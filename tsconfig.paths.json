@@ -5,7 +5,9 @@
       "@functions/*": ["src/functions/*"],
       "@handlers/*": ["src/handlers/*"],
       "@libs/*": ["src/libs/*"],
-      "@lib/*": ["src/lib/*"]
+      "@lib/*": ["src/lib/*"],
+      "@models/*": ["src/models/*"],
+      "@config/*": ["src/config/*"]
     }
   }
 }
