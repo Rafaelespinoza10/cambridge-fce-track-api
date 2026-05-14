@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets (never commit)
+.env
+.env.*
+!.env.example
+serverless.env.*
+.claude/
+
+# Logs & debug
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Serverless Framework
+.serverless/
+
+# Bundler / build artifacts (serverless-esbuild, tsc, etc.)
+.esbuild/
+dist/
+.webpack/
+_warmup/
+
+serveless.ts.scaffold
+
+# Tests & coverage
+coverage/
+.nyc_output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE (optional — remove if you prefer committing workspace settings)
+.idea/
+
+# TypeScript
+*.tsbuildinfo
