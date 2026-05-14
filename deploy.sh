@@ -6,7 +6,7 @@ YELLOW='\033[1;33m'; RED='\033[0;31m'; DIM='\033[2m'; NC='\033[0m'
 
 SERVICE=""; FUNCTION=""; STAGE="dev"; LIST=false
 
-# Debe coincidir con src/services/<nombre>.serverless.yml
+# Debe coincidir con serverless.yml (auth) o serverless.<nombre>.yml (resto)
 SERVICES=(
   activities
   auth
@@ -32,13 +32,23 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
-config_file_for() {
+# auth usa serverless.yml raíz; resto usa serverless.<service>.yml
+root_config_for() {
+  if [ "$1" = "auth" ]; then
+    echo "serverless.yml"
+  else
+    echo "serverless.${1}.yml"
+  fi
+}
+
+# Las funciones siguen definidas en src/services/<service>.serverless.yml
+partial_config_for() {
   echo "src/services/${1}.serverless.yml"
 }
 
 get_functions() {
   local cfg
-  cfg="$(config_file_for "$1")"
+  cfg="$(partial_config_for "$1")"
   awk '/^functions:/{f=1;next} f && /^  [a-zA-Z][a-zA-Z0-9_-]*:/{print $1} f && /^[a-zA-Z]/{f=0}' \
     "$cfg" | tr -d ':'
 }
@@ -46,7 +56,12 @@ get_functions() {
 list_services() {
   echo ""
   for svc in "${SERVICES[@]}"; do
-    echo -e "${YELLOW}--service ${svc}${NC}"
+    cfg="$(root_config_for "$svc")"
+    if [ -f "$cfg" ]; then
+      echo -e "${YELLOW}--service ${svc}${NC}  ${DIM}(config: ${cfg})${NC}"
+    else
+      echo -e "${DIM}--service ${svc}  (pendiente: falta ${cfg})${NC}"
+    fi
     get_functions "$svc" | while read -r fn; do echo -e "  ${DIM}--function $fn${NC}"; done
     echo ""
   done
@@ -54,9 +69,12 @@ list_services() {
 
 if [ "$LIST" = true ]; then list_services; exit 0; fi
 
-if [ -n "$SERVICE" ] && [ ! -f "$(config_file_for "$SERVICE")" ]; then
-  echo -e "${RED}✖ No existe $(config_file_for "$SERVICE")${NC}"
-  list_services; exit 1
+if [ -n "$SERVICE" ]; then
+  cfg="$(root_config_for "$SERVICE")"
+  if [ ! -f "$cfg" ]; then
+    echo -e "${RED}✖ No existe ${cfg}. Para crear el servicio, añade ${cfg} en la raíz del proyecto.${NC}"
+    list_services; exit 1
+  fi
 fi
 
 echo -e "\n${BOLD}Cambridge FCE Track API — Deploy${NC}\n${DIM}Stage: ${STAGE}${NC}\n"
@@ -64,16 +82,18 @@ echo -e "\n${BOLD}Cambridge FCE Track API — Deploy${NC}\n${DIM}Stage: ${STAGE}
 # ─── Deploy una sola función ─────────────────────────────────────────────────
 
 if [ -n "$FUNCTION" ] && [ -n "$SERVICE" ]; then
-  echo -e "${BLUE}→ Función: ${BOLD}${FUNCTION}${NC}  ${DIM}(servicio: ${SERVICE})${NC}\n"
-  npx serverless deploy function --function "$FUNCTION" --stage "$STAGE" --config "$(config_file_for "$SERVICE")"
+  cfg="$(root_config_for "$SERVICE")"
+  echo -e "${BLUE}→ Función: ${BOLD}${FUNCTION}${NC}  ${DIM}(servicio: ${SERVICE}, config: ${cfg})${NC}\n"
+  npx serverless deploy function --function "$FUNCTION" --stage "$STAGE" --config "$cfg"
 
-# ─── Deploy servicio completo (todas las Lambdas de ese YAML) ───────────────
+# ─── Deploy servicio completo ─────────────────────────────────────────────────
 
 elif [ -n "$SERVICE" ]; then
-  echo -e "${BLUE}→ Servicio: ${BOLD}${SERVICE}${NC}  ${DIM}(stack completo: $(config_file_for "$SERVICE"))${NC}\n"
-  npx serverless deploy --stage "$STAGE" --config "$(config_file_for "$SERVICE")"
+  cfg="$(root_config_for "$SERVICE")"
+  echo -e "${BLUE}→ Servicio: ${BOLD}${SERVICE}${NC}  ${DIM}(config: ${cfg})${NC}\n"
+  npx serverless deploy --stage "$STAGE" --config "$cfg"
 
-# ─── Deploy raíz (serverless.yml del proyecto) ──────────────────────────────
+# ─── Deploy raíz (todos los servicios implementados) ─────────────────────────
 
 else
   echo -e "${YELLOW}→ Deploy desde serverless.yml en la raíz del repo${NC}\n"

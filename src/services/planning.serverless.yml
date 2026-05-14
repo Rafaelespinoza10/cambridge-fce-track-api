@@ -7,7 +7,7 @@ plugins:
 provider:
   name: aws
   runtime: nodejs20.x
-  region: ${opt:region, 'us-east-1'}
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
