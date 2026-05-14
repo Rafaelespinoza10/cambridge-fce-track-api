@@ -10,7 +10,13 @@
     "deploy": "serverless deploy",
     "deploy:dev": "serverless deploy --stage dev",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:test-connection": "node scripts/test-connection.js",
+    "db:migration:generate": "node scripts/db.js migration:generate src/migrations/Migration -d src/config/database.ts",
+    "db:migration:create": "node scripts/db.js migration:create src/migrations/Migration",
+    "db:migration:run": "node scripts/db.js migration:run -d src/config/database.ts",
+    "db:migration:revert": "node scripts/db.js migration:revert -d src/config/database.ts",
+    "db:migration:show": "node scripts/db.js migration:show -d src/config/database.ts"
   },
   "engines": {
     "node": ">=20.0.0"
