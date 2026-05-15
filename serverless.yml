@@ -1,4 +1,5 @@
-service: cambridge-tracker-auth
+# Entrada de deploy en la raíz del repo. La definición vive en src/infra/auth.serverless.yml
+service: ${file(src/infra/auth.serverless.yml):service}
 frameworkVersion: '3'
 
 plugins:
@@ -17,7 +18,7 @@ provider:
     NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
     DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
 
-functions: ${file(src/services/auth.serverless.yml):functions}
+functions: ${file(src/infra/auth.serverless.yml):functions}
 
 package:
   individually: true
