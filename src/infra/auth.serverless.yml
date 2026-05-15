@@ -1,5 +1,4 @@
-# Entrada de deploy en la raíz del repo. La definición vive en src/infra/auth.serverless.yml
-service: ${file(src/infra/auth.serverless.yml):service}
+service: cambridge-tracker-auth
 frameworkVersion: '3'
 
 plugins:
@@ -17,23 +16,33 @@ provider:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
     NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
     DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
-functions: ${file(src/infra/auth.serverless.yml):functions}
+functions:
+  register:
+    handler: src/controllers/auth.controller.register
+    events:
+      - httpApi:
+          path: /auth/register
+          method: POST
+
+  login:
+    handler: src/controllers/auth.controller.login
+    events:
+      - httpApi:
+          path: /auth/login
+          method: POST
+
+  me:
+    handler: src/controllers/auth.controller.me
+    events:
+      - httpApi:
+          path: /auth/me
+          method: GET
 
 package:
   individually: true
-  patterns:
-    - '!README.md'
-    - '!docs/**'
-    - '!.env*'
-    - '!coverage/**'
-    - '!tsconfig*.json'
-    - '!.prettierrc.json'
-    - '!.prettierignore'
-    - '!deploy.sh'
-    - '!deploy.ps1'
-    - '!serverless.ts.scaffold'
-    - '!src/functions/**'
 
 custom:
   esbuild:

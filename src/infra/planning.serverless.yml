@@ -1,4 +1,4 @@
-service: cambridge-tracker-activities
+service: cambridge-tracker-planning
 frameworkVersion: '3'
 
 plugins:
@@ -6,14 +6,14 @@ plugins:
 
 provider:
   name: aws
-  runtime: nodejs20.x
-  region: ${opt:region, 'us-east-1'}
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
     NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
 
-# functions will be added when implementing activities handlers
+# functions will be added when implementing planning handlers
 functions: {}
 
 package:
@@ -26,6 +26,6 @@ custom:
     sourcemap: true
     exclude:
       - 'aws-sdk'
-    target: 'node20'
+    target: 'node22'
     platform: node
     concurrency: 10
