@@ -19,7 +19,7 @@
     "db:migration:show": "node scripts/db.js migration:show -d src/config/database.ts"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@middy/core": "^3.4.0",
