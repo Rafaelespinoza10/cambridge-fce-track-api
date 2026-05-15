@@ -6,7 +6,7 @@ plugins:
 
 provider:
   name: aws
-  runtime: nodejs20.x
+  runtime: nodejs22.x
   region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
   apiGateway:
@@ -34,6 +34,6 @@ custom:
     sourcemap: true
     exclude:
       - 'aws-sdk'
-    target: 'node20'
+    target: 'node22'
     platform: node
     concurrency: 10
