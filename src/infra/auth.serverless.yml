@@ -15,13 +15,30 @@ provider:
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
     NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
 functions:
-  health:
-    handler: src/handlers/auth/health.main
+  register:
+    handler: src/controllers/auth.controller.register
     events:
       - httpApi:
-          path: /health
+          path: /auth/register
+          method: POST
+
+  login:
+    handler: src/controllers/auth.controller.login
+    events:
+      - httpApi:
+          path: /auth/login
+          method: POST
+
+  me:
+    handler: src/controllers/auth.controller.me
+    events:
+      - httpApi:
+          path: /auth/me
           method: GET
 
 package:

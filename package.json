@@ -24,6 +24,8 @@
   "dependencies": {
     "@middy/core": "^3.4.0",
     "@middy/http-json-body-parser": "^3.4.0",
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.29"
@@ -31,6 +33,7 @@
   "devDependencies": {
     "@serverless/typescript": "^3.0.0",
     "@types/aws-lambda": "^8.10.71",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^14.14.25",
     "@types/pg": "^8.20.0",
     "esbuild": "^0.14.11",
