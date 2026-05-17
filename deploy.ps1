@@ -31,9 +31,9 @@ function Get-RootConfigPath($svcName) {
     return Join-Path $ScriptDir "serverless.$svcName.yml"
 }
 
-# Las funciones siguen definidas en src/services/<service>.serverless.yml
+# Las funciones siguen definidas en src/infra/<service>.serverless.yml
 function Get-PartialConfigPath($svcName) {
-    Join-Path $ScriptDir "src\services\$svcName.serverless.yml"
+    Join-Path $ScriptDir "src\infra\$svcName.serverless.yml"
 }
 
 function Write-Header {

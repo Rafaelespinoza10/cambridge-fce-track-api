@@ -41,9 +41,9 @@ root_config_for() {
   fi
 }
 
-# Las funciones siguen definidas en src/services/<service>.serverless.yml
+# Las funciones siguen definidas en src/infra/<service>.serverless.yml
 partial_config_for() {
-  echo "src/services/${1}.serverless.yml"
+  echo "src/infra/${1}.serverless.yml"
 }
 
 get_functions() {
