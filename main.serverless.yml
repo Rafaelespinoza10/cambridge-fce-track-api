@@ -1,0 +1,47 @@
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+custom:
+  stage: ${opt:stage, 'dev'}
+  esbuild:
+    bundle: true
+    splitting: false
+    minify: false
+    sourcemap: false
+    exclude:
+      - 'aws-sdk'
+    target: 'node22'
+    platform: node
+    concurrency: 10
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${self:custom.stage}.REGION, 'us-east-1'}
+  stage: ${self:custom.stage}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${self:custom.stage}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${self:custom.stage}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${self:custom.stage}.JWT_EXPIRES_IN}
+
+package:
+  individually: true
+  patterns:
+    - '!README.md'
+    - '!docs/**'
+    - '!.env*'
+    - '!coverage/**'
+    - '!tsconfig*.json'
+    - '!.prettierrc.json'
+    - '!.prettierignore'
+    - '!deploy.sh'
+    - '!deploy.ps1'
+    - '!serverless.ts.scaffold'
+    - '!src/functions/**'

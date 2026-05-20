@@ -9,23 +9,61 @@ provider:
   runtime: nodejs22.x
   region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
-    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
-# functions will be added when implementing users handlers
-functions: {}
+functions:
+  usersGetMe:
+    handler: src/controllers/usersController.getMe
+    events:
+      - httpApi:
+          path: /users/me
+          method: GET
+
+  usersUpdateProfile:
+    handler: src/controllers/usersController.updateProfile
+    events:
+      - httpApi:
+          path: /users/me/profile
+          method: PATCH
+
+  usersGetGoals:
+    handler: src/controllers/usersController.getGoals
+    events:
+      - httpApi:
+          path: /users/me/goals
+          method: GET
+
+  usersCreateGoal:
+    handler: src/controllers/usersController.createGoal
+    events:
+      - httpApi:
+          path: /users/me/goals
+          method: POST
+
+  usersUpdateGoal:
+    handler: src/controllers/usersController.updateGoal
+    events:
+      - httpApi:
+          path: /users/me/goals/{goalId}
+          method: PATCH
+
+  usersDeleteGoal:
+    handler: src/controllers/usersController.deleteGoal
+    events:
+      - httpApi:
+          path: /users/me/goals/{goalId}
+          method: DELETE
 
 package:
   individually: true
 
 custom:
-  esbuild:
-    bundle: true
-    minify: false
-    sourcemap: true
-    exclude:
-      - 'aws-sdk'
-    target: 'node22'
-    platform: node
-    concurrency: 10
+  esbuild: ${file(main.serverless.yml):custom.esbuild}

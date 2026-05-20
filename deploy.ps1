@@ -8,32 +8,21 @@ param(
 $ScriptDir = $PSScriptRoot
 Set-Location $ScriptDir
 
-# Debe coincidir con serverless.yml (auth) o serverless.<nombre>.yml (resto)
-$SERVICES = @(
-    "activities",
-    "auth",
-    "evidence",
-    "mocks",
-    "notifications",
-    "planning",
-    "progress",
-    "recommendations",
-    "resources",
-    "scoring",
-    "users"
-)
+$PathMap = Join-Path $ScriptDir "serverless.path-map.conf"
 
-# auth usa serverless.yml raíz; resto usa serverless.<service>.yml
-function Get-RootConfigPath($svcName) {
-    if ($svcName -eq "auth") {
-        return Join-Path $ScriptDir "serverless.yml"
+function Get-MapServiceNames {
+    $names = @()
+    foreach ($line in Get-Content $PathMap) {
+        if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
+        $names += ($line -split '=', 2)[0].Trim()
     }
-    return Join-Path $ScriptDir "serverless.$svcName.yml"
+    return $names
 }
 
-# Las funciones siguen definidas en src/infra/<service>.serverless.yml
-function Get-PartialConfigPath($svcName) {
-    Join-Path $ScriptDir "src\infra\$svcName.serverless.yml"
+$SERVICES = Get-MapServiceNames
+
+function Get-ServiceConfigPath($svcName) {
+    Join-Path $ScriptDir "src\services\$svcName.serverless.yml"
 }
 
 function Write-Header {
@@ -46,7 +35,7 @@ function Write-Ok($msg)   { Write-Host "✓ $msg" -ForegroundColor Green }
 function Write-Fail($msg) { Write-Host "✖ $msg" -ForegroundColor Red   }
 
 function Get-ServiceFunctions($svcName) {
-    $file = Get-PartialConfigPath $svcName
+    $file = Get-ServiceConfigPath $svcName
     $fns = @()
     $inF = $false
     foreach ($line in Get-Content $file) {
@@ -64,15 +53,9 @@ function Get-ServiceFunctions($svcName) {
 }
 
 function Show-List {
-    Write-Host ""; Write-Host "Servicios disponibles:" -ForegroundColor White; Write-Host ""
+    Write-Host ""; Write-Host "Servicios disponibles (src/services/*.serverless.yml):" -ForegroundColor White; Write-Host ""
     foreach ($svc in $SERVICES) {
-        $cfg = Get-RootConfigPath $svc
-        if (Test-Path $cfg) {
-            Write-Host "  -Service $svc" -ForegroundColor Yellow -NoNewline
-            Write-Host "  (config: $(Split-Path $cfg -Leaf))" -ForegroundColor DarkGray
-        } else {
-            Write-Host "  -Service $svc  (pendiente: falta $(Split-Path $cfg -Leaf))" -ForegroundColor DarkGray
-        }
+        Write-Host "  -Service $svc" -ForegroundColor Yellow
         foreach ($fn in Get-ServiceFunctions $svc) { Write-Host "    -Function $fn" -ForegroundColor DarkGray }
         Write-Host ""
     }
@@ -82,28 +65,36 @@ function Show-List {
 if ($List) { Show-List; exit 0 }
 
 # ─── Validate ─────────────────────────────────────────────────────────────────
-if ($Service -ne "") {
-    $cfg = Get-RootConfigPath $Service
-    if (-not (Test-Path $cfg)) {
-        Write-Fail "No existe $(Split-Path $cfg -Leaf). Para crear el servicio, añade ese archivo en la raíz del proyecto."
-        Show-List; exit 1
+if ($Service -ne "" -and -not (Test-Path (Get-ServiceConfigPath $Service))) {
+    Write-Fail "No existe $(Get-ServiceConfigPath $Service)"; Show-List; exit 1
+}
+
+# Copia temporal al root para satisfacer la restricción de Serverless v3
+function Invoke-SlsDeploy($svcName, [string[]]$SlsArgs) {
+    $src = Get-ServiceConfigPath $svcName
+    $tmpName = "_$($svcName)_tmp.serverless.yml"
+    $tmp = Join-Path $ScriptDir $tmpName
+    Copy-Item $src $tmp -Force
+    try {
+        npx serverless @SlsArgs --config $tmpName --stage $Stage
+    } finally {
+        Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     }
 }
 
 Write-Header
 
 if ($Function -ne "" -and $Service -ne "") {
-    $cfg = Get-RootConfigPath $Service
-    Write-Host "→ Función: $Function  (servicio: $Service, config: $(Split-Path $cfg -Leaf))" -ForegroundColor Cyan
+    Write-Host "→ Función: $Function  (servicio: $Service)" -ForegroundColor Cyan
     Write-Host ""
-    npx serverless deploy function --function $Function --stage $Stage --config $cfg
+    Invoke-SlsDeploy $Service @("deploy", "function", "--function", $Function)
     if ($LASTEXITCODE -ne 0) { Write-Fail "Falló el deploy de $Function"; exit 1 }
 
 } elseif ($Service -ne "") {
-    $cfg = Get-RootConfigPath $Service
-    Write-Host "→ Servicio: $Service  (config: $(Split-Path $cfg -Leaf))" -ForegroundColor Cyan
+    $fns = Get-ServiceFunctions $Service
+    Write-Host "→ Servicio: $Service  ($($fns.Count) función/es, stack completo)" -ForegroundColor Cyan
     Write-Host ""
-    npx serverless deploy --stage $Stage --config $cfg
+    Invoke-SlsDeploy $Service @("deploy")
     if ($LASTEXITCODE -ne 0) { Write-Fail "Falló el deploy de $Service"; exit 1 }
 
 } else {

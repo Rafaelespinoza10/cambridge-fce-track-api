@@ -24,6 +24,7 @@ pnpm-debug.log*
 dist/
 .webpack/
 _warmup/
+.claude/
 
 serveless.ts.scaffold
 # src/migrations/*.ts  ← removed: migrations MUST be committed

@@ -5,10 +5,10 @@
   "main": "serverless.ts",
   "scripts": {
     "build": "tsc --noEmit",
-    "package": "serverless package",
-    "package:dev": "serverless package --stage dev",
-    "deploy": "serverless deploy",
-    "deploy:dev": "serverless deploy --stage dev",
+    "package": "serverless package --config stacks/auth.serverless.yml",
+    "package:dev": "serverless package --config stacks/auth.serverless.yml --stage dev",
+    "deploy": "./deploy.sh",
+    "deploy:dev": "./deploy.sh --stage dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:test-connection": "node scripts/test-connection.js",
@@ -16,7 +16,8 @@
     "db:migration:create": "node scripts/db.js migration:create src/migrations/Migration",
     "db:migration:run": "node scripts/db.js migration:run -d src/config/database.ts",
     "db:migration:revert": "node scripts/db.js migration:revert -d src/config/database.ts",
-    "db:migration:show": "node scripts/db.js migration:show -d src/config/database.ts"
+    "db:migration:show": "node scripts/db.js migration:show -d src/config/database.ts",
+    "db:seed": "node scripts/seed.js"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -31,6 +32,7 @@
     "typeorm": "^0.3.29"
   },
   "devDependencies": {
+    "@serverless/compose": "^1.3.0",
     "@serverless/typescript": "^3.0.0",
     "@types/aws-lambda": "^8.10.71",
     "@types/jsonwebtoken": "^9.0.10",

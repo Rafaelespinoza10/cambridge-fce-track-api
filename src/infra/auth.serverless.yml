@@ -14,28 +14,28 @@ provider:
     shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
-    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
     DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
     JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
     JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
 functions:
   register:
-    handler: src/controllers/auth.controller.register
+    handler: src/controllers/authController.register
     events:
       - httpApi:
           path: /auth/register
           method: POST
 
   login:
-    handler: src/controllers/auth.controller.login
+    handler: src/controllers/authController.login
     events:
       - httpApi:
           path: /auth/login
           method: POST
 
   me:
-    handler: src/controllers/auth.controller.me
+    handler: src/controllers/authController.me
     events:
       - httpApi:
           path: /auth/me
@@ -45,12 +45,4 @@ package:
   individually: true
 
 custom:
-  esbuild:
-    bundle: true
-    minify: false
-    sourcemap: true
-    exclude:
-      - 'aws-sdk'
-    target: 'node22'
-    platform: node
-    concurrency: 10
+  esbuild: ${file(main.serverless.yml):custom.esbuild}
