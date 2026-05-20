@@ -1,24 +1,34 @@
-# Entrada de deploy en la raíz del repo. La definición vive en src/infra/auth.serverless.yml
-service: ${file(src/infra/auth.serverless.yml):service}
 frameworkVersion: '3'
 
 plugins:
   - serverless-esbuild
 
+custom:
+  stage: ${opt:stage, 'dev'}
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    exclude:
+      - 'aws-sdk'
+    target: 'node22'
+    platform: node
+    concurrency: 10
+
 provider:
   name: aws
   runtime: nodejs22.x
-  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
-  stage: ${opt:stage, 'dev'}
+  region: ${file(serverless.env.yml):${self:custom.stage}.REGION, 'us-east-1'}
+  stage: ${self:custom.stage}
   apiGateway:
     minimumCompressionSize: 1024
     shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
     NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
-    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
-
-functions: ${file(src/infra/auth.serverless.yml):functions}
+    DATABASE_URL: ${file(serverless.env.yml):${self:custom.stage}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${self:custom.stage}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${self:custom.stage}.JWT_EXPIRES_IN}
 
 package:
   individually: true
@@ -34,14 +44,3 @@ package:
     - '!deploy.ps1'
     - '!serverless.ts.scaffold'
     - '!src/functions/**'
-
-custom:
-  esbuild:
-    bundle: true
-    minify: false
-    sourcemap: true
-    exclude:
-      - 'aws-sdk'
-    target: 'node22'
-    platform: node
-    concurrency: 10

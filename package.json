@@ -5,10 +5,10 @@
   "main": "serverless.ts",
   "scripts": {
     "build": "tsc --noEmit",
-    "package": "serverless package",
-    "package:dev": "serverless package --stage dev",
-    "deploy": "serverless deploy",
-    "deploy:dev": "serverless deploy --stage dev",
+    "package": "serverless package --config stacks/auth.serverless.yml",
+    "package:dev": "serverless package --config stacks/auth.serverless.yml --stage dev",
+    "deploy": "./deploy.sh",
+    "deploy:dev": "./deploy.sh --stage dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:test-connection": "node scripts/test-connection.js",
@@ -31,6 +31,7 @@
     "typeorm": "^0.3.29"
   },
   "devDependencies": {
+    "@serverless/compose": "^1.3.0",
     "@serverless/typescript": "^3.0.0",
     "@types/aws-lambda": "^8.10.71",
     "@types/jsonwebtoken": "^9.0.10",
