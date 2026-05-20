@@ -1,6 +1,7 @@
+import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse } from '@lib/response';
-import { JwtService } from '@lib/auth';
+import { JwtService } from '@lib/jwt';
 import { EnglishLevel, GoalStatus, TargetExam } from '../models/enums';
 import { UsersService } from 'src/services/users.service';
 import type { CreateGoalBody, ProfileData, UpdateGoalBody } from 'src/interfaces/users.interface';
