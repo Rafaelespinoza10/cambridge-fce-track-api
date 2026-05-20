@@ -7,8 +7,9 @@ custom:
   stage: ${opt:stage, 'dev'}
   esbuild:
     bundle: true
+    splitting: false
     minify: false
-    sourcemap: true
+    sourcemap: false
     exclude:
       - 'aws-sdk'
     target: 'node22'
@@ -25,7 +26,7 @@ provider:
     shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
-    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
     DATABASE_URL: ${file(serverless.env.yml):${self:custom.stage}.DATABASE_URL}
     JWT_SECRET: ${file(serverless.env.yml):${self:custom.stage}.JWT_SECRET}
     JWT_EXPIRES_IN: ${file(serverless.env.yml):${self:custom.stage}.JWT_EXPIRES_IN}
