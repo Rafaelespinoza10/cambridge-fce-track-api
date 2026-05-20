@@ -1,4 +1,4 @@
-export * from './auth';
+export * from './jwt';
 export * from './database';
 export * from './http';
 export * from './password';

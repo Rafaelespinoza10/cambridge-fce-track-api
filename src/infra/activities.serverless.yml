@@ -9,23 +9,68 @@ provider:
   runtime: nodejs22.x
   region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
-    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
-# functions will be added when implementing activities handlers
-functions: {}
+functions:
+  activitiesGetSkills:
+    handler: src/controllers/activitiesController.getSkills
+    events:
+      - httpApi:
+          path: /skills
+          method: GET
+
+  activitiesGetExamSections:
+    handler: src/controllers/activitiesController.getExamSections
+    events:
+      - httpApi:
+          path: /exam-sections
+          method: GET
+
+  activitiesGetActivityTemplates:
+    handler: src/controllers/activitiesController.getActivityTemplates
+    events:
+      - httpApi:
+          path: /activity-templates
+          method: GET
+
+  activitiesCreateCustomActivity:
+    handler: src/controllers/activitiesController.createCustomActivity
+    events:
+      - httpApi:
+          path: /custom-activities
+          method: POST
+
+  activitiesGetCustomActivities:
+    handler: src/controllers/activitiesController.getCustomActivities
+    events:
+      - httpApi:
+          path: /custom-activities
+          method: GET
+
+  activitiesUpdateCustomActivity:
+    handler: src/controllers/activitiesController.updateCustomActivity
+    events:
+      - httpApi:
+          path: /custom-activities/{id}
+          method: PATCH
+
+  activitiesDeleteCustomActivity:
+    handler: src/controllers/activitiesController.deleteCustomActivity
+    events:
+      - httpApi:
+          path: /custom-activities/{id}
+          method: DELETE
 
 package:
   individually: true
 
 custom:
-  esbuild:
-    bundle: true
-    minify: false
-    sourcemap: true
-    exclude:
-      - 'aws-sdk'
-    target: 'node22'
-    platform: node
-    concurrency: 10
+  esbuild: ${file(main.serverless.yml):custom.esbuild}
