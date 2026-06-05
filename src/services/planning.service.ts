@@ -107,7 +107,9 @@ class PlanningService {
 
     const existing = await repo.findWeekPlanByUserAndStartDate(userId, body.weekStartDate);
     if (existing !== null) {
-      throw createError('A plan already exists for this week', 409);
+      const full = await repo.findWeekPlanByIdAndUser(existing.id, userId);
+      if (full === null) throw createError('Week plan not found', 404);
+      return toSafeWeeklyPlan(full);
     }
 
     const weekEndDate = addDays(body.weekStartDate, 6);
