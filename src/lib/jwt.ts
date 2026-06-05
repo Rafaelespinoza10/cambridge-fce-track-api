@@ -1,4 +1,5 @@
 import * as jwt from 'jsonwebtoken';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
 import type { JwtPayload } from '../interfaces/auth.interface';
 import type { SignOptions } from 'jsonwebtoken';
 
@@ -23,6 +24,17 @@ class JwtService {
     }
 
     return jwt.verify(token, secret) as JwtPayload;
+  }
+}
+
+export function getAuthenticatedPayload(event: APIGatewayProxyEvent): JwtPayload | null {
+  const authHeader = event.headers?.['Authorization'] ?? event.headers?.['authorization'] ?? '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  try {
+    return JwtService.verify(token);
+  } catch {
+    return null;
   }
 }
 
