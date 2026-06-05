@@ -1,37 +1,12 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse } from '@lib/response';
-import { JwtService } from '@lib/jwt';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
+import { getAuthenticatedPayload } from '@lib/jwt';
 import { EnglishLevel, GoalStatus, TargetExam } from '../models/enums';
 import { UsersService } from 'src/services/users.service';
 import type { CreateGoalBody, ProfileData, UpdateGoalBody } from 'src/interfaces/users.interface';
-import type { JwtPayload } from 'src/interfaces/auth.interface';
 
 const service = new UsersService();
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function getAuthenticatedPayload(event: APIGatewayProxyEvent): JwtPayload | null {
-  const authHeader = event.headers?.['Authorization'] ?? event.headers?.['authorization'] ?? '';
-  if (!authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-  try {
-    return JwtService.verify(token);
-  } catch {
-    return null;
-  }
-}
-
-function handleError(err: unknown): APIGatewayProxyResult {
-  const error = err as { message?: string; statusCode?: number };
-  const status = error.statusCode ?? 500;
-  const message = status < 500 ? (error.message ?? 'Error') : 'Internal server error';
-  return errorResponse(message, status);
-}
-
-function isValidUuid(value: string): boolean {
-  return UUID_REGEX.test(value);
-}
 
 // ── GET /users/me ─────────────────────────────────────────────────────────────
 
