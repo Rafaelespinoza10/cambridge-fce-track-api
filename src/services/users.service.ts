@@ -94,8 +94,12 @@ class UsersService {
         ...(body.targetExam !== undefined ? { target_exam: body.targetExam } : {}),
         ...(body.targetScore !== undefined ? { target_score: body.targetScore } : {}),
         ...(body.targetDate !== undefined ? { target_date: body.targetDate } : {}),
-        ...(body.studyDaysPerWeek !== undefined ? { study_days_per_week: body.studyDaysPerWeek } : {}),
-        ...(body.dailyStudyMinutes !== undefined ? { daily_study_minutes: body.dailyStudyMinutes } : {}),
+        ...(body.studyDaysPerWeek !== undefined
+          ? { study_days_per_week: body.studyDaysPerWeek }
+          : {}),
+        ...(body.dailyStudyMinutes !== undefined
+          ? { daily_study_minutes: body.dailyStudyMinutes }
+          : {}),
         ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
       });
     }

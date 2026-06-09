@@ -4,7 +4,6 @@ import { ActivityScoreDetail } from '../models/ActivityScoreDetail';
 import { PlannedActivity } from '../models/PlannedActivity';
 import type { ScoreType, DifficultyLevel, ScoreCriterion } from '../models/enums';
 
-
 interface CreateScoreData {
   userId: string;
   plannedActivityId: string | null;
@@ -50,7 +49,6 @@ interface HistoryQueryOptions {
   limit: number;
   offset: number;
 }
-
 
 class ScoringRepository {
   private readonly scoreRepo: Repository<ActivityScore>;
@@ -168,7 +166,10 @@ class ScoringRepository {
     await this.scoreRepo.update({ id: scoreId }, data);
   }
 
-  async replaceScoreDetails(scoreId: string, detailsData: CreateScoreDetailData[]): Promise<ActivityScoreDetail[]> {
+  async replaceScoreDetails(
+    scoreId: string,
+    detailsData: CreateScoreDetailData[],
+  ): Promise<ActivityScoreDetail[]> {
     return this.dataSource.transaction(async (manager) => {
       await manager.delete(ActivityScoreDetail, { activity_score_id: scoreId });
       if (detailsData.length === 0) return [];

@@ -94,13 +94,19 @@ export async function addActivity(event: APIGatewayProxyEvent): Promise<APIGatew
     return errorResponse('Invalid request body', 400);
   }
 
-  if (body.activityTemplateId !== undefined && body.activityTemplateId !== null &&
-      !isValidUuid(body.activityTemplateId)) {
+  if (
+    body.activityTemplateId !== undefined &&
+    body.activityTemplateId !== null &&
+    !isValidUuid(body.activityTemplateId)
+  ) {
     return errorResponse('activityTemplateId must be a valid UUID', 400);
   }
 
-  if (body.customActivityId !== undefined && body.customActivityId !== null &&
-      !isValidUuid(body.customActivityId)) {
+  if (
+    body.customActivityId !== undefined &&
+    body.customActivityId !== null &&
+    !isValidUuid(body.customActivityId)
+  ) {
     return errorResponse('customActivityId must be a valid UUID', 400);
   }
 
@@ -108,11 +114,18 @@ export async function addActivity(event: APIGatewayProxyEvent): Promise<APIGatew
     return errorResponse('skillId must be a valid UUID', 400);
   }
 
-  if (body.examSectionId !== undefined && body.examSectionId !== null && !isValidUuid(body.examSectionId)) {
+  if (
+    body.examSectionId !== undefined &&
+    body.examSectionId !== null &&
+    !isValidUuid(body.examSectionId)
+  ) {
     return errorResponse('examSectionId must be a valid UUID', 400);
   }
 
-  if (body.priority !== undefined && !(Object.values(ActivityPriority) as string[]).includes(body.priority)) {
+  if (
+    body.priority !== undefined &&
+    !(Object.values(ActivityPriority) as string[]).includes(body.priority)
+  ) {
     return errorResponse('priority must be low, medium, or high', 400);
   }
 
@@ -162,15 +175,25 @@ export async function updateActivity(event: APIGatewayProxyEvent): Promise<APIGa
     return errorResponse('skillId must be a valid UUID', 400);
   }
 
-  if (body.examSectionId !== undefined && body.examSectionId !== null && !isValidUuid(body.examSectionId)) {
+  if (
+    body.examSectionId !== undefined &&
+    body.examSectionId !== null &&
+    !isValidUuid(body.examSectionId)
+  ) {
     return errorResponse('examSectionId must be a valid UUID', 400);
   }
 
-  if (body.priority !== undefined && !(Object.values(ActivityPriority) as string[]).includes(body.priority)) {
+  if (
+    body.priority !== undefined &&
+    !(Object.values(ActivityPriority) as string[]).includes(body.priority)
+  ) {
     return errorResponse('priority must be low, medium, or high', 400);
   }
 
-  if (body.status !== undefined && !(Object.values(PlannedActivityStatus) as string[]).includes(body.status)) {
+  if (
+    body.status !== undefined &&
+    !(Object.values(PlannedActivityStatus) as string[]).includes(body.status)
+  ) {
     return errorResponse('status must be pending, in_progress, completed, or skipped', 400);
   }
 
@@ -231,8 +254,12 @@ export async function moveActivity(event: APIGatewayProxyEvent): Promise<APIGate
     return errorResponse('targetDayId must be a valid UUID', 400);
   }
 
-  if (body.targetOrder === undefined || body.targetOrder === null ||
-      !Number.isInteger(body.targetOrder) || body.targetOrder < 0) {
+  if (
+    body.targetOrder === undefined ||
+    body.targetOrder === null ||
+    !Number.isInteger(body.targetOrder) ||
+    body.targetOrder < 0
+  ) {
     return errorResponse('targetOrder must be an integer >= 0', 400);
   }
 

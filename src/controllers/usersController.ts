@@ -58,7 +58,9 @@ export async function updateProfile(event: APIGatewayProxyEvent): Promise<APIGat
 
   if (
     body.studyDaysPerWeek !== undefined &&
-    (!Number.isInteger(body.studyDaysPerWeek) || body.studyDaysPerWeek < 1 || body.studyDaysPerWeek > 7)
+    (!Number.isInteger(body.studyDaysPerWeek) ||
+      body.studyDaysPerWeek < 1 ||
+      body.studyDaysPerWeek > 7)
   ) {
     return errorResponse('studyDaysPerWeek must be between 1 and 7', 400);
   }
@@ -113,10 +115,7 @@ export async function createGoal(event: APIGatewayProxyEvent): Promise<APIGatewa
     return errorResponse('title is required', 400);
   }
 
-  if (
-    body.status !== undefined &&
-    !(Object.values(GoalStatus) as string[]).includes(body.status)
-  ) {
+  if (body.status !== undefined && !(Object.values(GoalStatus) as string[]).includes(body.status)) {
     return errorResponse('Invalid status value', 400);
   }
 
@@ -169,10 +168,7 @@ export async function updateGoal(event: APIGatewayProxyEvent): Promise<APIGatewa
     return errorResponse('Request body must not be empty', 400);
   }
 
-  if (
-    body.status !== undefined &&
-    !(Object.values(GoalStatus) as string[]).includes(body.status)
-  ) {
+  if (body.status !== undefined && !(Object.values(GoalStatus) as string[]).includes(body.status)) {
     return errorResponse('Invalid status value', 400);
   }
 

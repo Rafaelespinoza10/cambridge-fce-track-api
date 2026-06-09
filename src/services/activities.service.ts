@@ -109,7 +109,10 @@ class ActivitiesService {
     });
   }
 
-  async createCustomActivity(userId: string, body: CreateCustomActivityBody): Promise<SafeCustomActivity> {
+  async createCustomActivity(
+    userId: string,
+    body: CreateCustomActivityBody,
+  ): Promise<SafeCustomActivity> {
     const ds = await getDatabaseConnection();
     const repo = new ActivitiesRepository(ds);
 
@@ -131,7 +134,10 @@ class ActivitiesService {
     return ActivitiesService.toSafeCustomActivity(activity);
   }
 
-  async getCustomActivities(userId: string, filters: CustomActivityFilters): Promise<SafeCustomActivity[]> {
+  async getCustomActivities(
+    userId: string,
+    filters: CustomActivityFilters,
+  ): Promise<SafeCustomActivity[]> {
     const ds = await getDatabaseConnection();
     const repo = new ActivitiesRepository(ds);
 
@@ -173,7 +179,9 @@ class ActivitiesService {
       ...(body.name !== undefined ? { name: body.name.trim() } : {}),
       ...(body.description !== undefined ? { description: body.description } : {}),
       ...(body.scoreType !== undefined ? { score_type: body.scoreType } : {}),
-      ...(body.defaultDurationMinutes !== undefined ? { default_duration_minutes: body.defaultDurationMinutes } : {}),
+      ...(body.defaultDurationMinutes !== undefined
+        ? { default_duration_minutes: body.defaultDurationMinutes }
+        : {}),
       ...(body.maxScore !== undefined ? { max_score: body.maxScore } : {}),
     });
 

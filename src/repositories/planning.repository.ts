@@ -83,12 +83,19 @@ class PlanningRepository {
     this.customActivityRepo = dataSource.getRepository(CustomActivity);
   }
 
-  async findWeekPlanByUserAndStartDate(userId: string, weekStartDate: string): Promise<WeeklyPlan | null> {
-    return this.weeklyPlanRepo.findOne({ where: { user_id: userId, week_start_date: weekStartDate } });
+  async findWeekPlanByUserAndStartDate(
+    userId: string,
+    weekStartDate: string,
+  ): Promise<WeeklyPlan | null> {
+    return this.weeklyPlanRepo.findOne({
+      where: { user_id: userId, week_start_date: weekStartDate },
+    });
   }
 
   async createWeekPlanWithDays(data: CreateWeekPlanData): Promise<WeeklyPlan> {
-    const result = await this.dataSource.transaction(async function (manager: EntityManager): Promise<WeeklyPlan> {
+    const result = await this.dataSource.transaction(async function (
+      manager: EntityManager,
+    ): Promise<WeeklyPlan> {
       const plan = manager.create(WeeklyPlan, {
         user_id: data.userId,
         week_start_date: data.weekStartDate,
@@ -99,7 +106,10 @@ class PlanningRepository {
       const savedPlan = await manager.save(WeeklyPlan, plan);
 
       const startDate = new Date(data.weekStartDate + 'T00:00:00.000Z');
-      const dayEntities: PlanDay[] = DAYS_OF_WEEK.map(function (dayOfWeek: DayOfWeek, index: number): PlanDay {
+      const dayEntities: PlanDay[] = DAYS_OF_WEEK.map(function (
+        dayOfWeek: DayOfWeek,
+        index: number,
+      ): PlanDay {
         const dayDate = new Date(startDate);
         dayDate.setUTCDate(startDate.getUTCDate() + index);
         return manager.create(PlanDay, {
@@ -180,7 +190,11 @@ class PlanningRepository {
     return plan;
   }
 
-  async findPlanDayByIdAndWeekPlan(dayId: string, weekPlanId: string, userId: string): Promise<PlanDay | null> {
+  async findPlanDayByIdAndWeekPlan(
+    dayId: string,
+    weekPlanId: string,
+    userId: string,
+  ): Promise<PlanDay | null> {
     return this.planDayRepo
       .createQueryBuilder('pd')
       .innerJoin('pd.weekly_plan', 'wp')
@@ -246,7 +260,9 @@ class PlanningRepository {
     targetDayId: string,
     targetOrder: number,
   ): Promise<PlannedActivity> {
-    return this.dataSource.transaction(async function (manager: EntityManager): Promise<PlannedActivity> {
+    return this.dataSource.transaction(async function (
+      manager: EntityManager,
+    ): Promise<PlannedActivity> {
       const paRepo = manager.getRepository(PlannedActivity);
 
       const sourceActivities = await paRepo.find({

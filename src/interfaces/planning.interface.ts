@@ -1,4 +1,9 @@
-import type { ActivityPriority, PlannedActivityStatus, WeekPlanStatus, DayOfWeek } from '../models/enums';
+import type {
+  ActivityPriority,
+  PlannedActivityStatus,
+  WeekPlanStatus,
+  DayOfWeek,
+} from '../models/enums';
 
 export interface CreateWeekPlanBody {
   weekStartDate: string;

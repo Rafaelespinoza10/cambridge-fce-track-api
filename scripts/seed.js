@@ -59,14 +59,11 @@ function main() {
 
   console.log(`[seed.js] Stage: ${STAGE}\n`);
 
-  execSync(
-    'npx ts-node -r tsconfig-paths/register src/config/seed/run-seed.ts',
-    {
-      cwd: ROOT,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
-      stdio: 'inherit',
-    },
-  );
+  execSync('npx ts-node -r tsconfig-paths/register src/config/seed/run-seed.ts', {
+    cwd: ROOT,
+    env: { ...process.env, DATABASE_URL: databaseUrl },
+    stdio: 'inherit',
+  });
 }
 
 main();

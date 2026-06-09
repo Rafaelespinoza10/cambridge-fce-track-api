@@ -68,7 +68,9 @@ export async function registerScore(event: APIGatewayProxyEvent): Promise<APIGat
 
 // ── GET /scores/activities/{plannedActivityId} ─────────────────────────────────
 
-export async function getScoresByActivity(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+export async function getScoresByActivity(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
@@ -190,7 +192,8 @@ export async function getScoreHistory(event: APIGatewayProxyEvent): Promise<APIG
   const offset = qs['offset'] !== undefined ? parseInt(qs['offset'], 10) : 0;
 
   if (isNaN(limit) || limit <= 0) return errorResponse('limit must be a positive integer', 400);
-  if (isNaN(offset) || offset < 0) return errorResponse('offset must be a non-negative integer', 400);
+  if (isNaN(offset) || offset < 0)
+    return errorResponse('offset must be a non-negative integer', 400);
 
   const skillId = qs['skillId'] ?? undefined;
   if (skillId !== undefined && !isValidUuid(skillId)) {

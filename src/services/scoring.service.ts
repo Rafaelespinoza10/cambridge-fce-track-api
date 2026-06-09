@@ -88,7 +88,11 @@ function validateDetails(details: ScoreDetailInput[]): void {
     if (typeof d.score !== 'number' || d.score < 0) {
       throw createError('Each detail score must be a non-negative number', 400);
     }
-    if (d.maxScore !== undefined && d.maxScore !== null && (typeof d.maxScore !== 'number' || d.maxScore < 0)) {
+    if (
+      d.maxScore !== undefined &&
+      d.maxScore !== null &&
+      (typeof d.maxScore !== 'number' || d.maxScore < 0)
+    ) {
       throw createError('Each detail maxScore must be a non-negative number', 400);
     }
   }
@@ -97,12 +101,13 @@ function validateDetails(details: ScoreDetailInput[]): void {
 // ── Service ────────────────────────────────────────────────────────────────────
 
 class ScoringService {
-  async registerScore(userId: string, plannedActivityId: string, body: RegisterScoreBody): Promise<SafeScore> {
+  async registerScore(
+    userId: string,
+    plannedActivityId: string,
+    body: RegisterScoreBody,
+  ): Promise<SafeScore> {
     if (!body.scoreType || !VALID_SCORE_TYPES.has(body.scoreType)) {
-      throw createError(
-        `scoreType must be one of: ${Object.values(ScoreType).join(', ')}`,
-        400,
-      );
+      throw createError(`scoreType must be one of: ${Object.values(ScoreType).join(', ')}`, 400);
     }
 
     const ds = await getDatabaseConnection();
@@ -113,9 +118,10 @@ class ScoringService {
       throw createError('Planned activity not found', 404);
     }
 
-    const attemptedAt = body.attemptedAt !== undefined && body.attemptedAt !== null
-      ? new Date(body.attemptedAt)
-      : new Date();
+    const attemptedAt =
+      body.attemptedAt !== undefined && body.attemptedAt !== null
+        ? new Date(body.attemptedAt)
+        : new Date();
 
     if (isNaN(attemptedAt.getTime())) {
       throw createError('attemptedAt must be a valid ISO timestamp', 400);
@@ -152,8 +158,15 @@ class ScoringService {
       }
     }
 
-    if (body.difficulty !== undefined && body.difficulty !== null && !VALID_DIFFICULTY.has(body.difficulty)) {
-      throw createError(`difficulty must be one of: ${Object.values(DifficultyLevel).join(', ')}`, 400);
+    if (
+      body.difficulty !== undefined &&
+      body.difficulty !== null &&
+      !VALID_DIFFICULTY.has(body.difficulty)
+    ) {
+      throw createError(
+        `difficulty must be one of: ${Object.values(DifficultyLevel).join(', ')}`,
+        400,
+      );
     }
 
     const score = await repo.createScore({
@@ -224,8 +237,15 @@ class ScoringService {
       throw createError('Score not found', 404);
     }
 
-    if (body.difficulty !== undefined && body.difficulty !== null && !VALID_DIFFICULTY.has(body.difficulty)) {
-      throw createError(`difficulty must be one of: ${Object.values(DifficultyLevel).join(', ')}`, 400);
+    if (
+      body.difficulty !== undefined &&
+      body.difficulty !== null &&
+      !VALID_DIFFICULTY.has(body.difficulty)
+    ) {
+      throw createError(
+        `difficulty must be one of: ${Object.values(DifficultyLevel).join(', ')}`,
+        400,
+      );
     }
 
     const updateData: Parameters<ScoringRepository['updateScore']>[1] = {};
@@ -237,22 +257,29 @@ class ScoringService {
     if (body.notes !== undefined) updateData.notes = body.notes;
 
     // Recalculate percentage if correct_answers/total_questions change
-    const newCorrect = body.correctAnswers !== undefined ? body.correctAnswers : existing.correct_answers;
-    const newTotal = body.totalQuestions !== undefined ? body.totalQuestions : existing.total_questions;
+    const newCorrect =
+      body.correctAnswers !== undefined ? body.correctAnswers : existing.correct_answers;
+    const newTotal =
+      body.totalQuestions !== undefined ? body.totalQuestions : existing.total_questions;
     if (
       existing.score_type === ScoreType.CORRECT_ANSWERS &&
       (body.correctAnswers !== undefined || body.totalQuestions !== undefined) &&
-      newCorrect !== null && newTotal !== null && newTotal > 0
+      newCorrect !== null &&
+      newTotal !== null &&
+      newTotal > 0
     ) {
       updateData.percentage = String(roundTwo((newCorrect / newTotal) * 100));
     }
 
-    if (body.rawScore !== undefined) updateData.raw_score = body.rawScore !== null ? String(body.rawScore) : null;
-    if (body.maxScore !== undefined) updateData.max_score = body.maxScore !== null ? String(body.maxScore) : null;
+    if (body.rawScore !== undefined)
+      updateData.raw_score = body.rawScore !== null ? String(body.rawScore) : null;
+    if (body.maxScore !== undefined)
+      updateData.max_score = body.maxScore !== null ? String(body.maxScore) : null;
 
     if (body.attemptedAt !== undefined && body.attemptedAt !== null) {
       const parsed = new Date(body.attemptedAt);
-      if (isNaN(parsed.getTime())) throw createError('attemptedAt must be a valid ISO timestamp', 400);
+      if (isNaN(parsed.getTime()))
+        throw createError('attemptedAt must be a valid ISO timestamp', 400);
       updateData.attempted_at = parsed;
     }
 
@@ -279,7 +306,9 @@ class ScoringService {
       // Recalculate totals from updated details
       if (body.details.length > 0 && existing.score_type === ScoreType.RUBRIC) {
         const newRaw = roundTwo(body.details.reduce((sum, d) => sum + d.score, 0));
-        const allHaveMax = body.details.every((d) => d.maxScore !== undefined && d.maxScore !== null);
+        const allHaveMax = body.details.every(
+          (d) => d.maxScore !== undefined && d.maxScore !== null,
+        );
         const detailUpdate: Parameters<ScoringRepository['updateScore']>[1] = {
           raw_score: String(newRaw),
         };
@@ -310,7 +339,10 @@ class ScoringService {
     await repo.softDeleteScore(scoreId);
   }
 
-  async getScoreHistory(userId: string, filters: ScoreHistoryFilters): Promise<{
+  async getScoreHistory(
+    userId: string,
+    filters: ScoreHistoryFilters,
+  ): Promise<{
     data: SafeScore[];
     total: number;
     limit: number;

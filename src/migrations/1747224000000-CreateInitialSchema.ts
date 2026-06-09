@@ -5,24 +5,58 @@ export class CreateInitialSchema1747224000000 implements MigrationInterface {
     // ── Enum types ────────────────────────────────────────────────────────────
 
     await queryRunner.query(`CREATE TYPE "user_role_enum" AS ENUM ('student', 'teacher', 'admin')`);
-    await queryRunner.query(`CREATE TYPE "english_level_enum" AS ENUM ('A1', 'A2', 'B1', 'B1_PLUS', 'B2', 'C1', 'C2')`);
-    await queryRunner.query(`CREATE TYPE "target_exam_enum" AS ENUM ('B2_FIRST', 'C1_ADVANCED', 'IELTS', 'TOEFL')`);
-    await queryRunner.query(`CREATE TYPE "goal_status_enum" AS ENUM ('active', 'completed', 'cancelled')`);
-    await queryRunner.query(`CREATE TYPE "score_type_enum" AS ENUM ('correct_answers', 'percentage', 'rubric', 'time_only', 'custom')`);
-    await queryRunner.query(`CREATE TYPE "week_plan_status_enum" AS ENUM ('draft', 'active', 'completed', 'archived')`);
-    await queryRunner.query(`CREATE TYPE "day_of_week_enum" AS ENUM ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')`);
-    await queryRunner.query(`CREATE TYPE "activity_priority_enum" AS ENUM ('low', 'medium', 'high')`);
-    await queryRunner.query(`CREATE TYPE "planned_activity_status_enum" AS ENUM ('pending', 'in_progress', 'completed', 'skipped')`);
-    await queryRunner.query(`CREATE TYPE "difficulty_level_enum" AS ENUM ('easy', 'medium', 'hard')`);
-    await queryRunner.query(`CREATE TYPE "score_criterion_enum" AS ENUM ('content', 'communicative_achievement', 'organization', 'language', 'fluency', 'pronunciation', 'vocabulary', 'grammar', 'interaction', 'other')`);
-    await queryRunner.query(`CREATE TYPE "storage_provider_enum" AS ENUM ('s3', 'local', 'external')`);
-    await queryRunner.query(`CREATE TYPE "exam_type_enum" AS ENUM ('B2_FIRST', 'C1_ADVANCED', 'IELTS', 'TOEFL')`);
+    await queryRunner.query(
+      `CREATE TYPE "english_level_enum" AS ENUM ('A1', 'A2', 'B1', 'B1_PLUS', 'B2', 'C1', 'C2')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "target_exam_enum" AS ENUM ('B2_FIRST', 'C1_ADVANCED', 'IELTS', 'TOEFL')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "goal_status_enum" AS ENUM ('active', 'completed', 'cancelled')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "score_type_enum" AS ENUM ('correct_answers', 'percentage', 'rubric', 'time_only', 'custom')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "week_plan_status_enum" AS ENUM ('draft', 'active', 'completed', 'archived')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "day_of_week_enum" AS ENUM ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "activity_priority_enum" AS ENUM ('low', 'medium', 'high')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "planned_activity_status_enum" AS ENUM ('pending', 'in_progress', 'completed', 'skipped')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "difficulty_level_enum" AS ENUM ('easy', 'medium', 'hard')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "score_criterion_enum" AS ENUM ('content', 'communicative_achievement', 'organization', 'language', 'fluency', 'pronunciation', 'vocabulary', 'grammar', 'interaction', 'other')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "storage_provider_enum" AS ENUM ('s3', 'local', 'external')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "exam_type_enum" AS ENUM ('B2_FIRST', 'C1_ADVANCED', 'IELTS', 'TOEFL')`,
+    );
     await queryRunner.query(`CREATE TYPE "mock_type_enum" AS ENUM ('full', 'partial')`);
-    await queryRunner.query(`CREATE TYPE "resource_type_enum" AS ENUM ('pdf', 'link', 'video', 'template', 'vocabulary', 'grammar', 'writing_sample', 'other')`);
-    await queryRunner.query(`CREATE TYPE "recommendation_type_enum" AS ENUM ('weakness', 'study_plan', 'reminder', 'improvement', 'general')`);
-    await queryRunner.query(`CREATE TYPE "recommendation_priority_enum" AS ENUM ('low', 'medium', 'high')`);
-    await queryRunner.query(`CREATE TYPE "recommendation_status_enum" AS ENUM ('pending', 'applied', 'dismissed')`);
-    await queryRunner.query(`CREATE TYPE "recommendation_source_enum" AS ENUM ('rule_based', 'ai', 'manual')`);
+    await queryRunner.query(
+      `CREATE TYPE "resource_type_enum" AS ENUM ('pdf', 'link', 'video', 'template', 'vocabulary', 'grammar', 'writing_sample', 'other')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "recommendation_type_enum" AS ENUM ('weakness', 'study_plan', 'reminder', 'improvement', 'general')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "recommendation_priority_enum" AS ENUM ('low', 'medium', 'high')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "recommendation_status_enum" AS ENUM ('pending', 'applied', 'dismissed')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "recommendation_source_enum" AS ENUM ('rule_based', 'ai', 'manual')`,
+    );
 
     // ── skills ────────────────────────────────────────────────────────────────
 
@@ -480,23 +514,51 @@ export class CreateInitialSchema1747224000000 implements MigrationInterface {
     // ── Indexes ───────────────────────────────────────────────────────────────
 
     await queryRunner.query(`CREATE INDEX "idx_users_email" ON "users" ("email")`);
-    await queryRunner.query(`CREATE INDEX "idx_users_deleted_at" ON "users" ("deleted_at") WHERE "deleted_at" IS NOT NULL`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_users_deleted_at" ON "users" ("deleted_at") WHERE "deleted_at" IS NOT NULL`,
+    );
     await queryRunner.query(`CREATE INDEX "idx_user_goals_user_id" ON "user_goals" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_exam_sections_skill_id" ON "exam_sections" ("skill_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_activity_templates_skill_id" ON "activity_templates" ("skill_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_custom_activities_user_id" ON "custom_activities" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_weekly_plans_user_id" ON "weekly_plans" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_plan_days_weekly_plan_id" ON "plan_days" ("weekly_plan_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_planned_activities_plan_day_id" ON "planned_activities" ("plan_day_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_planned_activities_status" ON "planned_activities" ("status")`);
-    await queryRunner.query(`CREATE INDEX "idx_study_sessions_user_id" ON "study_sessions" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_activity_scores_user_id" ON "activity_scores" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_activity_scores_attempted_at" ON "activity_scores" ("attempted_at")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_exam_sections_skill_id" ON "exam_sections" ("skill_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_activity_templates_skill_id" ON "activity_templates" ("skill_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_custom_activities_user_id" ON "custom_activities" ("user_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_weekly_plans_user_id" ON "weekly_plans" ("user_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_plan_days_weekly_plan_id" ON "plan_days" ("weekly_plan_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_planned_activities_plan_day_id" ON "planned_activities" ("plan_day_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_planned_activities_status" ON "planned_activities" ("status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_study_sessions_user_id" ON "study_sessions" ("user_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_activity_scores_user_id" ON "activity_scores" ("user_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_activity_scores_attempted_at" ON "activity_scores" ("attempted_at")`,
+    );
     await queryRunner.query(`CREATE INDEX "idx_mock_tests_user_id" ON "mock_tests" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_evidence_files_user_id" ON "evidence_files" ("user_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_evidence_files_user_id" ON "evidence_files" ("user_id")`,
+    );
     await queryRunner.query(`CREATE INDEX "idx_resources_user_id" ON "resources" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_recommendations_user_id" ON "recommendations" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_recommendations_status" ON "recommendations" ("status")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_recommendations_user_id" ON "recommendations" ("user_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_recommendations_status" ON "recommendations" ("status")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

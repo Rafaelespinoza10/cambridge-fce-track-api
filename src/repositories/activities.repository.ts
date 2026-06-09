@@ -93,7 +93,10 @@ class ActivitiesRepository {
     return this.examSectionRepo.findOne({ where: { id } });
   }
 
-  async createCustomActivity(userId: string, body: CreateCustomActivityBody): Promise<CustomActivity> {
+  async createCustomActivity(
+    userId: string,
+    body: CreateCustomActivityBody,
+  ): Promise<CustomActivity> {
     const entity = this.customActivityRepo.create({
       user_id: userId,
       skill_id: body.skillId ?? null,
@@ -107,7 +110,10 @@ class ActivitiesRepository {
     return this.customActivityRepo.save(entity);
   }
 
-  async findCustomActivitiesByUser(userId: string, filters: CustomActivityFilters): Promise<CustomActivity[]> {
+  async findCustomActivitiesByUser(
+    userId: string,
+    filters: CustomActivityFilters,
+  ): Promise<CustomActivity[]> {
     const qb = this.customActivityRepo
       .createQueryBuilder('ca')
       .where('ca.user_id = :userId', { userId })

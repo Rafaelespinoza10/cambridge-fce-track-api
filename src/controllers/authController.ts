@@ -41,8 +41,7 @@ export async function register(event: APIGatewayProxyEvent): Promise<APIGatewayP
 }
 
 export async function me(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const authHeader =
-    event.headers?.['Authorization'] ?? event.headers?.['authorization'] ?? '';
+  const authHeader = event.headers?.['Authorization'] ?? event.headers?.['authorization'] ?? '';
 
   if (!authHeader.startsWith('Bearer ')) {
     return errorResponse('Missing or invalid Authorization header', 401);

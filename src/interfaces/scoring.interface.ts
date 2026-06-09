@@ -1,6 +1,5 @@
 import type { ScoreType, DifficultyLevel, ScoreCriterion } from '../models/enums';
 
-
 export interface ScoreDetailInput {
   criterion: ScoreCriterion;
   score: number;
@@ -32,7 +31,6 @@ export interface UpdateScoreBody {
   attemptedAt?: string | null;
   details?: ScoreDetailInput[] | null;
 }
-
 
 export interface SafeScoreDetail {
   id: string;
