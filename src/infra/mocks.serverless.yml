@@ -9,23 +9,54 @@ provider:
   runtime: nodejs22.x
   region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
-    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
-# functions will be added when implementing mocks handlers
-functions: {}
+functions:
+  mocksCreate:
+    handler: src/controllers/mocksController.createMock
+    events:
+      - httpApi:
+          path: /mocks
+          method: POST
+
+  mocksList:
+    handler: src/controllers/mocksController.listMocks
+    events:
+      - httpApi:
+          path: /mocks
+          method: GET
+
+  mocksGet:
+    handler: src/controllers/mocksController.getMock
+    events:
+      - httpApi:
+          path: /mocks/{mockId}
+          method: GET
+
+  mocksUpdate:
+    handler: src/controllers/mocksController.updateMock
+    events:
+      - httpApi:
+          path: /mocks/{mockId}
+          method: PATCH
+
+  mocksDelete:
+    handler: src/controllers/mocksController.deleteMock
+    events:
+      - httpApi:
+          path: /mocks/{mockId}
+          method: DELETE
 
 package:
   individually: true
 
 custom:
-  esbuild:
-    bundle: true
-    minify: false
-    sourcemap: true
-    exclude:
-      - 'aws-sdk'
-    target: 'node22'
-    platform: node
-    concurrency: 10
+  esbuild: ${file(main.serverless.yml):custom.esbuild}
