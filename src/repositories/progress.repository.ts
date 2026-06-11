@@ -174,7 +174,13 @@ class ProgressRepository {
       .andWhere('sc.deleted_at IS NULL')
       .orderBy('sc.attempted_at', 'DESC')
       .limit(limit)
-      .getRawMany<{ id: string; title: string; skillName: string | null; score: string | null; date: string }>();
+      .getRawMany<{
+        id: string;
+        title: string;
+        skillName: string | null;
+        score: string | null;
+        date: string;
+      }>();
 
     return rows.map((r) => ({
       id: r.id,
@@ -218,4 +224,11 @@ class ProgressRepository {
 }
 
 export { ProgressRepository };
-export type { WeeklyActivityStats, WeeklyScoreStats, SkillAverage, SkillWeekRow, RecentActivityRow, OverallWeekRow };
+export type {
+  WeeklyActivityStats,
+  WeeklyScoreStats,
+  SkillAverage,
+  SkillWeekRow,
+  RecentActivityRow,
+  OverallWeekRow,
+};

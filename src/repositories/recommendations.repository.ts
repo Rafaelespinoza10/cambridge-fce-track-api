@@ -79,7 +79,9 @@ class RecommendationsRepository {
 
   async updateFields(
     id: string,
-    fields: Partial<Pick<Recommendation, 'title' | 'description' | 'recommendation_type' | 'priority' | 'status'>>,
+    fields: Partial<
+      Pick<Recommendation, 'title' | 'description' | 'recommendation_type' | 'priority' | 'status'>
+    >,
   ): Promise<void> {
     await this.ds.getRepository(Recommendation).update({ id }, fields);
   }

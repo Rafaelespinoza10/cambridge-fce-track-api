@@ -36,9 +36,7 @@ export async function generateUploadUrl(
 
 // ── POST /evidence ─────────────────────────────────────────────────────────────
 
-export async function createEvidence(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function createEvidence(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
@@ -59,9 +57,7 @@ export async function createEvidence(
 
 // ── GET /evidence ──────────────────────────────────────────────────────────────
 
-export async function listEvidence(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function listEvidence(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
@@ -90,9 +86,7 @@ export async function listEvidence(
 
 // ── GET /evidence/{evidenceId} ─────────────────────────────────────────────────
 
-export async function getEvidence(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function getEvidence(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
@@ -110,9 +104,7 @@ export async function getEvidence(
 
 // ── DELETE /evidence/{evidenceId} ──────────────────────────────────────────────
 
-export async function deleteEvidence(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function deleteEvidence(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 

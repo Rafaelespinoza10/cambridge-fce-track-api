@@ -7,9 +7,15 @@ import type {
   MockListFilters,
   SafeMock,
 } from '../interfaces/mocks.interface';
-import { buildSectionData, createError, toSafeMock, VALID_EXAM_TYPES, VALID_LEVELS, VALID_MOCK_TYPES, validateSections } from '@lib/mocks-library';
-
-
+import {
+  buildSectionData,
+  createError,
+  toSafeMock,
+  VALID_EXAM_TYPES,
+  VALID_LEVELS,
+  VALID_MOCK_TYPES,
+  validateSections,
+} from '@lib/mocks-library';
 
 class MocksService {
   async createMock(userId: string, body: CreateMockBody): Promise<SafeMock> {
@@ -38,7 +44,10 @@ class MocksService {
       body.estimatedLevel !== null &&
       !VALID_LEVELS.has(body.estimatedLevel)
     ) {
-      throw createError(`estimatedLevel must be one of: ${Object.values(EnglishLevel).join(', ')}`, 400);
+      throw createError(
+        `estimatedLevel must be one of: ${Object.values(EnglishLevel).join(', ')}`,
+        400,
+      );
     }
 
     const sections = body.sections ?? [];
@@ -127,10 +136,18 @@ class MocksService {
     const existing = await repo.findMockWithOwner(mockId, userId);
     if (existing === null) throw createError('Mock not found', 404);
 
-    if (body.examType !== undefined && body.examType !== null && !VALID_EXAM_TYPES.has(body.examType)) {
+    if (
+      body.examType !== undefined &&
+      body.examType !== null &&
+      !VALID_EXAM_TYPES.has(body.examType)
+    ) {
       throw createError(`examType must be one of: ${Object.values(ExamType).join(', ')}`, 400);
     }
-    if (body.mockType !== undefined && body.mockType !== null && !VALID_MOCK_TYPES.has(body.mockType)) {
+    if (
+      body.mockType !== undefined &&
+      body.mockType !== null &&
+      !VALID_MOCK_TYPES.has(body.mockType)
+    ) {
       throw createError(`mockType must be one of: ${Object.values(MockType).join(', ')}`, 400);
     }
     if (
@@ -138,7 +155,10 @@ class MocksService {
       body.estimatedLevel !== null &&
       !VALID_LEVELS.has(body.estimatedLevel)
     ) {
-      throw createError(`estimatedLevel must be one of: ${Object.values(EnglishLevel).join(', ')}`, 400);
+      throw createError(
+        `estimatedLevel must be one of: ${Object.values(EnglishLevel).join(', ')}`,
+        400,
+      );
     }
 
     const updateData: Parameters<MocksRepository['updateMock']>[1] = {};
@@ -162,7 +182,8 @@ class MocksService {
         updateData.taken_at = null;
       } else {
         const parsed = new Date(body.takenAt);
-        if (isNaN(parsed.getTime())) throw createError('takenAt must be a valid ISO timestamp', 400);
+        if (isNaN(parsed.getTime()))
+          throw createError('takenAt must be a valid ISO timestamp', 400);
         updateData.taken_at = parsed;
       }
     }

@@ -127,8 +127,7 @@ class ProgressService {
         planned: activityStats.total,
       },
       studyMinutes: scoreStats.studyMinutes,
-      weeklyAvgScore:
-        scoreStats.avgScore !== null ? roundTwo(scoreStats.avgScore) : null,
+      weeklyAvgScore: scoreStats.avgScore !== null ? roundTwo(scoreStats.avgScore) : null,
       strongestSkill,
       weakestSkill,
       studyStreak: calculateStreak(studyDates),

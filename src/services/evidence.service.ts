@@ -30,10 +30,7 @@ class EvidenceService {
       throw createError('fileName is required', 400);
     }
     if (!body.mimeType || !ALL_VALID_MIME_TYPES.has(body.mimeType)) {
-      throw createError(
-        `mimeType must be one of: ${[...ALL_VALID_MIME_TYPES].join(', ')}`,
-        400,
-      );
+      throw createError(`mimeType must be one of: ${[...ALL_VALID_MIME_TYPES].join(', ')}`, 400);
     }
     if (body.fileSize !== undefined && (body.fileSize <= 0 || body.fileSize > MAX_FILE_SIZE)) {
       throw createError('fileSize must be between 1 and 52428800 bytes (50 MB)', 400);
@@ -65,10 +62,7 @@ class EvidenceService {
         throw createError('storageKey is required for file evidence', 400);
       }
       if (!body.mimeType || !ALL_VALID_MIME_TYPES.has(body.mimeType)) {
-        throw createError(
-          `mimeType must be one of: ${[...ALL_VALID_MIME_TYPES].join(', ')}`,
-          400,
-        );
+        throw createError(`mimeType must be one of: ${[...ALL_VALID_MIME_TYPES].join(', ')}`, 400);
       }
     }
 

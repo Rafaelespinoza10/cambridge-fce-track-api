@@ -2,7 +2,12 @@ import { getDatabaseConnection } from '../lib/database';
 import { RecommendationsRepository } from '../repositories/recommendations.repository';
 import { classifySkill, toSafeRecommendation, RULE_SOURCE } from '../lib/recommendations-library';
 import { RecommendationStatus } from '../models/enums';
-import type { RecommendationFilters, UpdateRecommendationBody, SafeRecommendation, GenerateResult } from '../interfaces/recommendations.interface';
+import type {
+  RecommendationFilters,
+  UpdateRecommendationBody,
+  SafeRecommendation,
+  GenerateResult,
+} from '../interfaces/recommendations.interface';
 
 function createError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
