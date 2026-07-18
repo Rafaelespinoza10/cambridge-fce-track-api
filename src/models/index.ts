@@ -3,7 +3,6 @@ export * from './ActivityScoreDetail';
 export * from './ActivityTemplate';
 export * from './ExamSection';
 export * from './EvidenceFile';
-export * from './ExamSection';
 export * from './MockSectionScore';
 export * from './MockTest';
 export * from './NotificationPreference';
