@@ -11,10 +11,12 @@ import type {
   AddPlannedActivityBody,
   UpdatePlannedActivityBody,
   MovePlannedActivityBody,
+  ActivityHistoryFilters,
   SafeWeeklyPlan,
   SafePlanDay,
   SafePlannedActivity,
   SafePlannedActivitySkill,
+  SafeActivityHistoryItem,
 } from '../interfaces/planning.interface';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -58,7 +60,8 @@ function toSafePlannedActivity(pa: PlannedActivity): SafePlannedActivity {
     title: pa.title,
     description: pa.description,
     skillId: pa.skill_id,
-    skill: pa.skill !== undefined && pa.skill !== null ? toSafePlannedActivitySkill(pa.skill) : null,
+    skill:
+      pa.skill !== undefined && pa.skill !== null ? toSafePlannedActivitySkill(pa.skill) : null,
     examSectionId: pa.exam_section_id,
     scheduledOrder: pa.scheduled_order,
     estimatedDurationMinutes: pa.estimated_duration_minutes,
@@ -75,9 +78,19 @@ function toSafePlanDay(day: PlanDay): SafePlanDay {
     dayOfWeek: day.day_of_week,
     date: day.date,
     notes: day.notes,
-    activities: (day.planned_activities ?? []).map(function (pa: PlannedActivity): SafePlannedActivity {
+    activities: (day.planned_activities ?? []).map(function (
+      pa: PlannedActivity,
+    ): SafePlannedActivity {
       return toSafePlannedActivity(pa);
     }),
+  };
+}
+
+function toSafeActivityHistoryItem(pa: PlannedActivity): SafeActivityHistoryItem {
+  return {
+    ...toSafePlannedActivity(pa),
+    weeklyPlanId: pa.plan_day.weekly_plan_id,
+    date: pa.plan_day.date,
   };
 }
 
@@ -107,7 +120,9 @@ class PlanningService {
 
     const existing = await repo.findWeekPlanByUserAndStartDate(userId, body.weekStartDate);
     if (existing !== null) {
-      throw createError('A plan already exists for this week', 409);
+      const full = await repo.findWeekPlanByIdAndUser(existing.id, userId);
+      if (full === null) throw createError('Week plan not found', 404);
+      return toSafeWeeklyPlan(full);
     }
 
     const weekEndDate = addDays(body.weekStartDate, 6);
@@ -155,8 +170,12 @@ class PlanningService {
     const day = await repo.findPlanDayByIdAndWeekPlan(dayId, weekId, userId);
     if (day === null) throw createError('Plan day not found', 404);
 
-    if (body.activityTemplateId !== undefined && body.activityTemplateId !== null &&
-        body.customActivityId !== undefined && body.customActivityId !== null) {
+    if (
+      body.activityTemplateId !== undefined &&
+      body.activityTemplateId !== null &&
+      body.customActivityId !== undefined &&
+      body.customActivityId !== null
+    ) {
       throw createError('Provide either activityTemplateId or customActivityId, not both', 400);
     }
 
@@ -182,7 +201,8 @@ class PlanningService {
     let scheduledAt: Date | null = null;
     if (body.scheduledAt !== undefined && body.scheduledAt !== null) {
       const parsed = new Date(body.scheduledAt);
-      if (isNaN(parsed.getTime())) throw createError('scheduledAt must be a valid ISO timestamp', 400);
+      if (isNaN(parsed.getTime()))
+        throw createError('scheduledAt must be a valid ISO timestamp', 400);
       scheduledAt = parsed;
     }
 
@@ -229,7 +249,8 @@ class PlanningService {
     if (body.description !== undefined) updateData.description = body.description;
     if (body.skillId !== undefined) updateData.skill_id = body.skillId;
     if (body.examSectionId !== undefined) updateData.exam_section_id = body.examSectionId;
-    if (body.estimatedDurationMinutes !== undefined) updateData.estimated_duration_minutes = body.estimatedDurationMinutes;
+    if (body.estimatedDurationMinutes !== undefined)
+      updateData.estimated_duration_minutes = body.estimatedDurationMinutes;
     if (body.priority !== undefined) updateData.priority = body.priority;
     if (body.status !== undefined) updateData.status = body.status;
 
@@ -238,7 +259,8 @@ class PlanningService {
         updateData.scheduled_at = null;
       } else {
         const parsed = new Date(body.scheduledAt);
-        if (isNaN(parsed.getTime())) throw createError('scheduledAt must be a valid ISO timestamp', 400);
+        if (isNaN(parsed.getTime()))
+          throw createError('scheduledAt must be a valid ISO timestamp', 400);
         updateData.scheduled_at = parsed;
       }
     }
@@ -248,7 +270,8 @@ class PlanningService {
         updateData.completed_at = null;
       } else {
         const parsed = new Date(body.completedAt);
-        if (isNaN(parsed.getTime())) throw createError('completedAt must be a valid ISO timestamp', 400);
+        if (isNaN(parsed.getTime()))
+          throw createError('completedAt must be a valid ISO timestamp', 400);
         updateData.completed_at = parsed;
       }
     }
@@ -311,6 +334,46 @@ class PlanningService {
     if (moved === null) throw createError('Planned activity not found', 404);
 
     return toSafePlannedActivity(moved);
+  }
+
+  async getActivityHistory(
+    userId: string,
+    filters: ActivityHistoryFilters,
+  ): Promise<{
+    data: SafeActivityHistoryItem[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const limit = Math.min(filters.limit ?? 20, 100);
+    const offset = filters.offset ?? 0;
+
+    let fromDate: Date | undefined;
+    let toDate: Date | undefined;
+
+    if (filters.from !== undefined) {
+      fromDate = new Date(filters.from);
+      if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    }
+    if (filters.to !== undefined) {
+      toDate = new Date(filters.to);
+      if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+    }
+
+    const ds = await getDatabaseConnection();
+    const repo = new PlanningRepository(ds);
+
+    const [activities, total] = await repo.findActivityHistory({
+      userId,
+      skillId: filters.skillId,
+      status: filters.status,
+      from: fromDate,
+      to: toDate,
+      limit,
+      offset,
+    });
+
+    return { data: activities.map(toSafeActivityHistoryItem), total, limit, offset };
   }
 }
 

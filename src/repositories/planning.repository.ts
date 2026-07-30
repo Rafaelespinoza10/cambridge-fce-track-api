@@ -64,6 +64,16 @@ interface UpdatePlannedActivityData {
   completed_at?: Date | null;
 }
 
+interface ActivityHistoryQueryOptions {
+  userId: string;
+  skillId?: string;
+  status?: PlannedActivityStatus;
+  from?: Date;
+  to?: Date;
+  limit: number;
+  offset: number;
+}
+
 // ── Repository ─────────────────────────────────────────────────────────────────
 
 class PlanningRepository {
@@ -83,12 +93,19 @@ class PlanningRepository {
     this.customActivityRepo = dataSource.getRepository(CustomActivity);
   }
 
-  async findWeekPlanByUserAndStartDate(userId: string, weekStartDate: string): Promise<WeeklyPlan | null> {
-    return this.weeklyPlanRepo.findOne({ where: { user_id: userId, week_start_date: weekStartDate } });
+  async findWeekPlanByUserAndStartDate(
+    userId: string,
+    weekStartDate: string,
+  ): Promise<WeeklyPlan | null> {
+    return this.weeklyPlanRepo.findOne({
+      where: { user_id: userId, week_start_date: weekStartDate },
+    });
   }
 
   async createWeekPlanWithDays(data: CreateWeekPlanData): Promise<WeeklyPlan> {
-    const result = await this.dataSource.transaction(async function (manager: EntityManager): Promise<WeeklyPlan> {
+    const result = await this.dataSource.transaction(async function (
+      manager: EntityManager,
+    ): Promise<WeeklyPlan> {
       const plan = manager.create(WeeklyPlan, {
         user_id: data.userId,
         week_start_date: data.weekStartDate,
@@ -99,7 +116,10 @@ class PlanningRepository {
       const savedPlan = await manager.save(WeeklyPlan, plan);
 
       const startDate = new Date(data.weekStartDate + 'T00:00:00.000Z');
-      const dayEntities: PlanDay[] = DAYS_OF_WEEK.map(function (dayOfWeek: DayOfWeek, index: number): PlanDay {
+      const dayEntities: PlanDay[] = DAYS_OF_WEEK.map(function (
+        dayOfWeek: DayOfWeek,
+        index: number,
+      ): PlanDay {
         const dayDate = new Date(startDate);
         dayDate.setUTCDate(startDate.getUTCDate() + index);
         return manager.create(PlanDay, {
@@ -180,7 +200,11 @@ class PlanningRepository {
     return plan;
   }
 
-  async findPlanDayByIdAndWeekPlan(dayId: string, weekPlanId: string, userId: string): Promise<PlanDay | null> {
+  async findPlanDayByIdAndWeekPlan(
+    dayId: string,
+    weekPlanId: string,
+    userId: string,
+  ): Promise<PlanDay | null> {
     return this.planDayRepo
       .createQueryBuilder('pd')
       .innerJoin('pd.weekly_plan', 'wp')
@@ -240,13 +264,48 @@ class PlanningRepository {
     await this.plannedActivityRepo.softDelete({ id });
   }
 
+  async findActivityHistory(
+    options: ActivityHistoryQueryOptions,
+  ): Promise<[PlannedActivity[], number]> {
+    const qb = this.plannedActivityRepo
+      .createQueryBuilder('pa')
+      .innerJoinAndSelect('pa.plan_day', 'pd')
+      .innerJoinAndSelect('pd.weekly_plan', 'wp')
+      .leftJoinAndSelect('pa.skill', 'skill')
+      .where('wp.user_id = :userId', { userId: options.userId })
+      .andWhere('pa.deleted_at IS NULL')
+      .andWhere('wp.deleted_at IS NULL');
+
+    if (options.skillId !== undefined) {
+      qb.andWhere('pa.skill_id = :skillId', { skillId: options.skillId });
+    }
+    if (options.status !== undefined) {
+      qb.andWhere('pa.status = :status', { status: options.status });
+    }
+    if (options.from !== undefined) {
+      qb.andWhere('pa.scheduled_at >= :from', { from: options.from });
+    }
+    if (options.to !== undefined) {
+      qb.andWhere('pa.scheduled_at <= :to', { to: options.to });
+    }
+
+    qb.orderBy('pa.scheduled_at', 'DESC', 'NULLS LAST')
+      .addOrderBy('pa.created_at', 'DESC')
+      .skip(options.offset)
+      .take(options.limit);
+
+    return qb.getManyAndCount();
+  }
+
   async moveActivityTransaction(
     activityId: string,
     sourceDayId: string,
     targetDayId: string,
     targetOrder: number,
   ): Promise<PlannedActivity> {
-    return this.dataSource.transaction(async function (manager: EntityManager): Promise<PlannedActivity> {
+    return this.dataSource.transaction(async function (
+      manager: EntityManager,
+    ): Promise<PlannedActivity> {
       const paRepo = manager.getRepository(PlannedActivity);
 
       const sourceActivities = await paRepo.find({

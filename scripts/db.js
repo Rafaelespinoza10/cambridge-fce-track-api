@@ -55,7 +55,9 @@ function main() {
   const databaseUrl = readDatabaseUrl(ENV_FILE, STAGE);
 
   if (!databaseUrl) {
-    console.error(`[db.js] ERROR: DATABASE_URL not found in serverless.env.yml under stage "${STAGE}".`);
+    console.error(
+      `[db.js] ERROR: DATABASE_URL not found in serverless.env.yml under stage "${STAGE}".`,
+    );
     process.exit(1);
   }
 

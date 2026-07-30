@@ -28,11 +28,18 @@ function readDatabaseUrl(filePath, stage) {
 
   for (const line of lines) {
     const trimmed = line.trimEnd();
-    if (trimmed === `${stage}:`) { inStage = true; continue; }
-    if (inStage && trimmed.length > 0 && !/^\s/.test(trimmed)) { inStage = false; }
+    if (trimmed === `${stage}:`) {
+      inStage = true;
+      continue;
+    }
+    if (inStage && trimmed.length > 0 && !/^\s/.test(trimmed)) {
+      inStage = false;
+    }
     if (inStage) {
       const match = trimmed.match(/^\s+DATABASE_URL:\s*(.+)$/);
-      if (match) { return match[1].trim(); }
+      if (match) {
+        return match[1].trim();
+      }
     }
   }
   return null;

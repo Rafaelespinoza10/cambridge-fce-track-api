@@ -1,6 +1,5 @@
 ## 📝 Description
 
-
 ## ✨ Changes
 
 - [ ] 🐛 Bug fix
@@ -9,6 +8,7 @@
 - [ ] 🧹 Refactor / chore / docs
 
 ## 🧪 How to test
+
 1.
 2.
 

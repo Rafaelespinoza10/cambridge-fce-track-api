@@ -1,44 +1,18 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse } from '@lib/response';
-import { JwtService } from '@lib/jwt';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
+import { getAuthenticatedPayload } from '@lib/jwt';
 import { ActivityPriority, PlannedActivityStatus } from '../models/enums';
 import { PlanningService } from '../services/planning.service';
-import type { JwtPayload } from '../interfaces/auth.interface';
 import type {
   CreateWeekPlanBody,
   AddPlannedActivityBody,
   UpdatePlannedActivityBody,
   MovePlannedActivityBody,
+  ActivityHistoryFilters,
 } from '../interfaces/planning.interface';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const service = new PlanningService();
-
-// ── Auth / error helpers ───────────────────────────────────────────────────────
-
-function getAuthenticatedPayload(event: APIGatewayProxyEvent): JwtPayload | null {
-  const authHeader = event.headers?.['Authorization'] ?? event.headers?.['authorization'] ?? '';
-  if (!authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-  try {
-    return JwtService.verify(token);
-  } catch {
-    return null;
-  }
-}
-
-function handleError(err: unknown): APIGatewayProxyResult {
-  const error = err as { message?: string; statusCode?: number };
-  const status = error.statusCode ?? 500;
-  const message = status < 500 ? (error.message ?? 'Error') : 'Internal server error';
-  return errorResponse(message, status);
-}
-
-function isValidUuid(value: string): boolean {
-  return UUID_REGEX.test(value);
-}
 
 // ── POST /plans/weeks ──────────────────────────────────────────────────────────
 
@@ -121,13 +95,19 @@ export async function addActivity(event: APIGatewayProxyEvent): Promise<APIGatew
     return errorResponse('Invalid request body', 400);
   }
 
-  if (body.activityTemplateId !== undefined && body.activityTemplateId !== null &&
-      !isValidUuid(body.activityTemplateId)) {
+  if (
+    body.activityTemplateId !== undefined &&
+    body.activityTemplateId !== null &&
+    !isValidUuid(body.activityTemplateId)
+  ) {
     return errorResponse('activityTemplateId must be a valid UUID', 400);
   }
 
-  if (body.customActivityId !== undefined && body.customActivityId !== null &&
-      !isValidUuid(body.customActivityId)) {
+  if (
+    body.customActivityId !== undefined &&
+    body.customActivityId !== null &&
+    !isValidUuid(body.customActivityId)
+  ) {
     return errorResponse('customActivityId must be a valid UUID', 400);
   }
 
@@ -135,11 +115,18 @@ export async function addActivity(event: APIGatewayProxyEvent): Promise<APIGatew
     return errorResponse('skillId must be a valid UUID', 400);
   }
 
-  if (body.examSectionId !== undefined && body.examSectionId !== null && !isValidUuid(body.examSectionId)) {
+  if (
+    body.examSectionId !== undefined &&
+    body.examSectionId !== null &&
+    !isValidUuid(body.examSectionId)
+  ) {
     return errorResponse('examSectionId must be a valid UUID', 400);
   }
 
-  if (body.priority !== undefined && !(Object.values(ActivityPriority) as string[]).includes(body.priority)) {
+  if (
+    body.priority !== undefined &&
+    !(Object.values(ActivityPriority) as string[]).includes(body.priority)
+  ) {
     return errorResponse('priority must be low, medium, or high', 400);
   }
 
@@ -189,15 +176,25 @@ export async function updateActivity(event: APIGatewayProxyEvent): Promise<APIGa
     return errorResponse('skillId must be a valid UUID', 400);
   }
 
-  if (body.examSectionId !== undefined && body.examSectionId !== null && !isValidUuid(body.examSectionId)) {
+  if (
+    body.examSectionId !== undefined &&
+    body.examSectionId !== null &&
+    !isValidUuid(body.examSectionId)
+  ) {
     return errorResponse('examSectionId must be a valid UUID', 400);
   }
 
-  if (body.priority !== undefined && !(Object.values(ActivityPriority) as string[]).includes(body.priority)) {
+  if (
+    body.priority !== undefined &&
+    !(Object.values(ActivityPriority) as string[]).includes(body.priority)
+  ) {
     return errorResponse('priority must be low, medium, or high', 400);
   }
 
-  if (body.status !== undefined && !(Object.values(PlannedActivityStatus) as string[]).includes(body.status)) {
+  if (
+    body.status !== undefined &&
+    !(Object.values(PlannedActivityStatus) as string[]).includes(body.status)
+  ) {
     return errorResponse('status must be pending, in_progress, completed, or skipped', 400);
   }
 
@@ -258,14 +255,65 @@ export async function moveActivity(event: APIGatewayProxyEvent): Promise<APIGate
     return errorResponse('targetDayId must be a valid UUID', 400);
   }
 
-  if (body.targetOrder === undefined || body.targetOrder === null ||
-      !Number.isInteger(body.targetOrder) || body.targetOrder < 0) {
+  if (
+    body.targetOrder === undefined ||
+    body.targetOrder === null ||
+    !Number.isInteger(body.targetOrder) ||
+    body.targetOrder < 0
+  ) {
     return errorResponse('targetOrder must be an integer >= 0', 400);
   }
 
   try {
     const result = await service.moveActivity(payload.sub, plannedActivityId, body);
     return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── GET /plans/activities ──────────────────────────────────────────────────────
+
+export async function getActivityHistory(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const qs = event.queryStringParameters ?? {};
+
+  const limit = qs['limit'] !== undefined ? parseInt(qs['limit'], 10) : 20;
+  const offset = qs['offset'] !== undefined ? parseInt(qs['offset'], 10) : 0;
+
+  if (isNaN(limit) || limit <= 0) return errorResponse('limit must be a positive integer', 400);
+  if (isNaN(offset) || offset < 0)
+    return errorResponse('offset must be a non-negative integer', 400);
+
+  const skillId = qs['skillId'] ?? undefined;
+  if (skillId !== undefined && !isValidUuid(skillId)) {
+    return errorResponse('skillId must be a valid UUID', 400);
+  }
+
+  const status = qs['status'] as PlannedActivityStatus | undefined;
+  if (
+    status !== undefined &&
+    !(Object.values(PlannedActivityStatus) as string[]).includes(status)
+  ) {
+    return errorResponse('status must be pending, in_progress, completed, or skipped', 400);
+  }
+
+  const filters: ActivityHistoryFilters = {
+    skillId,
+    status,
+    from: qs['from'] ?? undefined,
+    to: qs['to'] ?? undefined,
+    limit,
+    offset,
+  };
+
+  try {
+    const result = await service.getActivityHistory(payload.sub, filters);
+    return successResponse({ success: true, ...result }, 200);
   } catch (err: unknown) {
     return handleError(err);
   }

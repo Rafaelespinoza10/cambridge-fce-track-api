@@ -9,23 +9,65 @@ provider:
   runtime: nodejs22.x
   region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
-    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+    S3_EVIDENCE_BUCKET: ${file(serverless.env.yml):${opt:stage, 'dev'}.S3_EVIDENCE_BUCKET}
+    S3_REGION: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:DeleteObject
+          Resource: 'arn:aws:s3:::${self:provider.environment.S3_EVIDENCE_BUCKET}/*'
 
-# functions will be added when implementing evidence handlers
-functions: {}
+functions:
+  evidenceUploadUrl:
+    handler: src/controllers/evidenceController.generateUploadUrl
+    events:
+      - httpApi:
+          path: /evidence/upload-url
+          method: POST
+
+  evidenceCreate:
+    handler: src/controllers/evidenceController.createEvidence
+    events:
+      - httpApi:
+          path: /evidence
+          method: POST
+
+  evidenceList:
+    handler: src/controllers/evidenceController.listEvidence
+    events:
+      - httpApi:
+          path: /evidence
+          method: GET
+
+  evidenceGet:
+    handler: src/controllers/evidenceController.getEvidence
+    events:
+      - httpApi:
+          path: /evidence/{evidenceId}
+          method: GET
+
+  evidenceDelete:
+    handler: src/controllers/evidenceController.deleteEvidence
+    events:
+      - httpApi:
+          path: /evidence/{evidenceId}
+          method: DELETE
 
 package:
   individually: true
 
 custom:
-  esbuild:
-    bundle: true
-    minify: false
-    sourcemap: true
-    exclude:
-      - 'aws-sdk'
-    target: 'node22'
-    platform: node
-    concurrency: 10
+  esbuild: ${file(main.serverless.yml):custom.esbuild}

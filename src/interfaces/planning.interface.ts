@@ -1,4 +1,9 @@
-import type { ActivityPriority, PlannedActivityStatus, WeekPlanStatus, DayOfWeek } from '../models/enums';
+import type {
+  ActivityPriority,
+  PlannedActivityStatus,
+  WeekPlanStatus,
+  DayOfWeek,
+} from '../models/enums';
 
 export interface CreateWeekPlanBody {
   weekStartDate: string;
@@ -75,4 +80,18 @@ export interface SafeWeeklyPlan {
   title: string | null;
   status: WeekPlanStatus;
   days: SafePlanDay[];
+}
+
+export interface ActivityHistoryFilters {
+  skillId?: string;
+  status?: PlannedActivityStatus;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SafeActivityHistoryItem extends SafePlannedActivity {
+  weeklyPlanId: string;
+  date: string | null;
 }

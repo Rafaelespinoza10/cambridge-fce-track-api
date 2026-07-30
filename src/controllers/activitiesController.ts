@@ -1,10 +1,9 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse } from '@lib/response';
-import { JwtService } from '@lib/jwt';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
+import { getAuthenticatedPayload } from '@lib/jwt';
 import { ScoreType } from '../models/enums';
 import { ActivitiesService } from 'src/services/activities.service';
-import type { JwtPayload } from 'src/interfaces/auth.interface';
 import type {
   CreateCustomActivityBody,
   UpdateCustomActivityBody,
@@ -13,33 +12,7 @@ import type {
   CustomActivityFilters,
 } from 'src/interfaces/activities.interface';
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const service = new ActivitiesService();
-
-function getAuthenticatedPayload(event: APIGatewayProxyEvent): JwtPayload | null {
-  const authHeader = event.headers?.['Authorization'] ?? event.headers?.['authorization'] ?? '';
-  if (!authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-  try {
-    return JwtService.verify(token);
-  } catch {
-    return null;
-  }
-}
-
-function handleError(err: unknown): APIGatewayProxyResult {
-  const error = err as { message?: string; statusCode?: number };
-  const status = error.statusCode ?? 500;
-  const message = status < 500 ? (error.message ?? 'Error') : 'Internal server error';
-  return errorResponse(message, status);
-}
-
-function isValidUuid(value: string): boolean {
-  return UUID_REGEX.test(value);
-}
-
-// ── GET /skills ───────────────────────────────────────────────────────────────
 
 export async function getSkills(_event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   try {
@@ -78,7 +51,9 @@ export async function getExamSections(event: APIGatewayProxyEvent): Promise<APIG
 
 // ── GET /activity-templates ───────────────────────────────────────────────────
 
-export async function getActivityTemplates(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+export async function getActivityTemplates(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
   const params = event.queryStringParameters ?? {};
 
   const filters: ActivityTemplateFilters = {};
@@ -128,7 +103,9 @@ export async function getActivityTemplates(event: APIGatewayProxyEvent): Promise
 
 // ── POST /custom-activities ───────────────────────────────────────────────────
 
-export async function createCustomActivity(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+export async function createCustomActivity(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
@@ -143,7 +120,10 @@ export async function createCustomActivity(event: APIGatewayProxyEvent): Promise
     return errorResponse('name is required', 400);
   }
 
-  if (!body.scoreType || !(Object.values(ScoreType) as string[]).includes(body.scoreType as string)) {
+  if (
+    !body.scoreType ||
+    !(Object.values(ScoreType) as string[]).includes(body.scoreType as string)
+  ) {
     return errorResponse('scoreType is required and must be a valid value', 400);
   }
 
@@ -180,7 +160,9 @@ export async function createCustomActivity(event: APIGatewayProxyEvent): Promise
 
 // ── GET /custom-activities ────────────────────────────────────────────────────
 
-export async function getCustomActivities(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+export async function getCustomActivities(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
@@ -223,7 +205,9 @@ export async function getCustomActivities(event: APIGatewayProxyEvent): Promise<
 
 // ── PATCH /custom-activities/:id ──────────────────────────────────────────────
 
-export async function updateCustomActivity(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+export async function updateCustomActivity(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
@@ -300,7 +284,9 @@ export async function updateCustomActivity(event: APIGatewayProxyEvent): Promise
 
 // ── DELETE /custom-activities/:id ─────────────────────────────────────────────
 
-export async function deleteCustomActivity(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+export async function deleteCustomActivity(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 

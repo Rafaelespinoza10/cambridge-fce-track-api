@@ -11,17 +11,18 @@
 **Core value:** Convert daily study into measurable data — detect weaknesses, improve weekly plan, compare progress via mocks.
 
 **Differentiator:**
+
 > "Help users prepare Cambridge by measuring progress per skill, activity and mock, detecting weaknesses and generating a personalized practice plan."
 
 ---
 
 ## 2. Target Users
 
-| Role | Description |
-|------|-------------|
-| Student (MVP) | Registers, sets goal, manages calendar, completes activities, records scores, uploads evidence, reviews progress |
-| Advanced / Premium | Automatic plans, AI recommendations, writing/speaking analysis, PDF exports |
-| Teacher / Tutor | Future phase — review student progress, evidence, mocks, weakness by skill |
+| Role               | Description                                                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Student (MVP)      | Registers, sets goal, manages calendar, completes activities, records scores, uploads evidence, reviews progress |
+| Advanced / Premium | Automatic plans, AI recommendations, writing/speaking analysis, PDF exports                                      |
+| Teacher / Tutor    | Future phase — review student progress, evidence, mocks, weakness by skill                                       |
 
 ---
 
@@ -43,19 +44,19 @@ These are the **only** valid skill values throughout the entire system.
 
 ## 4. Modules (build order follows phases)
 
-| Module | Description |
-|--------|-------------|
-| Auth | Register, login, profile |
-| Dashboard | Weekly summary, completed activities, avg score, strongest/weakest skill, streak |
-| Weekly Calendar | Editable Mon–Sun view, activities per day, color by skill, drag-drop, repeat, status |
-| Activity Library | Predefined catalog of exercises by skill and exam part |
+| Module             | Description                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| Auth               | Register, login, profile                                                                 |
+| Dashboard          | Weekly summary, completed activities, avg score, strongest/weakest skill, streak         |
+| Weekly Calendar    | Editable Mon–Sun view, activities per day, color by skill, drag-drop, repeat, status     |
+| Activity Library   | Predefined catalog of exercises by skill and exam part                                   |
 | Score Registration | Flexible score capture per activity type (correct answers, %, rubrics, time, difficulty) |
-| Evidence | Upload images, PDFs, audio, external links, personal notes |
-| Mocks | Full or partial mock exam registration, score per section, historical comparison |
-| Progress Charts | Evolution by skill, specific activity, week, month, mock |
-| Recommendations | Rule-based weakness detection → suggested activities (MVP); AI in later phase |
-| Goals | Target exam, target date, target score, current level, available days/week, daily time |
-| Resources | Personal library of PDFs, videos, links, writing templates, vocabulary, phrasal verbs |
+| Evidence           | Upload images, PDFs, audio, external links, personal notes                               |
+| Mocks              | Full or partial mock exam registration, score per section, historical comparison         |
+| Progress Charts    | Evolution by skill, specific activity, week, month, mock                                 |
+| Recommendations    | Rule-based weakness detection → suggested activities (MVP); AI in later phase            |
+| Goals              | Target exam, target date, target score, current level, available days/week, daily time   |
+| Resources          | Personal library of PDFs, videos, links, writing templates, vocabulary, phrasal verbs    |
 
 ---
 
@@ -85,24 +86,28 @@ Recommendation
 ## 6. Activity Library — Exercises by Skill
 
 ### Use of English
+
 - Part 1: Multiple-choice cloze
 - Part 2: Open cloze
 - Part 3: Word formation
 - Part 4: Key word transformation
 
 ### Reading
+
 - Part 1: Multiple choice
 - Part 5: Multiple choice text
 - Part 6: Gapped text
 - Part 7: Multiple matching
 
 ### Listening
+
 - Part 1: Multiple choice
 - Part 2: Sentence completion
 - Part 3: Multiple matching
 - Part 4: Multiple choice
 
 ### Writing
+
 - Essay
 - Article
 - Review
@@ -110,6 +115,7 @@ Recommendation
 - Email/Letter
 
 ### Speaking
+
 - Part 1: Interview
 - Part 2: Long turn
 - Part 3: Collaborative task
@@ -120,6 +126,7 @@ Recommendation
 ## 7. Score Formats by Activity Type
 
 ### Reading / Use of English
+
 ```
 correctAnswers: number
 totalAnswers: number
@@ -129,6 +136,7 @@ difficulty: 'easy' | 'medium' | 'hard'
 ```
 
 ### Writing (rubric)
+
 ```
 content: 1–5
 communicativeAchievement: 1–5
@@ -138,6 +146,7 @@ total: number             // sum, max 20
 ```
 
 ### Speaking (rubric)
+
 ```
 fluency: 1–10
 pronunciation: 1–10
@@ -151,6 +160,7 @@ interaction: 1–10
 ## 8. Mock Exam Structure
 
 Fields required per mock:
+
 ```
 name: string
 date: Date
@@ -169,11 +179,11 @@ evidenceFileId?: string
 
 ## 9. Weakness Detection Rules (MVP — no AI)
 
-| Condition | Action |
-|-----------|--------|
-| Score < 60% | Mark as weakness → recommend 2x/week |
-| Score 60%–75% | Mark as in-progress → maintenance practice |
-| Score > 75% | Mark as strong → reduce frequency if other weaknesses exist |
+| Condition     | Action                                                      |
+| ------------- | ----------------------------------------------------------- |
+| Score < 60%   | Mark as weakness → recommend 2x/week                        |
+| Score 60%–75% | Mark as in-progress → maintenance practice                  |
+| Score > 75%   | Mark as strong → reduce frequency if other weaknesses exist |
 
 These are the **only** recommendation rules for Phase 1. Do not implement ML or AI calls in MVP.
 
@@ -181,18 +191,18 @@ These are the **only** recommendation rules for Phase 1. Do not implement ML or 
 
 ## 10. Functional Requirements
 
-| ID | Requirement |
-|----|-------------|
-| RF-01 | User can register and log in |
-| RF-02 | User can create, edit and delete activities in the weekly calendar |
+| ID    | Requirement                                                                   |
+| ----- | ----------------------------------------------------------------------------- |
+| RF-01 | User can register and log in                                                  |
+| RF-02 | User can create, edit and delete activities in the weekly calendar            |
 | RF-03 | User can assign skill, type, difficulty, priority and duration to an activity |
-| RF-04 | User can mark an activity as completed |
-| RF-05 | User can register score, percentage, notes and time spent |
-| RF-06 | User can upload evidence: image, PDF, audio |
-| RF-07 | User can view history of completed activities |
-| RF-08 | User can register full or partial mock exams |
-| RF-09 | System shows charts by skill, activity and mock |
-| RF-10 | System detects weaknesses using score-based rules |
+| RF-04 | User can mark an activity as completed                                        |
+| RF-05 | User can register score, percentage, notes and time spent                     |
+| RF-06 | User can upload evidence: image, PDF, audio                                   |
+| RF-07 | User can view history of completed activities                                 |
+| RF-08 | User can register full or partial mock exams                                  |
+| RF-09 | System shows charts by skill, activity and mock                               |
+| RF-10 | System detects weaknesses using score-based rules                             |
 
 ---
 
@@ -210,12 +220,15 @@ These are the **only** recommendation rules for Phase 1. Do not implement ML or 
 ## 12. Phase Roadmap
 
 ### Phase 1 — Strong MVP (current)
+
 Login/Register · Dashboard · Editable weekly calendar · Create activities · Register scores · Upload evidence · History · Skill charts · Register full mocks
 
 ### Phase 2 — Automation
+
 Auto recommendations · Auto weekly planner · Resource library · PDF report export · Audio upload for speaking
 
 ### Phase 3 — AI & Scale
+
 AI writing analysis · AI speaking feedback · Tutor marketplace · Teacher/student mode · Study groups
 
 ---
@@ -281,4 +294,4 @@ These rules apply to ALL code produced for this project:
 
 ---
 
-*Document version: 1.0 — Generated from `documentacion_app_cambridge_tracker.pdf`*
+_Document version: 1.0 — Generated from `documentacion_app_cambridge_tracker.pdf`_

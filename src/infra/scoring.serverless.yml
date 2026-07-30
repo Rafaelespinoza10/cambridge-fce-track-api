@@ -9,23 +9,61 @@ provider:
   runtime: nodejs22.x
   region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
-    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
-# functions will be added when implementing scoring handlers
-functions: {}
+functions:
+  scoringRegisterScore:
+    handler: src/controllers/scoringController.registerScore
+    events:
+      - httpApi:
+          path: /scores/activities/{plannedActivityId}
+          method: POST
+
+  scoringGetScoresByActivity:
+    handler: src/controllers/scoringController.getScoresByActivity
+    events:
+      - httpApi:
+          path: /scores/activities/{plannedActivityId}
+          method: GET
+
+  scoringGetScoreHistory:
+    handler: src/controllers/scoringController.getScoreHistory
+    events:
+      - httpApi:
+          path: /scores
+          method: GET
+
+  scoringGetScore:
+    handler: src/controllers/scoringController.getScore
+    events:
+      - httpApi:
+          path: /scores/{scoreId}
+          method: GET
+
+  scoringUpdateScore:
+    handler: src/controllers/scoringController.updateScore
+    events:
+      - httpApi:
+          path: /scores/{scoreId}
+          method: PATCH
+
+  scoringDeleteScore:
+    handler: src/controllers/scoringController.deleteScore
+    events:
+      - httpApi:
+          path: /scores/{scoreId}
+          method: DELETE
 
 package:
   individually: true
 
 custom:
-  esbuild:
-    bundle: true
-    minify: false
-    sourcemap: true
-    exclude:
-      - 'aws-sdk'
-    target: 'node22'
-    platform: node
-    concurrency: 10
+  esbuild: ${file(main.serverless.yml):custom.esbuild}
