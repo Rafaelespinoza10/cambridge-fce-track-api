@@ -81,3 +81,17 @@ export interface SafeWeeklyPlan {
   status: WeekPlanStatus;
   days: SafePlanDay[];
 }
+
+export interface ActivityHistoryFilters {
+  skillId?: string;
+  status?: PlannedActivityStatus;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SafeActivityHistoryItem extends SafePlannedActivity {
+  weeklyPlanId: string;
+  date: string | null;
+}

@@ -69,6 +69,13 @@ functions:
           path: /plans/activities/{plannedActivityId}/move
           method: PATCH
 
+  planningGetActivityHistory:
+    handler: src/controllers/planningController.getActivityHistory
+    events:
+      - httpApi:
+          path: /plans/activities
+          method: GET
+
 package:
   individually: true
 

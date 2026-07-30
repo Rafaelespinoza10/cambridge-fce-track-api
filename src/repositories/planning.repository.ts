@@ -64,6 +64,16 @@ interface UpdatePlannedActivityData {
   completed_at?: Date | null;
 }
 
+interface ActivityHistoryQueryOptions {
+  userId: string;
+  skillId?: string;
+  status?: PlannedActivityStatus;
+  from?: Date;
+  to?: Date;
+  limit: number;
+  offset: number;
+}
+
 // ── Repository ─────────────────────────────────────────────────────────────────
 
 class PlanningRepository {
@@ -252,6 +262,39 @@ class PlanningRepository {
 
   async softDeletePlannedActivity(id: string): Promise<void> {
     await this.plannedActivityRepo.softDelete({ id });
+  }
+
+  async findActivityHistory(
+    options: ActivityHistoryQueryOptions,
+  ): Promise<[PlannedActivity[], number]> {
+    const qb = this.plannedActivityRepo
+      .createQueryBuilder('pa')
+      .innerJoinAndSelect('pa.plan_day', 'pd')
+      .innerJoinAndSelect('pd.weekly_plan', 'wp')
+      .leftJoinAndSelect('pa.skill', 'skill')
+      .where('wp.user_id = :userId', { userId: options.userId })
+      .andWhere('pa.deleted_at IS NULL')
+      .andWhere('wp.deleted_at IS NULL');
+
+    if (options.skillId !== undefined) {
+      qb.andWhere('pa.skill_id = :skillId', { skillId: options.skillId });
+    }
+    if (options.status !== undefined) {
+      qb.andWhere('pa.status = :status', { status: options.status });
+    }
+    if (options.from !== undefined) {
+      qb.andWhere('pa.scheduled_at >= :from', { from: options.from });
+    }
+    if (options.to !== undefined) {
+      qb.andWhere('pa.scheduled_at <= :to', { to: options.to });
+    }
+
+    qb.orderBy('pa.scheduled_at', 'DESC', 'NULLS LAST')
+      .addOrderBy('pa.created_at', 'DESC')
+      .skip(options.offset)
+      .take(options.limit);
+
+    return qb.getManyAndCount();
   }
 
   async moveActivityTransaction(
