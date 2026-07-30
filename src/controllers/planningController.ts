@@ -9,6 +9,7 @@ import type {
   AddPlannedActivityBody,
   UpdatePlannedActivityBody,
   MovePlannedActivityBody,
+  ActivityHistoryFilters,
 } from '../interfaces/planning.interface';
 
 const service = new PlanningService();
@@ -266,6 +267,53 @@ export async function moveActivity(event: APIGatewayProxyEvent): Promise<APIGate
   try {
     const result = await service.moveActivity(payload.sub, plannedActivityId, body);
     return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── GET /plans/activities ──────────────────────────────────────────────────────
+
+export async function getActivityHistory(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const qs = event.queryStringParameters ?? {};
+
+  const limit = qs['limit'] !== undefined ? parseInt(qs['limit'], 10) : 20;
+  const offset = qs['offset'] !== undefined ? parseInt(qs['offset'], 10) : 0;
+
+  if (isNaN(limit) || limit <= 0) return errorResponse('limit must be a positive integer', 400);
+  if (isNaN(offset) || offset < 0)
+    return errorResponse('offset must be a non-negative integer', 400);
+
+  const skillId = qs['skillId'] ?? undefined;
+  if (skillId !== undefined && !isValidUuid(skillId)) {
+    return errorResponse('skillId must be a valid UUID', 400);
+  }
+
+  const status = qs['status'] as PlannedActivityStatus | undefined;
+  if (
+    status !== undefined &&
+    !(Object.values(PlannedActivityStatus) as string[]).includes(status)
+  ) {
+    return errorResponse('status must be pending, in_progress, completed, or skipped', 400);
+  }
+
+  const filters: ActivityHistoryFilters = {
+    skillId,
+    status,
+    from: qs['from'] ?? undefined,
+    to: qs['to'] ?? undefined,
+    limit,
+    offset,
+  };
+
+  try {
+    const result = await service.getActivityHistory(payload.sub, filters);
+    return successResponse({ success: true, ...result }, 200);
   } catch (err: unknown) {
     return handleError(err);
   }

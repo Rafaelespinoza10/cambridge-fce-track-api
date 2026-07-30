@@ -11,10 +11,12 @@ import type {
   AddPlannedActivityBody,
   UpdatePlannedActivityBody,
   MovePlannedActivityBody,
+  ActivityHistoryFilters,
   SafeWeeklyPlan,
   SafePlanDay,
   SafePlannedActivity,
   SafePlannedActivitySkill,
+  SafeActivityHistoryItem,
 } from '../interfaces/planning.interface';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -81,6 +83,14 @@ function toSafePlanDay(day: PlanDay): SafePlanDay {
     ): SafePlannedActivity {
       return toSafePlannedActivity(pa);
     }),
+  };
+}
+
+function toSafeActivityHistoryItem(pa: PlannedActivity): SafeActivityHistoryItem {
+  return {
+    ...toSafePlannedActivity(pa),
+    weeklyPlanId: pa.plan_day.weekly_plan_id,
+    date: pa.plan_day.date,
   };
 }
 
@@ -324,6 +334,46 @@ class PlanningService {
     if (moved === null) throw createError('Planned activity not found', 404);
 
     return toSafePlannedActivity(moved);
+  }
+
+  async getActivityHistory(
+    userId: string,
+    filters: ActivityHistoryFilters,
+  ): Promise<{
+    data: SafeActivityHistoryItem[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const limit = Math.min(filters.limit ?? 20, 100);
+    const offset = filters.offset ?? 0;
+
+    let fromDate: Date | undefined;
+    let toDate: Date | undefined;
+
+    if (filters.from !== undefined) {
+      fromDate = new Date(filters.from);
+      if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    }
+    if (filters.to !== undefined) {
+      toDate = new Date(filters.to);
+      if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+    }
+
+    const ds = await getDatabaseConnection();
+    const repo = new PlanningRepository(ds);
+
+    const [activities, total] = await repo.findActivityHistory({
+      userId,
+      skillId: filters.skillId,
+      status: filters.status,
+      from: fromDate,
+      to: toDate,
+      limit,
+      offset,
+    });
+
+    return { data: activities.map(toSafeActivityHistoryItem), total, limit, offset };
   }
 }
 

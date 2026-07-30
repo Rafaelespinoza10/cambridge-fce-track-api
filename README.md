@@ -42,7 +42,7 @@ src/
 | Auth | `cambridge-tracker-auth` | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
 | Users / Goals | `cambridge-tracker-users` | `GET /users/me`, `PATCH /users/me/profile`, `GET/POST /users/me/goals`, `PATCH/DELETE /users/me/goals/{goalId}` |
 | Activity Library | `cambridge-tracker-activities` | `GET /skills`, `GET /exam-sections`, `GET /activity-templates`, `GET/POST /custom-activities`, `PATCH/DELETE /custom-activities/{id}` |
-| Weekly Calendar (Planning) | `cambridge-tracker-planning` | `POST /plans/weeks`, `GET /plans/current`, `GET /plans/weeks/{weekId}`, `POST /plans/weeks/{weekId}/days/{dayId}/activities`, `PATCH/DELETE /plans/activities/{plannedActivityId}`, `PATCH /plans/activities/{plannedActivityId}/move` |
+| Weekly Calendar (Planning) | `cambridge-tracker-planning` | `POST /plans/weeks`, `GET /plans/current`, `GET /plans/weeks/{weekId}`, `POST /plans/weeks/{weekId}/days/{dayId}/activities`, `PATCH/DELETE /plans/activities/{plannedActivityId}`, `PATCH /plans/activities/{plannedActivityId}/move`, `GET /plans/activities` (historial paginado, cruza semanas, filtra por `skillId`/`status`/`from`/`to`) |
 | Score Registration | `cambridge-tracker-scoring` | `POST/GET /scores/activities/{plannedActivityId}`, `GET /scores`, `GET/PATCH/DELETE /scores/{scoreId}` |
 | Evidence | `cambridge-tracker-evidence` | `POST /evidence/upload-url`, `POST/GET /evidence`, `GET/DELETE /evidence/{evidenceId}` |
 | Mocks | `cambridge-tracker-mocks` | `POST/GET /mocks`, `GET/PATCH/DELETE /mocks/{mockId}` |
