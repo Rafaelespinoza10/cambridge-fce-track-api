@@ -1,11 +1,14 @@
 import { getDatabaseConnection } from '../lib/database';
 import { getSkillAccentColor } from '../lib/skill-display';
+import { fromCsv } from '../lib/csv';
 import { PlanningRepository } from '../repositories/planning.repository';
-import { ActivityPriority, PlannedActivityStatus } from '../models/enums';
+import { ScoringRepository } from '../repositories/scoring.repository';
+import { ActivityPriority, PlannedActivityStatus, ScoreType } from '../models/enums';
 import type { WeeklyPlan } from '../models/WeeklyPlan';
 import type { PlanDay } from '../models/PlanDay';
 import type { PlannedActivity } from '../models/PlannedActivity';
 import type { Skill } from '../models/Skill';
+import type { ImportResult } from '../lib/csv';
 import type {
   CreateWeekPlanBody,
   AddPlannedActivityBody,
@@ -17,6 +20,7 @@ import type {
   SafePlannedActivity,
   SafePlannedActivitySkill,
   SafeActivityHistoryItem,
+  ActivityHistoryExportRow,
 } from '../interfaces/planning.interface';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -38,6 +42,29 @@ function todayISODate(): string {
 function isValidDateString(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   return !isNaN(new Date(value + 'T00:00:00.000Z').getTime());
+}
+
+function mondayOfWeek(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00.000Z');
+  const day = date.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  date.setUTCDate(date.getUTCDate() - diff);
+  return date.toISOString().slice(0, 10);
+}
+
+function roundTwo(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function resolveImportStatus(raw: string | undefined): PlannedActivityStatus {
+  const value = (raw ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+  if (value === '') return PlannedActivityStatus.PENDING;
+
+  const match = (Object.values(PlannedActivityStatus) as string[]).find((s) => s === value);
+  if (match === undefined) {
+    throw new Error(`status must be one of: ${Object.values(PlannedActivityStatus).join(', ')}`);
+  }
+  return match as PlannedActivityStatus;
 }
 
 // ── Mappers ────────────────────────────────────────────────────────────────────
@@ -91,6 +118,23 @@ function toSafeActivityHistoryItem(pa: PlannedActivity): SafeActivityHistoryItem
     ...toSafePlannedActivity(pa),
     weeklyPlanId: pa.plan_day.weekly_plan_id,
     date: pa.plan_day.date,
+  };
+}
+
+function toActivityHistoryExportRow(pa: PlannedActivity): ActivityHistoryExportRow {
+  return {
+    plannedActivityId: pa.id,
+    weeklyPlanId: pa.plan_day.weekly_plan_id,
+    date: pa.plan_day.date ?? '',
+    title: pa.title,
+    description: pa.description ?? '',
+    skillName: pa.skill?.name ?? '',
+    examSectionId: pa.exam_section_id ?? '',
+    priority: pa.priority,
+    status: pa.status,
+    scheduledAt: pa.scheduled_at?.toISOString() ?? '',
+    completedAt: pa.completed_at?.toISOString() ?? '',
+    estimatedDurationMinutes: pa.estimated_duration_minutes ?? '',
   };
 }
 
@@ -374,6 +418,172 @@ class PlanningService {
     });
 
     return { data: activities.map(toSafeActivityHistoryItem), total, limit, offset };
+  }
+
+  async exportActivityHistory(
+    userId: string,
+    filters: Omit<ActivityHistoryFilters, 'limit' | 'offset'>,
+  ): Promise<ActivityHistoryExportRow[]> {
+    let fromDate: Date | undefined;
+    let toDate: Date | undefined;
+
+    if (filters.from !== undefined) {
+      fromDate = new Date(filters.from);
+      if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    }
+    if (filters.to !== undefined) {
+      toDate = new Date(filters.to);
+      if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+    }
+
+    const ds = await getDatabaseConnection();
+    const repo = new PlanningRepository(ds);
+
+    const activities = await repo.findActivityHistoryForExport({
+      userId,
+      skillId: filters.skillId,
+      status: filters.status,
+      from: fromDate,
+      to: toDate,
+    });
+
+    return activities.map(toActivityHistoryExportRow);
+  }
+
+  async importActivityHistory(userId: string, csvText: string): Promise<ImportResult> {
+    let rows: Record<string, string>[];
+    try {
+      rows = fromCsv(csvText);
+    } catch {
+      throw createError('Invalid CSV content', 400);
+    }
+
+    const ds = await getDatabaseConnection();
+    const repo = new PlanningRepository(ds);
+    const scoringRepo = new ScoringRepository(ds);
+
+    const result: ImportResult = { imported: 0, skipped: 0, errors: [] };
+    const weekPlanIdByStart = new Map<string, string>();
+    const planDayIdByDate = new Map<string, string>();
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowNum = i + 2;
+      const row = rows[i];
+
+      try {
+        const date = (row.date ?? '').trim();
+        if (!isValidDateString(date)) {
+          throw new Error('date must be in YYYY-MM-DD format');
+        }
+
+        const title = (row.title ?? '').trim();
+        if (title === '') {
+          throw new Error('title is required');
+        }
+
+        let skillId: string | null = null;
+        const skillName = (row.skill ?? '').trim();
+        if (skillName !== '') {
+          const skill = await repo.findSkillByName(skillName);
+          if (skill === null) throw new Error(`Unknown skill "${skillName}"`);
+          skillId = skill.id;
+        }
+
+        const status = resolveImportStatus(row.status);
+
+        const rawScoreStr = (row.score ?? '').trim();
+        const maxScoreStr = (row.max_score ?? '').trim();
+        const rawScore = rawScoreStr !== '' ? Number(rawScoreStr) : null;
+        const maxScore = maxScoreStr !== '' ? Number(maxScoreStr) : null;
+        if (rawScoreStr !== '' && (rawScore === null || isNaN(rawScore))) {
+          throw new Error('score must be a number');
+        }
+        if (maxScoreStr !== '' && (maxScore === null || isNaN(maxScore))) {
+          throw new Error('max_score must be a number');
+        }
+
+        const durationStr = (row.duration_min ?? '').trim();
+        const durationMinutes = durationStr !== '' ? parseInt(durationStr, 10) : null;
+        if (durationStr !== '' && (durationMinutes === null || isNaN(durationMinutes))) {
+          throw new Error('duration_min must be an integer');
+        }
+
+        const weekStart = mondayOfWeek(date);
+        let weeklyPlanId = weekPlanIdByStart.get(weekStart);
+        if (weeklyPlanId === undefined) {
+          const existingPlan = await repo.findWeekPlanByUserAndStartDate(userId, weekStart);
+          if (existingPlan !== null) {
+            weeklyPlanId = existingPlan.id;
+          } else {
+            const created = await repo.createWeekPlanWithDays({
+              userId,
+              weekStartDate: weekStart,
+              weekEndDate: addDays(weekStart, 6),
+              title: null,
+            });
+            weeklyPlanId = created.id;
+          }
+          weekPlanIdByStart.set(weekStart, weeklyPlanId);
+        }
+
+        const planDayKey = `${weeklyPlanId}:${date}`;
+        let planDayId = planDayIdByDate.get(planDayKey);
+        if (planDayId === undefined) {
+          const planDay = await repo.findPlanDayByDate(weeklyPlanId, date);
+          if (planDay === null) throw new Error('Could not resolve plan day for date');
+          planDayId = planDay.id;
+          planDayIdByDate.set(planDayKey, planDayId);
+        }
+
+        const duplicate = await repo.findPlannedActivityByTitleAndDay(planDayId, title);
+        if (duplicate !== null) {
+          result.skipped++;
+          continue;
+        }
+
+        const scheduledAt = new Date(date + 'T00:00:00.000Z');
+        const completedAt = status === PlannedActivityStatus.COMPLETED ? scheduledAt : null;
+
+        const activity = await repo.createPlannedActivityForImport({
+          planDayId,
+          title,
+          skillId,
+          estimatedDurationMinutes: durationMinutes,
+          status,
+          scheduledAt,
+          completedAt,
+          scheduledOrder: await repo.countActivitiesInDay(planDayId),
+        });
+
+        if (rawScore !== null && maxScore !== null) {
+          const percentage = maxScore > 0 ? roundTwo((rawScore / maxScore) * 100) : null;
+          await scoringRepo.createScore({
+            userId,
+            plannedActivityId: activity.id,
+            skillId,
+            scoreType: ScoreType.PERCENTAGE,
+            correctAnswers: null,
+            totalQuestions: null,
+            rawScore,
+            maxScore,
+            percentage,
+            timeSpentMinutes: durationMinutes,
+            difficulty: null,
+            notes: null,
+            attemptedAt: completedAt ?? scheduledAt,
+          });
+        }
+
+        result.imported++;
+      } catch (err) {
+        result.errors.push({
+          row: rowNum,
+          reason: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+
+    return result;
   }
 }
 

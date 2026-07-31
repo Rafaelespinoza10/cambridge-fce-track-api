@@ -89,3 +89,16 @@ export interface CustomActivityFilters {
   examSectionId?: string;
   scoreType?: ScoreType;
 }
+
+// ── Export (CSV) row ────────────────────────────────────────────────────────────
+
+export interface CustomActivityExportRow {
+  activityId: string;
+  name: string;
+  description: string;
+  skillId: string;
+  examSectionId: string;
+  scoreType: ScoreType | string;
+  defaultDurationMinutes: number | string;
+  maxScore: number | string;
+}

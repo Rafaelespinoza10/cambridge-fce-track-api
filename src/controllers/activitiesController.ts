@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
+import { errorResponse, successResponse, csvResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
+import { toCsv } from '@lib/csv';
 import { ScoreType } from '../models/enums';
 import { ActivitiesService } from 'src/services/activities.service';
 import type {
@@ -10,6 +11,7 @@ import type {
   ExamSectionFilters,
   ActivityTemplateFilters,
   CustomActivityFilters,
+  CustomActivityExportRow,
 } from 'src/interfaces/activities.interface';
 
 const service = new ActivitiesService();
@@ -203,6 +205,63 @@ export async function getCustomActivities(
   }
 }
 
+// ── GET /custom-activities/export ─────────────────────────────────────────────
+
+const CUSTOM_ACTIVITY_EXPORT_COLUMNS: { key: keyof CustomActivityExportRow; header: string }[] = [
+  { key: 'activityId', header: 'Activity ID' },
+  { key: 'name', header: 'Name' },
+  { key: 'description', header: 'Description' },
+  { key: 'skillId', header: 'Skill ID' },
+  { key: 'examSectionId', header: 'Exam Section ID' },
+  { key: 'scoreType', header: 'Score Type' },
+  { key: 'defaultDurationMinutes', header: 'Default Duration (min)' },
+  { key: 'maxScore', header: 'Max Score' },
+];
+
+export async function exportCustomActivities(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const params = event.queryStringParameters ?? {};
+
+  const filters: CustomActivityFilters = {};
+
+  if (params.skillId !== undefined && params.skillId !== '') {
+    if (!isValidUuid(params.skillId)) {
+      return errorResponse('skillId must be a valid UUID', 400);
+    }
+    filters.skillId = params.skillId;
+  }
+
+  if (params.skillSlug !== undefined && params.skillSlug !== '') {
+    filters.skillSlug = params.skillSlug;
+  }
+
+  if (params.examSectionId !== undefined && params.examSectionId !== '') {
+    if (!isValidUuid(params.examSectionId)) {
+      return errorResponse('examSectionId must be a valid UUID', 400);
+    }
+    filters.examSectionId = params.examSectionId;
+  }
+
+  if (params.scoreType !== undefined && params.scoreType !== '') {
+    if (!(Object.values(ScoreType) as string[]).includes(params.scoreType)) {
+      return errorResponse('scoreType must be a valid value', 400);
+    }
+    filters.scoreType = params.scoreType as ScoreType;
+  }
+
+  try {
+    const rows = await service.exportCustomActivities(payload.sub, filters);
+    const csv = toCsv(rows, CUSTOM_ACTIVITY_EXPORT_COLUMNS);
+    return csvResponse(csv, 'custom-activities-export.csv');
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
 // ── PATCH /custom-activities/:id ──────────────────────────────────────────────
 
 export async function updateCustomActivity(
@@ -298,6 +357,25 @@ export async function deleteCustomActivity(
   try {
     await service.deleteCustomActivity(payload.sub, activityId);
     return successResponse({ success: true }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── POST /custom-activities/import ────────────────────────────────────────────
+
+export async function importCustomActivities(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const csvText = event.body ?? '';
+  if (csvText.trim() === '') return errorResponse('Request body must not be empty', 400);
+
+  try {
+    const result = await service.importCustomActivities(payload.sub, csvText);
+    return successResponse({ success: true, ...result }, 200);
   } catch (err: unknown) {
     return handleError(err);
   }

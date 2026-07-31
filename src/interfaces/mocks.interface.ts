@@ -76,3 +76,22 @@ export interface SafeMock {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// ── Export (CSV) row ────────────────────────────────────────────────────────────
+
+export interface MockExportRow {
+  mockId: string;
+  mockName: string;
+  examType: ExamType;
+  mockType: MockType;
+  takenAt: string;
+  estimatedCambridgeScore: number | string;
+  estimatedLevel: EnglishLevel | string;
+  notes: string;
+  sectionName: string;
+  rawScore: number | string;
+  maxScore: number | string;
+  percentage: number | string;
+  cambridgeScore: number | string;
+  sectionNotes: string;
+}

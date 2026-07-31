@@ -44,6 +44,14 @@ interface MockListOptions {
   offset: number;
 }
 
+interface MockExportOptions {
+  userId: string;
+  examType?: ExamType;
+  mockType?: MockType;
+  from?: Date;
+  to?: Date;
+}
+
 class MocksRepository {
   private readonly mockRepo: Repository<MockTest>;
   private readonly sectionRepo: Repository<MockSectionScore>;
@@ -133,6 +141,53 @@ class MocksRepository {
     return qb.getManyAndCount();
   }
 
+  async findMocksForExport(options: MockExportOptions): Promise<MockTest[]> {
+    const qb = this.mockRepo
+      .createQueryBuilder('mock')
+      .leftJoinAndSelect('mock.section_scores', 'ss')
+      .where('mock.user_id = :userId', { userId: options.userId })
+      .andWhere('mock.deleted_at IS NULL');
+
+    if (options.examType !== undefined) {
+      qb.andWhere('mock.exam_type = :examType', { examType: options.examType });
+    }
+    if (options.mockType !== undefined) {
+      qb.andWhere('mock.mock_type = :mockType', { mockType: options.mockType });
+    }
+    if (options.from !== undefined) {
+      qb.andWhere('mock.taken_at >= :from', { from: options.from });
+    }
+    if (options.to !== undefined) {
+      qb.andWhere('mock.taken_at <= :to', { to: options.to });
+    }
+
+    qb.orderBy('mock.taken_at', 'DESC', 'NULLS LAST')
+      .addOrderBy('mock.created_at', 'DESC')
+      .addOrderBy('ss.section_name', 'ASC');
+
+    return qb.getMany();
+  }
+
+  async findMockByNameAndTakenAt(
+    userId: string,
+    name: string,
+    takenAt: Date | null,
+  ): Promise<MockTest | null> {
+    const qb = this.mockRepo
+      .createQueryBuilder('mock')
+      .where('mock.user_id = :userId', { userId })
+      .andWhere('LOWER(mock.name) = LOWER(:name)', { name })
+      .andWhere('mock.deleted_at IS NULL');
+
+    if (takenAt === null) {
+      qb.andWhere('mock.taken_at IS NULL');
+    } else {
+      qb.andWhere('mock.taken_at = :takenAt', { takenAt });
+    }
+
+    return qb.getOne();
+  }
+
   async updateMock(mockId: string, data: UpdateMockData): Promise<void> {
     await this.mockRepo.update({ id: mockId }, data);
   }
@@ -165,4 +220,4 @@ class MocksRepository {
 }
 
 export { MocksRepository };
-export type { CreateMockData, CreateSectionData, UpdateMockData, MockListOptions };
+export type { CreateMockData, CreateSectionData, UpdateMockData, MockListOptions, MockExportOptions };
