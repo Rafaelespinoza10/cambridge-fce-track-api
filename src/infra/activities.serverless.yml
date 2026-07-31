@@ -55,6 +55,20 @@ functions:
           path: /custom-activities
           method: GET
 
+  activitiesExportActivities:
+    handler: src/controllers/activitiesController.exportCustomActivities
+    events:
+      - httpApi:
+          path: /custom-activities/export
+          method: GET
+
+  activitiesImportActivities:
+    handler: src/controllers/activitiesController.importCustomActivities
+    events:
+      - httpApi:
+          path: /custom-activities/import
+          method: POST
+
   activitiesUpdateCustomActivity:
     handler: src/controllers/activitiesController.updateCustomActivity
     events:

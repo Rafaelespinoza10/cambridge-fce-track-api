@@ -1,9 +1,13 @@
 import { getDatabaseConnection } from '../lib/database';
+import { fromCsv } from '../lib/csv';
+import { isValidUuid } from '@lib/response';
 import { ActivitiesRepository } from 'src/repositories/activities.repository';
+import { ScoreType } from '../models/enums';
 import type { Skill } from '../models/Skill';
 import type { ExamSection } from '../models/ExamSection';
 import type { ActivityTemplate } from '../models/ActivityTemplate';
 import type { CustomActivity } from '../models/CustomActivity';
+import type { ImportResult } from '../lib/csv';
 import type {
   SafeSkill,
   SafeExamSection,
@@ -14,6 +18,7 @@ import type {
   ExamSectionFilters,
   ActivityTemplateFilters,
   CustomActivityFilters,
+  CustomActivityExportRow,
 } from 'src/interfaces/activities.interface';
 
 function createError(message: string, statusCode: number): Error {
@@ -147,6 +152,28 @@ class ActivitiesService {
     });
   }
 
+  async exportCustomActivities(
+    userId: string,
+    filters: CustomActivityFilters,
+  ): Promise<CustomActivityExportRow[]> {
+    const ds = await getDatabaseConnection();
+    const repo = new ActivitiesRepository(ds);
+
+    const activities = await repo.findCustomActivitiesByUser(userId, filters);
+    return activities.map(function (activity: CustomActivity): CustomActivityExportRow {
+      return {
+        activityId: activity.id,
+        name: activity.name,
+        description: activity.description ?? '',
+        skillId: activity.skill_id ?? '',
+        examSectionId: activity.exam_section_id ?? '',
+        scoreType: activity.score_type ?? '',
+        defaultDurationMinutes: activity.default_duration_minutes ?? '',
+        maxScore: activity.max_score ?? '',
+      };
+    });
+  }
+
   async updateCustomActivity(
     userId: string,
     activityId: string,
@@ -199,6 +226,81 @@ class ActivitiesService {
     if (existing === null) throw createError('Custom activity not found', 404);
 
     await repo.softDeleteCustomActivity(activityId);
+  }
+
+  async importCustomActivities(userId: string, csvText: string): Promise<ImportResult> {
+    let rows: Record<string, string>[];
+    try {
+      rows = fromCsv(csvText);
+    } catch {
+      throw createError('Invalid CSV content', 400);
+    }
+
+    const result: ImportResult = { imported: 0, skipped: 0, errors: [] };
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowNum = i + 2;
+      const row = rows[i];
+
+      try {
+        const name = (row['Name'] ?? '').trim();
+        if (name === '') throw new Error('Name is required');
+
+        const scoreTypeRaw = (row['Score Type'] ?? '').trim();
+        if (!(Object.values(ScoreType) as string[]).includes(scoreTypeRaw)) {
+          throw new Error(`Score Type must be one of: ${Object.values(ScoreType).join(', ')}`);
+        }
+
+        const skillId = (row['Skill ID'] ?? '').trim() || undefined;
+        if (skillId !== undefined && !isValidUuid(skillId)) {
+          throw new Error('Skill ID must be a valid UUID');
+        }
+
+        const examSectionId = (row['Exam Section ID'] ?? '').trim() || undefined;
+        if (examSectionId !== undefined && !isValidUuid(examSectionId)) {
+          throw new Error('Exam Section ID must be a valid UUID');
+        }
+
+        const description = (row['Description'] ?? '').trim() || undefined;
+
+        const durationRaw = (row['Default Duration (min)'] ?? '').trim();
+        let defaultDurationMinutes: number | undefined;
+        if (durationRaw !== '') {
+          defaultDurationMinutes = parseInt(durationRaw, 10);
+          if (!Number.isInteger(defaultDurationMinutes) || defaultDurationMinutes <= 0) {
+            throw new Error('Default Duration (min) must be a positive integer');
+          }
+        }
+
+        const maxScoreRaw = (row['Max Score'] ?? '').trim();
+        let maxScore: number | undefined;
+        if (maxScoreRaw !== '') {
+          maxScore = parseInt(maxScoreRaw, 10);
+          if (!Number.isInteger(maxScore) || maxScore <= 0) {
+            throw new Error('Max Score must be a positive integer');
+          }
+        }
+
+        await this.createCustomActivity(userId, {
+          name,
+          description,
+          scoreType: scoreTypeRaw as ScoreType,
+          skillId,
+          examSectionId,
+          defaultDurationMinutes,
+          maxScore,
+        });
+
+        result.imported++;
+      } catch (err) {
+        result.errors.push({
+          row: rowNum,
+          reason: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+
+    return result;
   }
 }
 

@@ -76,6 +76,20 @@ functions:
           path: /plans/activities
           method: GET
 
+  planningExportActivityHistory:
+    handler: src/controllers/planningController.exportActivityHistory
+    events:
+      - httpApi:
+          path: /plans/activities/export
+          method: GET
+
+  planningImportActivityHistory:
+    handler: src/controllers/planningController.importActivityHistory
+    events:
+      - httpApi:
+          path: /plans/activities/import
+          method: POST
+
 package:
   individually: true
 

@@ -95,3 +95,20 @@ export interface SafeActivityHistoryItem extends SafePlannedActivity {
   weeklyPlanId: string;
   date: string | null;
 }
+
+// ── Export (CSV) row ────────────────────────────────────────────────────────────
+
+export interface ActivityHistoryExportRow {
+  plannedActivityId: string;
+  weeklyPlanId: string;
+  date: string;
+  title: string;
+  description: string;
+  skillName: string;
+  examSectionId: string;
+  priority: ActivityPriority | string;
+  status: PlannedActivityStatus | string;
+  scheduledAt: string;
+  completedAt: string;
+  estimatedDurationMinutes: number | string;
+}
