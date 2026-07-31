@@ -20,6 +20,11 @@ import type { Resource } from './Resource';
 import type { Recommendation } from './Recommendation';
 import type { StudySession } from './StudySession';
 import type { NotificationPreference } from './NotificationPreference';
+import type { Deck } from './Deck';
+import type { Flashcard } from './Flashcard';
+import type { FlashcardReview } from './FlashcardReview';
+import type { DailyReviewStat } from './DailyReviewStat';
+import type { FlashcardPreference } from './FlashcardPreference';
 
 @Entity('users')
 export class User {
@@ -95,4 +100,19 @@ export class User {
 
   @OneToMany('StudySession', 'user')
   study_sessions: StudySession[];
+
+  @OneToMany('Deck', 'user')
+  decks: Deck[];
+
+  @OneToMany('Flashcard', 'user')
+  flashcards: Flashcard[];
+
+  @OneToMany('FlashcardReview', 'user')
+  flashcard_reviews: FlashcardReview[];
+
+  @OneToMany('DailyReviewStat', 'user')
+  daily_review_stats: DailyReviewStat[];
+
+  @OneToOne('FlashcardPreference', 'user')
+  flashcard_preference: FlashcardPreference;
 }
