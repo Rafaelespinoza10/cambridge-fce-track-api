@@ -20,6 +20,11 @@ import { MockSectionScore } from '../models/MockSectionScore';
 import { Resource } from '../models/Resource';
 import { Recommendation } from '../models/Recommendation';
 import { NotificationPreference } from '../models/NotificationPreference';
+import { Deck } from '../models/Deck';
+import { Flashcard } from '../models/Flashcard';
+import { FlashcardReview } from '../models/FlashcardReview';
+import { DailyReviewStat } from '../models/DailyReviewStat';
+import { FlashcardPreference } from '../models/FlashcardPreference';
 
 function getSslConfig(): boolean | { rejectUnauthorized: boolean } {
   const databaseUrl: string = process.env.DATABASE_URL ?? '';
@@ -59,6 +64,11 @@ export const AppDataSource = new DataSource({
     Resource,
     Recommendation,
     NotificationPreference,
+    Deck,
+    Flashcard,
+    FlashcardReview,
+    DailyReviewStat,
+    FlashcardPreference,
   ],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',
