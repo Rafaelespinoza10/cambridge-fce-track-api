@@ -125,9 +125,13 @@ class CompleteFlashcardReviewSessionService {
     }
 
     if (session.status === StudySessionStatus.COMPLETED) {
-      if (session.ended_at === null || session.started_at === null) {
+      if (
+        session.started_at === null ||
+        session.ended_at === null ||
+        session.duration_minutes === null
+      ) {
         throw new CompleteFlashcardReviewSessionError(
-          'Completed flashcard review session is missing started_at/ended_at',
+          'Completed flashcard review session is missing started_at/ended_at/duration_minutes',
           CompleteFlashcardReviewSessionErrorCode.PERSISTENCE_INCONSISTENCY,
         );
       }
@@ -138,7 +142,7 @@ class CompleteFlashcardReviewSessionService {
           status: session.status,
           startedAt: session.started_at,
           endedAt: session.ended_at,
-          durationMinutes: session.duration_minutes ?? 0,
+          durationMinutes: session.duration_minutes,
         },
         summary: { reviewsCount },
         idempotentReplay: true,

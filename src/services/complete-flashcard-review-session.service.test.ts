@@ -377,6 +377,28 @@ describe('CompleteFlashcardReviewSessionService — idempotency', () => {
         error.code === CompleteFlashcardReviewSessionErrorCode.PERSISTENCE_INCONSISTENCY,
     );
   });
+
+  it('rejects a completed session with a null duration_minutes, without silently defaulting to 0', async () => {
+    const { world, recorder, service } = setup({
+      session: makeSession({
+        status: StudySessionStatus.COMPLETED,
+        started_at: STARTED_AT,
+        ended_at: new Date('2026-01-15T10:10:00.000Z'),
+        duration_minutes: null,
+      }),
+    });
+    const sessionSnapshot = { ...world.session };
+
+    await assert.rejects(
+      () => service.execute(makeInput()),
+      (error: unknown) =>
+        error instanceof CompleteFlashcardReviewSessionError &&
+        error.code === CompleteFlashcardReviewSessionErrorCode.PERSISTENCE_INCONSISTENCY,
+    );
+
+    assert.equal(recorder.markCompletedCalls, 0);
+    assert.deepEqual(world.session, sessionSnapshot);
+  });
 });
 
 // ── Validaciones ─────────────────────────────────────────────────────────────────
