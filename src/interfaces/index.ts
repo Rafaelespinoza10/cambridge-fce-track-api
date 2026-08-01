@@ -6,3 +6,4 @@ export * from './mocks.interface';
 export * from './planning.interface';
 export * from './recommendations.interface';
 export * from './flashcard-review.interface';
+export * from './start-flashcard-review-session.interface';
