@@ -41,6 +41,55 @@ functions:
           path: /flashcards/review-sessions/{sessionId}/complete
           method: POST
 
+  flashcardsCreateDeck:
+    handler: src/controllers/deckController.createDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks
+          method: POST
+
+  flashcardsListDecks:
+    handler: src/controllers/deckController.listDecks
+    events:
+      - httpApi:
+          path: /flashcards/decks
+          method: GET
+
+  flashcardsGetDeck:
+    handler: src/controllers/deckController.getDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}
+          method: GET
+
+  flashcardsUpdateDeck:
+    handler: src/controllers/deckController.updateDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}
+          method: PATCH
+
+  flashcardsArchiveDeck:
+    handler: src/controllers/deckController.archiveDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/archive
+          method: POST
+
+  flashcardsUnarchiveDeck:
+    handler: src/controllers/deckController.unarchiveDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/unarchive
+          method: POST
+
+  flashcardsDeleteDeck:
+    handler: src/controllers/deckController.deleteDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}
+          method: DELETE
+
 package:
   individually: true
 
