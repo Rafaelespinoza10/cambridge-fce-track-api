@@ -41,6 +41,15 @@ class DecksRepository {
       .getOne();
   }
 
+  async findNonDeletedByIdAndUser(deckId: string, userId: string): Promise<Deck | null> {
+    return this.deckRepo
+      .createQueryBuilder('deck')
+      .where('deck.id = :deckId', { deckId })
+      .andWhere('deck.user_id = :userId', { userId })
+      .andWhere('deck.deleted_at IS NULL')
+      .getOne();
+  }
+
   async findAvailableByUser(userId: string): Promise<Deck[]> {
     return this.deckRepo
       .createQueryBuilder('deck')
