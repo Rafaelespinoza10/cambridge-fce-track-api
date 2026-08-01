@@ -1,0 +1,48 @@
+service: cambridge-tracker-flashcards
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+
+functions:
+  flashcardsStartReviewSession:
+    handler: src/controllers/flashcardReviewController.startFlashcardReviewSession
+    events:
+      - httpApi:
+          path: /flashcards/review-sessions
+          method: POST
+
+  flashcardsAnswerFlashcard:
+    handler: src/controllers/flashcardReviewController.answerFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/review-sessions/{sessionId}/answers
+          method: POST
+
+  flashcardsCompleteReviewSession:
+    handler: src/controllers/flashcardReviewController.completeFlashcardReviewSession
+    events:
+      - httpApi:
+          path: /flashcards/review-sessions/{sessionId}/complete
+          method: POST
+
+package:
+  individually: true
+
+custom:
+  esbuild: ${file(main.serverless.yml):custom.esbuild}
