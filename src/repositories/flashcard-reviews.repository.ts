@@ -102,6 +102,23 @@ class FlashcardReviewsRepository {
   }
 
   /**
+   * `reviewed_at` no es único, así que se ordena también por `id DESC` como
+   * criterio de desempate estable (no cronológico, solo determinista).
+   */
+  async findLatestBySession(
+    studySessionId: string,
+    userId: string,
+  ): Promise<FlashcardReview | null> {
+    return this.reviewRepo
+      .createQueryBuilder('review')
+      .where('review.study_session_id = :studySessionId', { studySessionId })
+      .andWhere('review.user_id = :userId', { userId })
+      .orderBy('review.reviewed_at', 'DESC')
+      .addOrderBy('review.id', 'DESC')
+      .getOne();
+  }
+
+  /**
    * ¿Ya existe un review de esta tarjeta dentro del rango [dayStartedAt, dayEndedAt)?
    * El rango del día local lo calcula el caller (no hay lógica de timezone aquí).
    */

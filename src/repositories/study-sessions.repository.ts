@@ -47,6 +47,29 @@ class StudySessionsRepository {
       .getOne();
   }
 
+  /**
+   * Bloquea la fila con SELECT ... FOR UPDATE. Requiere un EntityManager
+   * transaccional (obtenido de dataSource.transaction(async manager => {...})) —
+   * TypeORM lanza en runtime si se invoca fuera de una transacción activa. Sirve
+   * para serializar dos intentos concurrentes de cerrar la misma sesión.
+   */
+  async findFlashcardSessionByIdForUpdate(
+    studySessionId: string,
+    userId: string,
+    manager: EntityManager,
+  ): Promise<StudySession | null> {
+    return manager
+      .getRepository(StudySession)
+      .createQueryBuilder('session')
+      .setLock('pessimistic_write')
+      .where('session.id = :studySessionId', { studySessionId })
+      .andWhere('session.user_id = :userId', { userId })
+      .andWhere('session.session_type = :sessionType', {
+        sessionType: StudySessionType.FLASHCARD_REVIEW,
+      })
+      .getOne();
+  }
+
   async updateSessionProgress(
     studySessionId: string,
     userId: string,
