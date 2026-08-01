@@ -5,3 +5,4 @@ export * from './scoring.interface';
 export * from './mocks.interface';
 export * from './planning.interface';
 export * from './recommendations.interface';
+export * from './flashcard-review.interface';

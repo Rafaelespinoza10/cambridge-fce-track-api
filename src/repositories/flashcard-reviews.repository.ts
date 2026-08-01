@@ -21,6 +21,7 @@ interface CreateFlashcardReviewData {
   previousLapses: number;
   newLapses: number;
   responseTimeMs: number | null;
+  reviewedAt: Date;
 }
 
 class FlashcardReviewsRepository {
@@ -50,6 +51,7 @@ class FlashcardReviewsRepository {
       previous_lapses: data.previousLapses,
       new_lapses: data.newLapses,
       response_time_ms: data.responseTimeMs,
+      reviewed_at: data.reviewedAt,
     });
     return this.reviewRepo.save(review);
   }
@@ -97,6 +99,26 @@ class FlashcardReviewsRepository {
 
   async countBySession(studySessionId: string, userId: string): Promise<number> {
     return this.reviewRepo.count({ where: { study_session_id: studySessionId, user_id: userId } });
+  }
+
+  /**
+   * ¿Ya existe un review de esta tarjeta dentro del rango [dayStartedAt, dayEndedAt)?
+   * El rango del día local lo calcula el caller (no hay lógica de timezone aquí).
+   */
+  async existsForFlashcardOnDate(
+    userId: string,
+    flashcardId: string,
+    dayStartedAt: Date,
+    dayEndedAt: Date,
+  ): Promise<boolean> {
+    const count = await this.reviewRepo
+      .createQueryBuilder('review')
+      .where('review.user_id = :userId', { userId })
+      .andWhere('review.flashcard_id = :flashcardId', { flashcardId })
+      .andWhere('review.reviewed_at >= :dayStartedAt', { dayStartedAt })
+      .andWhere('review.reviewed_at < :dayEndedAt', { dayEndedAt })
+      .getCount();
+    return count > 0;
   }
 }
 
