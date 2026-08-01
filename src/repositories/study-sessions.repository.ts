@@ -15,12 +15,12 @@ class StudySessionsRepository {
     this.sessionRepo = dataSource.getRepository(StudySession);
   }
 
-  async createFlashcardSession(userId: string): Promise<StudySession> {
+  async createFlashcardSession(userId: string, startedAt: Date): Promise<StudySession> {
     const session = this.sessionRepo.create({
       user_id: userId,
       session_type: StudySessionType.FLASHCARD_REVIEW,
       status: StudySessionStatus.ACTIVE,
-      started_at: new Date(),
+      started_at: startedAt,
     });
     return this.sessionRepo.save(session);
   }

@@ -44,6 +44,7 @@ interface UpdateSchedulingStateData {
 }
 
 interface FindDueOptions {
+  deckId?: string;
   limit?: number;
   offset?: number;
 }
@@ -131,36 +132,43 @@ class FlashcardsRepository {
 
   /**
    * Tarjetas pendientes de un usuario: tarjeta activa, mazo activo y no
-   * archivado, no suspendida, vencida. No aplica meta diaria, mezcla de
-   * mazos ni priorización — eso es responsabilidad del service.
+   * archivado, no suspendida, vencida respecto a `asOf` (nunca el reloj de
+   * Postgres, para mantener el cálculo determinista). No aplica meta diaria,
+   * mezcla de mazos ni priorización — eso es responsabilidad del service.
    */
-  async findDueByUser(userId: string, options: FindDueOptions = {}): Promise<Flashcard[]> {
+  async findDueByUser(
+    userId: string,
+    asOf: Date,
+    options: FindDueOptions = {},
+  ): Promise<Flashcard[]> {
     const qb = this.flashcardRepo
       .createQueryBuilder('flashcard')
       .innerJoin('flashcard.deck', 'deck')
       .where('flashcard.user_id = :userId', { userId })
       .andWhere('flashcard.deleted_at IS NULL')
       .andWhere('flashcard.status <> :suspended', { suspended: FlashcardStatus.SUSPENDED })
-      .andWhere('flashcard.next_review_at <= now()')
+      .andWhere('flashcard.next_review_at <= :asOf', { asOf })
       .andWhere('deck.deleted_at IS NULL')
       .andWhere('deck.is_archived = false')
       .orderBy('flashcard.next_review_at', 'ASC')
       .addOrderBy('flashcard.created_at', 'ASC');
 
+    if (options.deckId !== undefined)
+      qb.andWhere('flashcard.deck_id = :deckId', { deckId: options.deckId });
     if (options.limit !== undefined) qb.take(options.limit);
     if (options.offset !== undefined) qb.skip(options.offset);
 
     return qb.getMany();
   }
 
-  async countDueByUser(userId: string): Promise<number> {
+  async countDueByUser(userId: string, asOf: Date): Promise<number> {
     return this.flashcardRepo
       .createQueryBuilder('flashcard')
       .innerJoin('flashcard.deck', 'deck')
       .where('flashcard.user_id = :userId', { userId })
       .andWhere('flashcard.deleted_at IS NULL')
       .andWhere('flashcard.status <> :suspended', { suspended: FlashcardStatus.SUSPENDED })
-      .andWhere('flashcard.next_review_at <= now()')
+      .andWhere('flashcard.next_review_at <= :asOf', { asOf })
       .andWhere('deck.deleted_at IS NULL')
       .andWhere('deck.is_archived = false')
       .getCount();
@@ -223,4 +231,9 @@ class FlashcardsRepository {
 }
 
 export { FlashcardsRepository };
-export type { CreateFlashcardData, UpdateFlashcardContentData, UpdateSchedulingStateData };
+export type {
+  CreateFlashcardData,
+  UpdateFlashcardContentData,
+  UpdateSchedulingStateData,
+  FindDueOptions,
+};

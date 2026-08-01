@@ -1,4 +1,4 @@
-import type { DataSource, Repository } from 'typeorm';
+import type { DataSource, EntityManager, Repository } from 'typeorm';
 import { User } from '../models/User';
 import { UserProfile } from '../models/UserProfile';
 import { UserGoal } from '../models/UserGoal';
@@ -43,7 +43,7 @@ class UsersRepository {
   private readonly profileRepo: Repository<UserProfile>;
   private readonly goalRepo: Repository<UserGoal>;
 
-  constructor(dataSource: DataSource) {
+  constructor(dataSource: DataSource | EntityManager) {
     this.userRepo = dataSource.getRepository(User);
     this.profileRepo = dataSource.getRepository(UserProfile);
     this.goalRepo = dataSource.getRepository(UserGoal);
