@@ -253,6 +253,30 @@ class FlashcardsService {
     return this.deps.decks(this.dataSource);
   }
 
+  /**
+   * Una tarjeta puede seguir con deleted_at IS NULL aunque su mazo ya haya
+   * sido eliminado (el soft delete de un mazo no cascada a sus tarjetas), así
+   * que toda lectura o mutación por flashcardId debe revalidar el mazo, no
+   * solo la tarjeta. Un mazo archivado sí es válido aquí — solo un mazo
+   * eliminado la trata como inexistente.
+   */
+  private async getFlashcardWithAvailableDeck(
+    userId: string,
+    flashcardId: string,
+  ): Promise<Flashcard> {
+    const flashcard = await this.flashcardsRepo().findActiveByIdAndUser(flashcardId, userId);
+    if (flashcard === null) {
+      throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
+    }
+
+    const deck = await this.decksRepo().findActiveByIdAndUser(flashcard.deck_id, userId);
+    if (deck === null) {
+      throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
+    }
+
+    return flashcard;
+  }
+
   async createFlashcard(
     userId: string,
     deckId: string,
@@ -356,16 +380,7 @@ class FlashcardsService {
   }
 
   async getFlashcard(userId: string, flashcardId: string): Promise<FlashcardDto> {
-    const flashcard = await this.flashcardsRepo().findActiveByIdAndUser(flashcardId, userId);
-    if (flashcard === null) {
-      throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
-    }
-
-    const deck = await this.decksRepo().findActiveByIdAndUser(flashcard.deck_id, userId);
-    if (deck === null) {
-      throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
-    }
-
+    const flashcard = await this.getFlashcardWithAvailableDeck(userId, flashcardId);
     return toFlashcardDto(flashcard);
   }
 
@@ -437,10 +452,7 @@ class FlashcardsService {
       );
     }
 
-    const existing = await this.flashcardsRepo().findActiveByIdAndUser(flashcardId, userId);
-    if (existing === null) {
-      throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
-    }
+    const existing = await this.getFlashcardWithAvailableDeck(userId, flashcardId);
 
     const nextType = updateData.type ?? existing.type;
     const nextFront = updateData.front ?? existing.front;
@@ -487,10 +499,7 @@ class FlashcardsService {
   }
 
   async suspendFlashcard(userId: string, flashcardId: string): Promise<FlashcardDto> {
-    const existing = await this.flashcardsRepo().findActiveByIdAndUser(flashcardId, userId);
-    if (existing === null) {
-      throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
-    }
+    const existing = await this.getFlashcardWithAvailableDeck(userId, flashcardId);
 
     if (existing.status !== FlashcardStatus.SUSPENDED) {
       const result = await this.flashcardsRepo().suspendFlashcard(flashcardId, userId);
@@ -510,10 +519,7 @@ class FlashcardsService {
   }
 
   async reactivateFlashcard(userId: string, flashcardId: string): Promise<FlashcardDto> {
-    const existing = await this.flashcardsRepo().findActiveByIdAndUser(flashcardId, userId);
-    if (existing === null) {
-      throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
-    }
+    const existing = await this.getFlashcardWithAvailableDeck(userId, flashcardId);
 
     if (existing.status === FlashcardStatus.SUSPENDED) {
       const nextStatus =
@@ -541,6 +547,8 @@ class FlashcardsService {
   }
 
   async deleteFlashcard(userId: string, flashcardId: string): Promise<void> {
+    await this.getFlashcardWithAvailableDeck(userId, flashcardId);
+
     const result = await this.flashcardsRepo().softDeleteFlashcard(flashcardId, userId);
     if (result.affected !== 1) {
       throw new FlashcardError('Flashcard not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);

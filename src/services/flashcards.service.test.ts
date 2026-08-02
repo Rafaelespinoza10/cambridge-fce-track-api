@@ -86,15 +86,35 @@ function makeFlashcard(overrides: Partial<Flashcard> = {}): Flashcard {
   } as Flashcard;
 }
 
+interface MutationCallCounts {
+  createFlashcard: number;
+  updateContent: number;
+  suspendFlashcard: number;
+  reactivateFlashcard: number;
+  softDeleteFlashcard: number;
+}
+
 interface World {
   decks: Deck[];
   flashcards: Flashcard[];
   queuedCreateError?: Error;
   queuedUpdateError?: Error;
+  mutationCalls: MutationCallCounts;
 }
 
 function createWorld(overrides: Partial<World> = {}): World {
-  return { decks: [makeDeck()], flashcards: [], ...overrides };
+  return {
+    decks: [makeDeck()],
+    flashcards: [],
+    mutationCalls: {
+      createFlashcard: 0,
+      updateContent: 0,
+      suspendFlashcard: 0,
+      reactivateFlashcard: 0,
+      softDeleteFlashcard: 0,
+    },
+    ...overrides,
+  };
 }
 
 let idCounter = 0;
@@ -113,6 +133,7 @@ function buildFakeDecksRepo(world: World): DecksRepositoryPort {
 function buildFakeFlashcardsRepo(world: World): FlashcardsRepositoryPort {
   return {
     createFlashcard: async (data: CreateFlashcardData) => {
+      world.mutationCalls.createFlashcard += 1;
       if (world.queuedCreateError) {
         const error = world.queuedCreateError;
         world.queuedCreateError = undefined;
@@ -176,6 +197,7 @@ function buildFakeFlashcardsRepo(world: World): FlashcardsRepositoryPort {
       return found ?? null;
     },
     updateContent: async (flashcardId, userId, data: UpdateFlashcardContentData) => {
+      world.mutationCalls.updateContent += 1;
       if (world.queuedUpdateError) {
         const error = world.queuedUpdateError;
         world.queuedUpdateError = undefined;
@@ -189,6 +211,7 @@ function buildFakeFlashcardsRepo(world: World): FlashcardsRepositoryPort {
       return OK_RESULT;
     },
     suspendFlashcard: async (flashcardId, userId) => {
+      world.mutationCalls.suspendFlashcard += 1;
       const flashcard = world.flashcards.find(
         (f) => f.id === flashcardId && f.user_id === userId && f.deleted_at === null,
       );
@@ -197,6 +220,7 @@ function buildFakeFlashcardsRepo(world: World): FlashcardsRepositoryPort {
       return OK_RESULT;
     },
     reactivateFlashcard: async (flashcardId, userId, status) => {
+      world.mutationCalls.reactivateFlashcard += 1;
       const flashcard = world.flashcards.find(
         (f) => f.id === flashcardId && f.user_id === userId && f.deleted_at === null,
       );
@@ -205,6 +229,7 @@ function buildFakeFlashcardsRepo(world: World): FlashcardsRepositoryPort {
       return OK_RESULT;
     },
     softDeleteFlashcard: async (flashcardId, userId) => {
+      world.mutationCalls.softDeleteFlashcard += 1;
       const flashcard = world.flashcards.find(
         (f) => f.id === flashcardId && f.user_id === userId && f.deleted_at === null,
       );
@@ -698,12 +723,27 @@ describe('FlashcardsService.updateFlashcard', () => {
   });
 
   it('can update a flashcard in an archived deck', async () => {
-    const { service } = setup({
+    const { world, service } = setup({
       decks: [makeDeck({ is_archived: true })],
       flashcards: [makeFlashcard()],
     });
     const card = await service.updateFlashcard(USER_ID, FLASHCARD_ID, { front: 'Changed' });
     assert.equal(card.front, 'Changed');
+    assert.equal(world.mutationCalls.updateContent, 1);
+  });
+
+  it('rejects updating a flashcard whose deck was soft-deleted, without touching the repository', async () => {
+    const { world, service } = setup({
+      decks: [makeDeck({ deleted_at: NOW })],
+      flashcards: [makeFlashcard()],
+    });
+    await assert.rejects(
+      () => service.updateFlashcard(USER_ID, FLASHCARD_ID, { front: 'Changed' }),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.FLASHCARD_NOT_FOUND,
+    );
+    assert.equal(world.mutationCalls.updateContent, 0);
+    assert.equal(world.flashcards[0].front, 'Ubiquitous');
   });
 
   it('an empty patch fails', async () => {
@@ -825,6 +865,30 @@ describe('FlashcardsService.suspendFlashcard', () => {
         error instanceof FlashcardError && error.code === FlashcardErrorCode.FLASHCARD_NOT_FOUND,
     );
   });
+
+  it('can suspend a flashcard in an archived deck', async () => {
+    const { world, service } = setup({
+      decks: [makeDeck({ is_archived: true })],
+      flashcards: [makeFlashcard({ status: FlashcardStatus.NEW })],
+    });
+    const card = await service.suspendFlashcard(USER_ID, FLASHCARD_ID);
+    assert.equal(card.status, FlashcardStatus.SUSPENDED);
+    assert.equal(world.mutationCalls.suspendFlashcard, 1);
+  });
+
+  it('rejects suspending a flashcard whose deck was soft-deleted, without touching the repository', async () => {
+    const { world, service } = setup({
+      decks: [makeDeck({ deleted_at: NOW })],
+      flashcards: [makeFlashcard({ status: FlashcardStatus.NEW })],
+    });
+    await assert.rejects(
+      () => service.suspendFlashcard(USER_ID, FLASHCARD_ID),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.FLASHCARD_NOT_FOUND,
+    );
+    assert.equal(world.mutationCalls.suspendFlashcard, 0);
+    assert.equal(world.flashcards[0].status, FlashcardStatus.NEW);
+  });
 });
 
 // ── Reactivar ────────────────────────────────────────────────────────────────────
@@ -908,6 +972,30 @@ describe('FlashcardsService.reactivateFlashcard', () => {
         error instanceof FlashcardError && error.code === FlashcardErrorCode.FLASHCARD_NOT_FOUND,
     );
   });
+
+  it('can reactivate a flashcard in an archived deck', async () => {
+    const { world, service } = setup({
+      decks: [makeDeck({ is_archived: true })],
+      flashcards: [makeFlashcard({ status: FlashcardStatus.SUSPENDED })],
+    });
+    const card = await service.reactivateFlashcard(USER_ID, FLASHCARD_ID);
+    assert.equal(card.status, FlashcardStatus.NEW);
+    assert.equal(world.mutationCalls.reactivateFlashcard, 1);
+  });
+
+  it('rejects reactivating a flashcard whose deck was soft-deleted, without touching the repository', async () => {
+    const { world, service } = setup({
+      decks: [makeDeck({ deleted_at: NOW })],
+      flashcards: [makeFlashcard({ status: FlashcardStatus.SUSPENDED })],
+    });
+    await assert.rejects(
+      () => service.reactivateFlashcard(USER_ID, FLASHCARD_ID),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.FLASHCARD_NOT_FOUND,
+    );
+    assert.equal(world.mutationCalls.reactivateFlashcard, 0);
+    assert.equal(world.flashcards[0].status, FlashcardStatus.SUSPENDED);
+  });
 });
 
 // ── Eliminar ─────────────────────────────────────────────────────────────────────
@@ -950,6 +1038,30 @@ describe('FlashcardsService.deleteFlashcard', () => {
       () => service.deleteFlashcard(OTHER_USER_ID, FLASHCARD_ID),
       () => true,
     );
+    assert.equal(world.flashcards[0].deleted_at, null);
+  });
+
+  it('can delete a flashcard in an archived deck', async () => {
+    const { world, service } = setup({
+      decks: [makeDeck({ is_archived: true })],
+      flashcards: [makeFlashcard()],
+    });
+    await service.deleteFlashcard(USER_ID, FLASHCARD_ID);
+    assert.notEqual(world.flashcards[0].deleted_at, null);
+    assert.equal(world.mutationCalls.softDeleteFlashcard, 1);
+  });
+
+  it('rejects deleting a flashcard whose deck was soft-deleted, without touching the repository', async () => {
+    const { world, service } = setup({
+      decks: [makeDeck({ deleted_at: NOW })],
+      flashcards: [makeFlashcard()],
+    });
+    await assert.rejects(
+      () => service.deleteFlashcard(USER_ID, FLASHCARD_ID),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.FLASHCARD_NOT_FOUND,
+    );
+    assert.equal(world.mutationCalls.softDeleteFlashcard, 0);
     assert.equal(world.flashcards[0].deleted_at, null);
   });
 });
