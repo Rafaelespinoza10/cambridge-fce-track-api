@@ -90,6 +90,55 @@ functions:
           path: /flashcards/decks/{deckId}
           method: DELETE
 
+  flashcardsCreateFlashcard:
+    handler: src/controllers/flashcardController.createFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/cards
+          method: POST
+
+  flashcardsListFlashcards:
+    handler: src/controllers/flashcardController.listFlashcards
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/cards
+          method: GET
+
+  flashcardsGetFlashcard:
+    handler: src/controllers/flashcardController.getFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}
+          method: GET
+
+  flashcardsUpdateFlashcard:
+    handler: src/controllers/flashcardController.updateFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}
+          method: PATCH
+
+  flashcardsSuspendFlashcard:
+    handler: src/controllers/flashcardController.suspendFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}/suspend
+          method: POST
+
+  flashcardsReactivateFlashcard:
+    handler: src/controllers/flashcardController.reactivateFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}/reactivate
+          method: POST
+
+  flashcardsDeleteFlashcard:
+    handler: src/controllers/flashcardController.deleteFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}
+          method: DELETE
+
 package:
   individually: true
 

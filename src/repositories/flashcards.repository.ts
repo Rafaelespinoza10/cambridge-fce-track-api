@@ -18,6 +18,14 @@ interface CreateFlashcardData {
   sourceUrl: string | null;
   level: EnglishLevel | null;
   tags: string[];
+  nextReviewAt: Date;
+}
+
+type FlashcardListStatusFilter = 'active' | 'suspended' | 'all';
+
+interface FindByDeckFilters {
+  status: FlashcardListStatusFilter;
+  type?: FlashcardType;
 }
 
 interface UpdateFlashcardContentData {
@@ -71,6 +79,7 @@ class FlashcardsRepository {
       source_url: data.sourceUrl,
       level: data.level,
       tags: data.tags,
+      next_review_at: data.nextReviewAt,
     });
     return this.flashcardRepo.save(flashcard);
   }
@@ -104,14 +113,28 @@ class FlashcardsRepository {
       .getOne();
   }
 
-  async findActiveByDeck(deckId: string, userId: string): Promise<Flashcard[]> {
-    return this.flashcardRepo
+  async findByDeckForUser(
+    deckId: string,
+    userId: string,
+    filters: FindByDeckFilters,
+  ): Promise<Flashcard[]> {
+    const qb = this.flashcardRepo
       .createQueryBuilder('flashcard')
       .where('flashcard.deck_id = :deckId', { deckId })
       .andWhere('flashcard.user_id = :userId', { userId })
-      .andWhere('flashcard.deleted_at IS NULL')
-      .orderBy('flashcard.created_at', 'DESC')
-      .getMany();
+      .andWhere('flashcard.deleted_at IS NULL');
+
+    if (filters.status === 'active') {
+      qb.andWhere('flashcard.status <> :suspended', { suspended: FlashcardStatus.SUSPENDED });
+    } else if (filters.status === 'suspended') {
+      qb.andWhere('flashcard.status = :suspended', { suspended: FlashcardStatus.SUSPENDED });
+    }
+
+    if (filters.type !== undefined) {
+      qb.andWhere('flashcard.type = :type', { type: filters.type });
+    }
+
+    return qb.orderBy('flashcard.created_at', 'DESC').addOrderBy('flashcard.id', 'ASC').getMany();
   }
 
   async findDuplicate(
@@ -119,15 +142,21 @@ class FlashcardsRepository {
     type: FlashcardType,
     front: string,
     back: string,
+    excludeId?: string,
   ): Promise<Flashcard | null> {
-    return this.flashcardRepo
+    const qb = this.flashcardRepo
       .createQueryBuilder('flashcard')
       .where('flashcard.deck_id = :deckId', { deckId })
       .andWhere('flashcard.type = :type', { type })
       .andWhere('LOWER(flashcard.front) = LOWER(:front)', { front })
       .andWhere('LOWER(flashcard.back) = LOWER(:back)', { back })
-      .andWhere('flashcard.deleted_at IS NULL')
-      .getOne();
+      .andWhere('flashcard.deleted_at IS NULL');
+
+    if (excludeId !== undefined) {
+      qb.andWhere('flashcard.id != :excludeId', { excludeId });
+    }
+
+    return qb.getOne();
   }
 
   /**
@@ -236,4 +265,6 @@ export type {
   UpdateFlashcardContentData,
   UpdateSchedulingStateData,
   FindDueOptions,
+  FindByDeckFilters,
+  FlashcardListStatusFilter,
 };
