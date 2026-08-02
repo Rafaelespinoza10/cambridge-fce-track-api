@@ -1,0 +1,167 @@
+service: cambridge-tracker-flashcards
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+
+functions:
+  flashcardsStartReviewSession:
+    handler: src/controllers/flashcardReviewController.startFlashcardReviewSession
+    events:
+      - httpApi:
+          path: /flashcards/review-sessions
+          method: POST
+
+  flashcardsAnswerFlashcard:
+    handler: src/controllers/flashcardReviewController.answerFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/review-sessions/{sessionId}/answers
+          method: POST
+
+  flashcardsCompleteReviewSession:
+    handler: src/controllers/flashcardReviewController.completeFlashcardReviewSession
+    events:
+      - httpApi:
+          path: /flashcards/review-sessions/{sessionId}/complete
+          method: POST
+
+  flashcardsCreateDeck:
+    handler: src/controllers/deckController.createDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks
+          method: POST
+
+  flashcardsListDecks:
+    handler: src/controllers/deckController.listDecks
+    events:
+      - httpApi:
+          path: /flashcards/decks
+          method: GET
+
+  flashcardsGetDeck:
+    handler: src/controllers/deckController.getDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}
+          method: GET
+
+  flashcardsUpdateDeck:
+    handler: src/controllers/deckController.updateDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}
+          method: PATCH
+
+  flashcardsArchiveDeck:
+    handler: src/controllers/deckController.archiveDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/archive
+          method: POST
+
+  flashcardsUnarchiveDeck:
+    handler: src/controllers/deckController.unarchiveDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/unarchive
+          method: POST
+
+  flashcardsDeleteDeck:
+    handler: src/controllers/deckController.deleteDeck
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}
+          method: DELETE
+
+  flashcardsCreateFlashcard:
+    handler: src/controllers/flashcardController.createFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/cards
+          method: POST
+
+  flashcardsListFlashcards:
+    handler: src/controllers/flashcardController.listFlashcards
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/cards
+          method: GET
+
+  flashcardsGetFlashcard:
+    handler: src/controllers/flashcardController.getFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}
+          method: GET
+
+  flashcardsUpdateFlashcard:
+    handler: src/controllers/flashcardController.updateFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}
+          method: PATCH
+
+  flashcardsSuspendFlashcard:
+    handler: src/controllers/flashcardController.suspendFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}/suspend
+          method: POST
+
+  flashcardsReactivateFlashcard:
+    handler: src/controllers/flashcardController.reactivateFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}/reactivate
+          method: POST
+
+  flashcardsDeleteFlashcard:
+    handler: src/controllers/flashcardController.deleteFlashcard
+    events:
+      - httpApi:
+          path: /flashcards/cards/{flashcardId}
+          method: DELETE
+
+  flashcardsGetPreferences:
+    handler: src/controllers/flashcardProgressController.getFlashcardPreferences
+    events:
+      - httpApi:
+          path: /flashcards/preferences
+          method: GET
+
+  flashcardsUpdatePreferences:
+    handler: src/controllers/flashcardProgressController.updateFlashcardPreferences
+    events:
+      - httpApi:
+          path: /flashcards/preferences
+          method: PATCH
+
+  flashcardsReviewSummary:
+    handler: src/controllers/flashcardProgressController.getFlashcardReviewSummary
+    events:
+      - httpApi:
+          path: /flashcards/review-summary
+          method: GET
+
+package:
+  individually: true
+
+custom:
+  esbuild: ${file(main.serverless.yml):custom.esbuild}

@@ -138,3 +138,36 @@ export enum RecommendationSource {
   AI = 'ai',
   MANUAL = 'manual',
 }
+
+export enum FlashcardType {
+  PHRASAL_VERB = 'phrasal_verb',
+  COLLOCATION = 'collocation',
+  VOCABULARY = 'vocabulary',
+  EXPRESSION = 'expression',
+  GRAMMAR = 'grammar',
+  CUSTOM = 'custom',
+}
+
+export enum FlashcardStatus {
+  NEW = 'new',
+  LEARNING = 'learning',
+  REVIEW = 'review',
+  SUSPENDED = 'suspended',
+}
+
+export enum ReviewRating {
+  AGAIN = 'again',
+  HARD = 'hard',
+  GOOD = 'good',
+  EASY = 'easy',
+}
+
+export enum StudySessionType {
+  ACTIVITY = 'activity',
+  FLASHCARD_REVIEW = 'flashcard_review',
+}
+
+export enum StudySessionStatus {
+  ACTIVE = 'active',
+  COMPLETED = 'completed',
+}

@@ -1,13 +1,15 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
+import { errorResponse, successResponse, csvResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
+import { toCsv } from '@lib/csv';
 import { MocksService } from '../services/mocks.service';
 import { ExamType, MockType } from '../models/enums';
 import type {
   CreateMockBody,
   UpdateMockBody,
   MockListFilters,
+  MockExportRow,
 } from '../interfaces/mocks.interface';
 
 const service = new MocksService();
@@ -77,6 +79,57 @@ export async function listMocks(event: APIGatewayProxyEvent): Promise<APIGateway
   }
 }
 
+// ── GET /mocks/export ──────────────────────────────────────────────────────────
+
+const MOCK_EXPORT_COLUMNS: { key: keyof MockExportRow; header: string }[] = [
+  { key: 'mockId', header: 'Mock ID' },
+  { key: 'mockName', header: 'Mock Name' },
+  { key: 'examType', header: 'Exam Type' },
+  { key: 'mockType', header: 'Mock Type' },
+  { key: 'takenAt', header: 'Taken At' },
+  { key: 'estimatedCambridgeScore', header: 'Estimated Cambridge Score' },
+  { key: 'estimatedLevel', header: 'Estimated Level' },
+  { key: 'notes', header: 'Notes' },
+  { key: 'sectionName', header: 'Section' },
+  { key: 'rawScore', header: 'Raw Score' },
+  { key: 'maxScore', header: 'Max Score' },
+  { key: 'percentage', header: 'Percentage' },
+  { key: 'cambridgeScore', header: 'Section Cambridge Score' },
+  { key: 'sectionNotes', header: 'Section Notes' },
+];
+
+export async function exportMocks(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const qs = event.queryStringParameters ?? {};
+
+  const examType = qs['examType'] as ExamType | undefined;
+  if (examType !== undefined && !(Object.values(ExamType) as string[]).includes(examType)) {
+    return errorResponse(`examType must be one of: ${Object.values(ExamType).join(', ')}`, 400);
+  }
+
+  const mockType = qs['mockType'] as MockType | undefined;
+  if (mockType !== undefined && !(Object.values(MockType) as string[]).includes(mockType)) {
+    return errorResponse(`mockType must be one of: ${Object.values(MockType).join(', ')}`, 400);
+  }
+
+  const filters: Omit<MockListFilters, 'limit' | 'offset'> = {
+    examType,
+    mockType,
+    from: qs['from'] ?? undefined,
+    to: qs['to'] ?? undefined,
+  };
+
+  try {
+    const rows = await service.exportMocks(payload.sub, filters);
+    const csv = toCsv(rows, MOCK_EXPORT_COLUMNS);
+    return csvResponse(csv, 'mocks-export.csv');
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
 // ── GET /mocks/{mockId} ────────────────────────────────────────────────────────
 
 export async function getMock(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -132,6 +185,23 @@ export async function deleteMock(event: APIGatewayProxyEvent): Promise<APIGatewa
   try {
     await service.deleteMock(payload.sub, mockId);
     return successResponse({ success: true }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── POST /mocks/import ─────────────────────────────────────────────────────────
+
+export async function importMocks(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const csvText = event.body ?? '';
+  if (csvText.trim() === '') return errorResponse('Request body must not be empty', 400);
+
+  try {
+    const result = await service.importMocks(payload.sub, csvText);
+    return successResponse({ success: true, ...result }, 200);
   } catch (err: unknown) {
     return handleError(err);
   }

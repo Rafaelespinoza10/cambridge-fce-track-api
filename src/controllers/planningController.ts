@@ -1,7 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
+import { errorResponse, successResponse, csvResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
+import { toCsv } from '@lib/csv';
 import { ActivityPriority, PlannedActivityStatus } from '../models/enums';
 import { PlanningService } from '../services/planning.service';
 import type {
@@ -10,6 +11,7 @@ import type {
   UpdatePlannedActivityBody,
   MovePlannedActivityBody,
   ActivityHistoryFilters,
+  ActivityHistoryExportRow,
 } from '../interfaces/planning.interface';
 
 const service = new PlanningService();
@@ -313,6 +315,79 @@ export async function getActivityHistory(
 
   try {
     const result = await service.getActivityHistory(payload.sub, filters);
+    return successResponse({ success: true, ...result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── GET /plans/activities/export ───────────────────────────────────────────────
+
+const ACTIVITY_HISTORY_EXPORT_COLUMNS: { key: keyof ActivityHistoryExportRow; header: string }[] = [
+  { key: 'plannedActivityId', header: 'Planned Activity ID' },
+  { key: 'weeklyPlanId', header: 'Weekly Plan ID' },
+  { key: 'date', header: 'Date' },
+  { key: 'title', header: 'Title' },
+  { key: 'description', header: 'Description' },
+  { key: 'skillName', header: 'Skill' },
+  { key: 'examSectionId', header: 'Exam Section ID' },
+  { key: 'priority', header: 'Priority' },
+  { key: 'status', header: 'Status' },
+  { key: 'scheduledAt', header: 'Scheduled At' },
+  { key: 'completedAt', header: 'Completed At' },
+  { key: 'estimatedDurationMinutes', header: 'Estimated Duration (min)' },
+];
+
+export async function exportActivityHistory(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const qs = event.queryStringParameters ?? {};
+
+  const skillId = qs['skillId'] ?? undefined;
+  if (skillId !== undefined && !isValidUuid(skillId)) {
+    return errorResponse('skillId must be a valid UUID', 400);
+  }
+
+  const status = qs['status'] as PlannedActivityStatus | undefined;
+  if (
+    status !== undefined &&
+    !(Object.values(PlannedActivityStatus) as string[]).includes(status)
+  ) {
+    return errorResponse('status must be pending, in_progress, completed, or skipped', 400);
+  }
+
+  const filters: Omit<ActivityHistoryFilters, 'limit' | 'offset'> = {
+    skillId,
+    status,
+    from: qs['from'] ?? undefined,
+    to: qs['to'] ?? undefined,
+  };
+
+  try {
+    const rows = await service.exportActivityHistory(payload.sub, filters);
+    const csv = toCsv(rows, ACTIVITY_HISTORY_EXPORT_COLUMNS);
+    return csvResponse(csv, 'activity-history-export.csv');
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── POST /plans/activities/import ──────────────────────────────────────────────
+
+export async function importActivityHistory(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const csvText = event.body ?? '';
+  if (csvText.trim() === '') return errorResponse('Request body must not be empty', 400);
+
+  try {
+    const result = await service.importActivityHistory(payload.sub, csvText);
     return successResponse({ success: true, ...result }, 200);
   } catch (err: unknown) {
     return handleError(err);

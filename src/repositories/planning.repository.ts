@@ -4,8 +4,9 @@ import { PlanDay } from '../models/PlanDay';
 import { PlannedActivity } from '../models/PlannedActivity';
 import { ActivityTemplate } from '../models/ActivityTemplate';
 import { CustomActivity } from '../models/CustomActivity';
-import { WeekPlanStatus, DayOfWeek } from '../models/enums';
-import type { ActivityPriority, PlannedActivityStatus } from '../models/enums';
+import { Skill } from '../models/Skill';
+import { WeekPlanStatus, DayOfWeek, ActivityPriority } from '../models/enums';
+import type { PlannedActivityStatus } from '../models/enums';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,14 @@ interface ActivityHistoryQueryOptions {
   offset: number;
 }
 
+interface ActivityHistoryExportOptions {
+  userId: string;
+  skillId?: string;
+  status?: PlannedActivityStatus;
+  from?: Date;
+  to?: Date;
+}
+
 // ── Repository ─────────────────────────────────────────────────────────────────
 
 class PlanningRepository {
@@ -82,6 +91,7 @@ class PlanningRepository {
   private readonly plannedActivityRepo: Repository<PlannedActivity>;
   private readonly activityTemplateRepo: Repository<ActivityTemplate>;
   private readonly customActivityRepo: Repository<CustomActivity>;
+  private readonly skillRepo: Repository<Skill>;
   private readonly dataSource: DataSource;
 
   constructor(dataSource: DataSource) {
@@ -91,6 +101,7 @@ class PlanningRepository {
     this.plannedActivityRepo = dataSource.getRepository(PlannedActivity);
     this.activityTemplateRepo = dataSource.getRepository(ActivityTemplate);
     this.customActivityRepo = dataSource.getRepository(CustomActivity);
+    this.skillRepo = dataSource.getRepository(Skill);
   }
 
   async findWeekPlanByUserAndStartDate(
@@ -223,6 +234,53 @@ class PlanningRepository {
     return this.customActivityRepo.findOne({ where: { id, user_id: userId } });
   }
 
+  async findSkillByName(name: string): Promise<Skill | null> {
+    return this.skillRepo
+      .createQueryBuilder('skill')
+      .where('LOWER(skill.name) = LOWER(:name)', { name })
+      .getOne();
+  }
+
+  async findPlanDayByDate(weeklyPlanId: string, date: string): Promise<PlanDay | null> {
+    return this.planDayRepo.findOne({ where: { weekly_plan_id: weeklyPlanId, date } });
+  }
+
+  async findPlannedActivityByTitleAndDay(
+    planDayId: string,
+    title: string,
+  ): Promise<PlannedActivity | null> {
+    return this.plannedActivityRepo
+      .createQueryBuilder('pa')
+      .where('pa.plan_day_id = :planDayId', { planDayId })
+      .andWhere('LOWER(pa.title) = LOWER(:title)', { title })
+      .andWhere('pa.deleted_at IS NULL')
+      .getOne();
+  }
+
+  async createPlannedActivityForImport(data: {
+    planDayId: string;
+    title: string;
+    skillId: string | null;
+    estimatedDurationMinutes: number | null;
+    status: PlannedActivityStatus;
+    scheduledAt: Date;
+    completedAt: Date | null;
+    scheduledOrder: number;
+  }): Promise<PlannedActivity> {
+    const entity = this.plannedActivityRepo.create({
+      plan_day_id: data.planDayId,
+      title: data.title,
+      skill_id: data.skillId,
+      estimated_duration_minutes: data.estimatedDurationMinutes,
+      priority: ActivityPriority.MEDIUM,
+      status: data.status,
+      scheduled_at: data.scheduledAt,
+      completed_at: data.completedAt,
+      scheduled_order: data.scheduledOrder,
+    });
+    return this.plannedActivityRepo.save(entity);
+  }
+
   async countActivitiesInDay(planDayId: string): Promise<number> {
     return this.plannedActivityRepo.count({ where: { plan_day_id: planDayId } });
   }
@@ -295,6 +353,36 @@ class PlanningRepository {
       .take(options.limit);
 
     return qb.getManyAndCount();
+  }
+
+  async findActivityHistoryForExport(
+    options: ActivityHistoryExportOptions,
+  ): Promise<PlannedActivity[]> {
+    const qb = this.plannedActivityRepo
+      .createQueryBuilder('pa')
+      .innerJoinAndSelect('pa.plan_day', 'pd')
+      .innerJoinAndSelect('pd.weekly_plan', 'wp')
+      .leftJoinAndSelect('pa.skill', 'skill')
+      .where('wp.user_id = :userId', { userId: options.userId })
+      .andWhere('pa.deleted_at IS NULL')
+      .andWhere('wp.deleted_at IS NULL');
+
+    if (options.skillId !== undefined) {
+      qb.andWhere('pa.skill_id = :skillId', { skillId: options.skillId });
+    }
+    if (options.status !== undefined) {
+      qb.andWhere('pa.status = :status', { status: options.status });
+    }
+    if (options.from !== undefined) {
+      qb.andWhere('pa.scheduled_at >= :from', { from: options.from });
+    }
+    if (options.to !== undefined) {
+      qb.andWhere('pa.scheduled_at <= :to', { to: options.to });
+    }
+
+    qb.orderBy('pa.scheduled_at', 'DESC', 'NULLS LAST').addOrderBy('pa.created_at', 'DESC');
+
+    return qb.getMany();
   }
 
   async moveActivityTransaction(

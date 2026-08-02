@@ -34,6 +34,13 @@ functions:
           path: /mocks
           method: GET
 
+  mocksExport:
+    handler: src/controllers/mocksController.exportMocks
+    events:
+      - httpApi:
+          path: /mocks/export
+          method: GET
+
   mocksGet:
     handler: src/controllers/mocksController.getMock
     events:
@@ -54,6 +61,13 @@ functions:
       - httpApi:
           path: /mocks/{mockId}
           method: DELETE
+
+  mocksImport:
+    handler: src/controllers/mocksController.importMocks
+    events:
+      - httpApi:
+          path: /mocks/import
+          method: POST
 
 package:
   individually: true

@@ -1,0 +1,586 @@
+process.env.JWT_SECRET = 'test-secret-for-flashcard-controller';
+
+import { describe, it } from 'node:test';
+import * as assert from 'node:assert/strict';
+import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+
+import {
+  createFlashcard,
+  listFlashcards,
+  getFlashcard,
+  updateFlashcard,
+  suspendFlashcard,
+  reactivateFlashcard,
+  deleteFlashcard,
+} from './flashcardController';
+import type { FlashcardControllerDeps, FlashcardsServicePort } from './flashcardController';
+import { JwtService } from '../lib/jwt';
+import { FlashcardError, FlashcardErrorCode } from '../services/flashcards.service';
+import type { FlashcardDto } from '../interfaces/flashcards.interface';
+import { FlashcardType, FlashcardStatus } from '../models/enums';
+
+const USER_ID = 'user-1';
+const DECK_ID = '11111111-1111-1111-1111-111111111111';
+const FLASHCARD_ID = '22222222-2222-2222-2222-222222222222';
+const NOW = new Date('2026-01-15T00:00:00.000Z');
+
+const TOKEN = JwtService.sign({ sub: USER_ID, email: 'user@example.com', role: 'student' });
+
+function makeEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
+  return {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+    body: null,
+    pathParameters: null,
+    queryStringParameters: null,
+    ...overrides,
+  } as unknown as APIGatewayProxyEvent;
+}
+
+function parseBody(result: APIGatewayProxyResult): Record<string, unknown> {
+  return JSON.parse(result.body) as Record<string, unknown>;
+}
+
+const FLASHCARD_DTO: FlashcardDto = {
+  id: FLASHCARD_ID,
+  deckId: DECK_ID,
+  type: FlashcardType.VOCABULARY,
+  front: 'Ubiquitous',
+  back: 'Presente en todas partes',
+  translation: null,
+  example: null,
+  personalExample: null,
+  notes: null,
+  sourceName: null,
+  sourceUrl: null,
+  level: null,
+  tags: [],
+  status: FlashcardStatus.NEW,
+  nextReviewAt: NOW,
+  intervalMinutes: 0,
+  easeFactor: 2.5,
+  repetitions: 0,
+  lapses: 0,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+interface FakeService extends FlashcardsServicePort {
+  calls: {
+    createFlashcard: Parameters<FlashcardsServicePort['createFlashcard']>[];
+    listFlashcards: Parameters<FlashcardsServicePort['listFlashcards']>[];
+    getFlashcard: Parameters<FlashcardsServicePort['getFlashcard']>[];
+    updateFlashcard: Parameters<FlashcardsServicePort['updateFlashcard']>[];
+    suspendFlashcard: Parameters<FlashcardsServicePort['suspendFlashcard']>[];
+    reactivateFlashcard: Parameters<FlashcardsServicePort['reactivateFlashcard']>[];
+    deleteFlashcard: Parameters<FlashcardsServicePort['deleteFlashcard']>[];
+  };
+}
+
+function buildDeps(
+  overrides: Partial<FlashcardsServicePort> = {},
+  now: () => Date = () => NOW,
+): { deps: FlashcardControllerDeps; service: FakeService } {
+  const calls: FakeService['calls'] = {
+    createFlashcard: [],
+    listFlashcards: [],
+    getFlashcard: [],
+    updateFlashcard: [],
+    suspendFlashcard: [],
+    reactivateFlashcard: [],
+    deleteFlashcard: [],
+  };
+
+  const service: FakeService = {
+    calls,
+    createFlashcard: async (...args) => {
+      calls.createFlashcard.push(args);
+      return overrides.createFlashcard ? overrides.createFlashcard(...args) : FLASHCARD_DTO;
+    },
+    listFlashcards: async (...args) => {
+      calls.listFlashcards.push(args);
+      return overrides.listFlashcards ? overrides.listFlashcards(...args) : [FLASHCARD_DTO];
+    },
+    getFlashcard: async (...args) => {
+      calls.getFlashcard.push(args);
+      return overrides.getFlashcard ? overrides.getFlashcard(...args) : FLASHCARD_DTO;
+    },
+    updateFlashcard: async (...args) => {
+      calls.updateFlashcard.push(args);
+      return overrides.updateFlashcard ? overrides.updateFlashcard(...args) : FLASHCARD_DTO;
+    },
+    suspendFlashcard: async (...args) => {
+      calls.suspendFlashcard.push(args);
+      return overrides.suspendFlashcard
+        ? overrides.suspendFlashcard(...args)
+        : { ...FLASHCARD_DTO, status: FlashcardStatus.SUSPENDED };
+    },
+    reactivateFlashcard: async (...args) => {
+      calls.reactivateFlashcard.push(args);
+      return overrides.reactivateFlashcard ? overrides.reactivateFlashcard(...args) : FLASHCARD_DTO;
+    },
+    deleteFlashcard: async (...args) => {
+      calls.deleteFlashcard.push(args);
+      if (overrides.deleteFlashcard) await overrides.deleteFlashcard(...args);
+    },
+  };
+
+  return { deps: { now, services: async () => ({ flashcards: service }) }, service };
+}
+
+// ── createFlashcard ──────────────────────────────────────────────────────────────
+
+describe('createFlashcard', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await createFlashcard(
+      makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid deckId', async () => {
+    const { deps } = buildDeps();
+    const result = await createFlashcard(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('rejects malformed JSON', async () => {
+    const { deps } = buildDeps();
+    const result = await createFlashcard(
+      makeEvent({ pathParameters: { deckId: DECK_ID }, body: '{not json' }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('creates successfully and returns 201', async () => {
+    const { deps, service } = buildDeps();
+    const result = await createFlashcard(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        body: JSON.stringify({ type: 'vocabulary', front: 'Front', back: 'Back' }),
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 201);
+    assert.equal(service.calls.createFlashcard[0][0], USER_ID);
+    assert.equal(service.calls.createFlashcard[0][1], DECK_ID);
+  });
+
+  it('takes userId from the JWT, never from the body', async () => {
+    const { deps, service } = buildDeps();
+    await createFlashcard(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        body: JSON.stringify({
+          type: 'vocabulary',
+          front: 'Front',
+          back: 'Back',
+          userId: 'someone-else',
+        }),
+      }),
+      deps,
+    );
+    assert.equal(service.calls.createFlashcard[0][0], USER_ID);
+  });
+
+  it('the "now" passed to the service comes from the server clock provider', async () => {
+    const { deps, service } = buildDeps({}, () => NOW);
+    await createFlashcard(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        body: JSON.stringify({ type: 'vocabulary', front: 'Front', back: 'Back' }),
+      }),
+      deps,
+    );
+    assert.deepEqual(service.calls.createFlashcard[0][2], NOW);
+  });
+
+  it('maps a domain error to its HTTP status', async () => {
+    const { deps } = buildDeps({
+      createFlashcard: async () => {
+        throw new FlashcardError('front must not be empty', FlashcardErrorCode.INVALID_INPUT);
+      },
+    });
+    const result = await createFlashcard(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        body: JSON.stringify({ type: 'vocabulary', front: '', back: 'Back' }),
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('an unexpected error returns 500 without leaking internal details', async () => {
+    const { deps } = buildDeps({
+      createFlashcard: async () => {
+        throw new Error('duplicate key value violates unique constraint "whatever"');
+      },
+    });
+    const result = await createFlashcard(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        body: JSON.stringify({ type: 'vocabulary', front: 'Front', back: 'Back' }),
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 500);
+    assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── listFlashcards ───────────────────────────────────────────────────────────────
+
+describe('listFlashcards', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await listFlashcards(
+      makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid deckId', async () => {
+    const { deps } = buildDeps();
+    const result = await listFlashcards(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('defaults to status=active when no query param is given', async () => {
+    const { deps, service } = buildDeps();
+    const result = await listFlashcards(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    assert.equal(result.statusCode, 200);
+    assert.equal(service.calls.listFlashcards[0][2], 'active');
+  });
+
+  it('accepts status=suspended and status=all', async () => {
+    const { deps, service } = buildDeps();
+    await listFlashcards(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        queryStringParameters: { status: 'suspended' },
+      }),
+      deps,
+    );
+    assert.equal(service.calls.listFlashcards[0][2], 'suspended');
+
+    await listFlashcards(
+      makeEvent({ pathParameters: { deckId: DECK_ID }, queryStringParameters: { status: 'all' } }),
+      deps,
+    );
+    assert.equal(service.calls.listFlashcards[1][2], 'all');
+  });
+
+  it('rejects an invalid status query value', async () => {
+    const { deps } = buildDeps();
+    const result = await listFlashcards(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        queryStringParameters: { status: 'archived' },
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('accepts a valid type filter', async () => {
+    const { deps, service } = buildDeps();
+    await listFlashcards(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        queryStringParameters: { type: 'grammar' },
+      }),
+      deps,
+    );
+    assert.equal(service.calls.listFlashcards[0][3], 'grammar');
+  });
+
+  it('rejects an invalid type filter', async () => {
+    const { deps } = buildDeps();
+    const result = await listFlashcards(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        queryStringParameters: { type: 'not-a-type' },
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('maps DECK_NOT_FOUND to 404', async () => {
+    const { deps } = buildDeps({
+      listFlashcards: async () => {
+        throw new FlashcardError('not found', FlashcardErrorCode.DECK_NOT_FOUND);
+      },
+    });
+    const result = await listFlashcards(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    assert.equal(result.statusCode, 404);
+  });
+});
+
+// ── getFlashcard ─────────────────────────────────────────────────────────────────
+
+describe('getFlashcard', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await getFlashcard(
+      makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('returns the flashcard for an authenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await getFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+  });
+
+  it('rejects an invalid flashcardId', async () => {
+    const { deps } = buildDeps();
+    const result = await getFlashcard(makeEvent({ pathParameters: { flashcardId: 'nope' } }), deps);
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('rejects a missing flashcardId', async () => {
+    const { deps } = buildDeps();
+    const result = await getFlashcard(makeEvent({ pathParameters: null }), deps);
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('maps FLASHCARD_NOT_FOUND to 404', async () => {
+    const { deps } = buildDeps({
+      getFlashcard: async () => {
+        throw new FlashcardError('not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
+      },
+    });
+    const result = await getFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 404);
+  });
+});
+
+// ── updateFlashcard ──────────────────────────────────────────────────────────────
+
+describe('updateFlashcard', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await updateFlashcard(
+      makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid flashcardId', async () => {
+    const { deps } = buildDeps();
+    const result = await updateFlashcard(
+      makeEvent({
+        pathParameters: { flashcardId: 'nope' },
+        body: JSON.stringify({ front: 'x' }),
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('rejects malformed JSON', async () => {
+    const { deps } = buildDeps();
+    const result = await updateFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID }, body: '{not json' }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('forwards userId from the JWT and ignores protected fields sent by the client', async () => {
+    const { deps, service } = buildDeps();
+    await updateFlashcard(
+      makeEvent({
+        pathParameters: { flashcardId: FLASHCARD_ID },
+        body: JSON.stringify({ front: 'New front', status: 'review', userId: 'someone-else' }),
+      }),
+      deps,
+    );
+    // The controller forwards the parsed body as-is; FlashcardsService is
+    // responsible for ignoring status/userId — already covered at the service level.
+    assert.equal(service.calls.updateFlashcard[0][0], USER_ID);
+    assert.equal(service.calls.updateFlashcard[0][1], FLASHCARD_ID);
+  });
+
+  it('maps an empty-patch INVALID_INPUT to 400', async () => {
+    const { deps } = buildDeps({
+      updateFlashcard: async () => {
+        throw new FlashcardError(
+          'At least one field must be provided',
+          FlashcardErrorCode.INVALID_INPUT,
+        );
+      },
+    });
+    const result = await updateFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID }, body: '{}' }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('maps FLASHCARD_DUPLICATE to 409', async () => {
+    const { deps } = buildDeps({
+      updateFlashcard: async () => {
+        throw new FlashcardError('duplicate', FlashcardErrorCode.FLASHCARD_DUPLICATE);
+      },
+    });
+    const result = await updateFlashcard(
+      makeEvent({
+        pathParameters: { flashcardId: FLASHCARD_ID },
+        body: JSON.stringify({ front: 'x' }),
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 409);
+  });
+});
+
+// ── suspendFlashcard ─────────────────────────────────────────────────────────────
+
+describe('suspendFlashcard', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await suspendFlashcard(
+      makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid flashcardId', async () => {
+    const { deps } = buildDeps();
+    const result = await suspendFlashcard(
+      makeEvent({ pathParameters: { flashcardId: 'nope' } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('suspends successfully and returns 200', async () => {
+    const { deps } = buildDeps();
+    const result = await suspendFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+    assert.equal((parseBody(result).data as FlashcardDto).status, FlashcardStatus.SUSPENDED);
+  });
+
+  it('maps FLASHCARD_NOT_FOUND to 404', async () => {
+    const { deps } = buildDeps({
+      suspendFlashcard: async () => {
+        throw new FlashcardError('not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
+      },
+    });
+    const result = await suspendFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 404);
+  });
+});
+
+// ── reactivateFlashcard ──────────────────────────────────────────────────────────
+
+describe('reactivateFlashcard', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await reactivateFlashcard(
+      makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid flashcardId', async () => {
+    const { deps } = buildDeps();
+    const result = await reactivateFlashcard(
+      makeEvent({ pathParameters: { flashcardId: 'nope' } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('reactivates successfully and returns 200', async () => {
+    const { deps } = buildDeps();
+    const result = await reactivateFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+  });
+});
+
+// ── deleteFlashcard ──────────────────────────────────────────────────────────────
+
+describe('deleteFlashcard', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await deleteFlashcard(
+      makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid flashcardId', async () => {
+    const { deps } = buildDeps();
+    const result = await deleteFlashcard(
+      makeEvent({ pathParameters: { flashcardId: 'nope' } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('deletes successfully and returns 200', async () => {
+    const { deps, service } = buildDeps();
+    const result = await deleteFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+    assert.equal(service.calls.deleteFlashcard[0][0], USER_ID);
+    assert.equal(service.calls.deleteFlashcard[0][1], FLASHCARD_ID);
+  });
+
+  it('a second delete attempt maps FLASHCARD_NOT_FOUND to 404', async () => {
+    const { deps } = buildDeps({
+      deleteFlashcard: async () => {
+        throw new FlashcardError('not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
+      },
+    });
+    const result = await deleteFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 404);
+  });
+
+  it('an unexpected error returns 500 without leaking internal details', async () => {
+    const { deps } = buildDeps({
+      deleteFlashcard: async () => {
+        throw new Error('relation "flashcards" violates constraint "whatever"');
+      },
+    });
+    const result = await deleteFlashcard(
+      makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 500);
+    assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});

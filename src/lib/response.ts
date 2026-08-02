@@ -16,6 +16,15 @@ export const errorResponse = (
   body: JSON.stringify({ success: false, message }),
 });
 
+export const csvResponse = (csv: string, filename: string): APIGatewayProxyResult => ({
+  statusCode: 200,
+  headers: {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': `attachment; filename="${filename}"`,
+  },
+  body: csv,
+});
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isValidUuid(value: string): boolean {
