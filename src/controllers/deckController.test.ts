@@ -6,12 +6,13 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 import {
   createDeck,
-  listDecks,
-  getDeck,
-  updateDeck,
-  archiveDeck,
-  unarchiveDeck,
-  deleteDeck,
+  createDeckHandler,
+  listDecksHandler,
+  getDeckHandler,
+  updateDeckHandler,
+  archiveDeckHandler,
+  unarchiveDeckHandler,
+  deleteDeckHandler,
 } from './deckController';
 import type { DeckControllerDeps, DecksServicePort } from './deckController';
 import { JwtService } from '../lib/jwt';
@@ -113,26 +114,29 @@ function buildDeps(overrides: Partial<DecksServicePort> = {}): {
 describe('createDeck', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await createDeck(makeEvent({ headers: {} }), deps);
+    const result = await createDeckHandler(makeEvent({ headers: {} }), deps);
     assert.equal(result.statusCode, 401);
   });
 
   it('rejects malformed JSON', async () => {
     const { deps } = buildDeps();
-    const result = await createDeck(makeEvent({ body: '{not json' }), deps);
+    const result = await createDeckHandler(makeEvent({ body: '{not json' }), deps);
     assert.equal(result.statusCode, 400);
   });
 
   it('creates successfully and returns 201', async () => {
     const { deps, service } = buildDeps();
-    const result = await createDeck(makeEvent({ body: JSON.stringify({ name: 'Idioms' }) }), deps);
+    const result = await createDeckHandler(
+      makeEvent({ body: JSON.stringify({ name: 'Idioms' }) }),
+      deps,
+    );
     assert.equal(result.statusCode, 201);
     assert.equal(service.calls.createDeck[0][0], USER_ID);
   });
 
   it('takes userId from the JWT, never from the body', async () => {
     const { deps, service } = buildDeps();
-    await createDeck(
+    await createDeckHandler(
       makeEvent({ body: JSON.stringify({ name: 'Idioms', userId: 'someone-else' }) }),
       deps,
     );
@@ -145,7 +149,7 @@ describe('createDeck', () => {
         throw new DeckError('name must not be empty', DeckErrorCode.INVALID_INPUT);
       },
     });
-    const result = await createDeck(makeEvent({ body: JSON.stringify({ name: '' }) }), deps);
+    const result = await createDeckHandler(makeEvent({ body: JSON.stringify({ name: '' }) }), deps);
     assert.equal(result.statusCode, 400);
   });
 
@@ -155,7 +159,10 @@ describe('createDeck', () => {
         throw new Error('duplicate key value violates unique constraint "whatever"');
       },
     });
-    const result = await createDeck(makeEvent({ body: JSON.stringify({ name: 'Idioms' }) }), deps);
+    const result = await createDeckHandler(
+      makeEvent({ body: JSON.stringify({ name: 'Idioms' }) }),
+      deps,
+    );
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');
   });
@@ -164,26 +171,26 @@ describe('createDeck', () => {
 describe('listDecks', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await listDecks(makeEvent({ headers: {} }), deps);
+    const result = await listDecksHandler(makeEvent({ headers: {} }), deps);
     assert.equal(result.statusCode, 401);
   });
 
   it('defaults to available when no status query param is given', async () => {
     const { deps, service } = buildDeps();
-    const result = await listDecks(makeEvent(), deps);
+    const result = await listDecksHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 200);
     assert.equal(service.calls.listDecks[0][1], 'available');
   });
 
   it('accepts status=archived', async () => {
     const { deps, service } = buildDeps();
-    await listDecks(makeEvent({ queryStringParameters: { status: 'archived' } }), deps);
+    await listDecksHandler(makeEvent({ queryStringParameters: { status: 'archived' } }), deps);
     assert.equal(service.calls.listDecks[0][1], 'archived');
   });
 
   it('rejects an invalid status query value', async () => {
     const { deps } = buildDeps();
-    const result = await listDecks(
+    const result = await listDecksHandler(
       makeEvent({ queryStringParameters: { status: 'deleted' } }),
       deps,
     );
@@ -196,7 +203,7 @@ describe('listDecks', () => {
 describe('getDeck', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await getDeck(
+    const result = await getDeckHandler(
       makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
       deps,
     );
@@ -205,19 +212,19 @@ describe('getDeck', () => {
 
   it('returns the deck for an authenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await getDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await getDeckHandler(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
     assert.equal(result.statusCode, 200);
   });
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await getDeck(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    const result = await getDeckHandler(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
     assert.equal(result.statusCode, 400);
   });
 
   it('rejects a missing deckId', async () => {
     const { deps } = buildDeps();
-    const result = await getDeck(makeEvent({ pathParameters: null }), deps);
+    const result = await getDeckHandler(makeEvent({ pathParameters: null }), deps);
     assert.equal(result.statusCode, 400);
   });
 
@@ -227,7 +234,7 @@ describe('getDeck', () => {
         throw new DeckError('not found', DeckErrorCode.DECK_NOT_FOUND);
       },
     });
-    const result = await getDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await getDeckHandler(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
     assert.equal(result.statusCode, 404);
   });
 });
@@ -237,7 +244,7 @@ describe('getDeck', () => {
 describe('updateDeck', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await updateDeck(
+    const result = await updateDeckHandler(
       makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
       deps,
     );
@@ -246,7 +253,7 @@ describe('updateDeck', () => {
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await updateDeck(
+    const result = await updateDeckHandler(
       makeEvent({ pathParameters: { deckId: 'nope' }, body: JSON.stringify({ name: 'x' }) }),
       deps,
     );
@@ -255,7 +262,7 @@ describe('updateDeck', () => {
 
   it('rejects malformed JSON', async () => {
     const { deps } = buildDeps();
-    const result = await updateDeck(
+    const result = await updateDeckHandler(
       makeEvent({ pathParameters: { deckId: DECK_ID }, body: '{not json' }),
       deps,
     );
@@ -264,7 +271,7 @@ describe('updateDeck', () => {
 
   it('ignores protected fields sent by the client and still forwards the rest', async () => {
     const { deps, service } = buildDeps();
-    await updateDeck(
+    await updateDeckHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         body: JSON.stringify({ name: 'New name', isArchived: true, userId: 'someone-else' }),
@@ -283,7 +290,7 @@ describe('updateDeck', () => {
         throw new DeckError('At least one field must be provided', DeckErrorCode.INVALID_INPUT);
       },
     });
-    const result = await updateDeck(
+    const result = await updateDeckHandler(
       makeEvent({ pathParameters: { deckId: DECK_ID }, body: '{}' }),
       deps,
     );
@@ -296,7 +303,7 @@ describe('updateDeck', () => {
 describe('archiveDeck', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await archiveDeck(
+    const result = await archiveDeckHandler(
       makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
       deps,
     );
@@ -305,13 +312,19 @@ describe('archiveDeck', () => {
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await archiveDeck(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    const result = await archiveDeckHandler(
+      makeEvent({ pathParameters: { deckId: 'nope' } }),
+      deps,
+    );
     assert.equal(result.statusCode, 400);
   });
 
   it('archives successfully and returns 200', async () => {
     const { deps } = buildDeps();
-    const result = await archiveDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await archiveDeckHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 200);
     assert.equal((parseBody(result).data as DeckDto).isArchived, true);
   });
@@ -322,7 +335,10 @@ describe('archiveDeck', () => {
         throw new DeckError('not found', DeckErrorCode.DECK_NOT_FOUND);
       },
     });
-    const result = await archiveDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await archiveDeckHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 404);
   });
 });
@@ -330,7 +346,7 @@ describe('archiveDeck', () => {
 describe('unarchiveDeck', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await unarchiveDeck(
+    const result = await unarchiveDeckHandler(
       makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
       deps,
     );
@@ -339,13 +355,19 @@ describe('unarchiveDeck', () => {
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await unarchiveDeck(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    const result = await unarchiveDeckHandler(
+      makeEvent({ pathParameters: { deckId: 'nope' } }),
+      deps,
+    );
     assert.equal(result.statusCode, 400);
   });
 
   it('unarchives successfully and returns 200', async () => {
     const { deps } = buildDeps();
-    const result = await unarchiveDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await unarchiveDeckHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 200);
   });
 });
@@ -355,7 +377,7 @@ describe('unarchiveDeck', () => {
 describe('deleteDeck', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await deleteDeck(
+    const result = await deleteDeckHandler(
       makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
       deps,
     );
@@ -364,13 +386,16 @@ describe('deleteDeck', () => {
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await deleteDeck(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    const result = await deleteDeckHandler(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
     assert.equal(result.statusCode, 400);
   });
 
   it('deletes successfully and returns 200', async () => {
     const { deps, service } = buildDeps();
-    const result = await deleteDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await deleteDeckHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 200);
     assert.equal(service.calls.deleteDeck[0][0], USER_ID);
     assert.equal(service.calls.deleteDeck[0][1], DECK_ID);
@@ -382,7 +407,10 @@ describe('deleteDeck', () => {
         throw new DeckError('not found', DeckErrorCode.DECK_NOT_FOUND);
       },
     });
-    const result = await deleteDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await deleteDeckHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 404);
   });
 
@@ -392,8 +420,53 @@ describe('deleteDeck', () => {
         throw new Error('relation "decks" violates constraint "whatever"');
       },
     });
-    const result = await deleteDeck(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await deleteDeckHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── Lambda invocation shape regression guard ───────────────────────────────────────
+//
+// AWS Lambda always calls the exported handler as `handler(event, context)`.
+// A prior version of this controller took `deps: DeckControllerDeps =
+// DEFAULT_DEPS` as its second parameter — since `context` is never
+// `undefined`, the default never activated in production and every request
+// crashed with `TypeError: deps.services is not a function`, masked as a
+// generic 500 by handleError. This guards against that shape regressing: the
+// exported function must declare exactly one parameter, so a second
+// caller-supplied argument (real or fake) is always ignored by plain JS
+// semantics rather than silently reinterpreted as `deps`.
+
+describe('exported Lambda handlers ignore a second (context) argument', () => {
+  it('createDeck declares only one parameter', () => {
+    assert.equal(createDeck.length, 1);
+  });
+
+  it('does not throw "deps.services is not a function" when called with a second argument', async () => {
+    const event = makeEvent({ body: JSON.stringify({ name: 'Idioms' }) });
+    const fakeLambdaContext = { awsRequestId: 'req-1', functionName: 'flashcardsCreateDeck' };
+    // Cast away the 1-arg type to faithfully reproduce how the real Lambda
+    // runtime calls this function; TypeScript itself already prevents this
+    // call shape from compiling, which is part of the fix. DEFAULT_DEPS
+    // points at the real composition root, so this will fail for lack of a
+    // configured DATABASE_URL in the test environment — that failure is
+    // expected and fine; the only thing this guards against is the specific
+    // deps-shadowing TypeError.
+    const call = createDeck as unknown as (
+      event: APIGatewayProxyEvent,
+      context: unknown,
+    ) => Promise<APIGatewayProxyResult>;
+    try {
+      await call(event, fakeLambdaContext);
+    } catch (err) {
+      assert.ok(
+        !(err instanceof TypeError && err.message.includes('deps.services is not a function')),
+        `regressed: ${String(err)}`,
+      );
+    }
   });
 });
