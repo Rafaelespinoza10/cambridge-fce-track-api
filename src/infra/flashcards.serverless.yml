@@ -139,6 +139,27 @@ functions:
           path: /flashcards/cards/{flashcardId}
           method: DELETE
 
+  flashcardsGetPreferences:
+    handler: src/controllers/flashcardProgressController.getFlashcardPreferences
+    events:
+      - httpApi:
+          path: /flashcards/preferences
+          method: GET
+
+  flashcardsUpdatePreferences:
+    handler: src/controllers/flashcardProgressController.updateFlashcardPreferences
+    events:
+      - httpApi:
+          path: /flashcards/preferences
+          method: PATCH
+
+  flashcardsReviewSummary:
+    handler: src/controllers/flashcardProgressController.getFlashcardReviewSummary
+    events:
+      - httpApi:
+          path: /flashcards/review-summary
+          method: GET
+
 package:
   individually: true
 
