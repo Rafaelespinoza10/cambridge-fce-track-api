@@ -6,8 +6,9 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 import {
   getFlashcardPreferences,
-  updateFlashcardPreferences,
-  getFlashcardReviewSummary,
+  getFlashcardPreferencesHandler,
+  updateFlashcardPreferencesHandler,
+  getFlashcardReviewSummaryHandler,
 } from './flashcardProgressController';
 import type {
   FlashcardProgressControllerDeps,
@@ -103,13 +104,13 @@ function buildDeps(
 describe('getFlashcardPreferences', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await getFlashcardPreferences(makeEvent({ headers: {} }), deps);
+    const result = await getFlashcardPreferencesHandler(makeEvent({ headers: {} }), deps);
     assert.equal(result.statusCode, 401);
   });
 
   it('returns preferences for the authenticated user', async () => {
     const { deps, service } = buildDeps();
-    const result = await getFlashcardPreferences(makeEvent(), deps);
+    const result = await getFlashcardPreferencesHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 200);
     assert.equal(service.calls.getPreferences[0]![0], USER_ID);
     assert.deepEqual(parseBody(result).data, PREFERENCES_DTO);
@@ -121,7 +122,7 @@ describe('getFlashcardPreferences', () => {
         throw new Error('relation "flashcard_preferences" does not exist');
       },
     });
-    const result = await getFlashcardPreferences(makeEvent(), deps);
+    const result = await getFlashcardPreferencesHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');
   });
@@ -132,19 +133,19 @@ describe('getFlashcardPreferences', () => {
 describe('updateFlashcardPreferences', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await updateFlashcardPreferences(makeEvent({ headers: {} }), deps);
+    const result = await updateFlashcardPreferencesHandler(makeEvent({ headers: {} }), deps);
     assert.equal(result.statusCode, 401);
   });
 
   it('rejects malformed JSON', async () => {
     const { deps } = buildDeps();
-    const result = await updateFlashcardPreferences(makeEvent({ body: '{not json' }), deps);
+    const result = await updateFlashcardPreferencesHandler(makeEvent({ body: '{not json' }), deps);
     assert.equal(result.statusCode, 400);
   });
 
   it('updates successfully and returns 200', async () => {
     const { deps, service } = buildDeps();
-    const result = await updateFlashcardPreferences(
+    const result = await updateFlashcardPreferencesHandler(
       makeEvent({ body: JSON.stringify({ dailyGoal: 20 }) }),
       deps,
     );
@@ -154,7 +155,7 @@ describe('updateFlashcardPreferences', () => {
 
   it('takes userId from the JWT, never from the body', async () => {
     const { deps, service } = buildDeps();
-    await updateFlashcardPreferences(
+    await updateFlashcardPreferencesHandler(
       makeEvent({ body: JSON.stringify({ dailyGoal: 20, userId: 'someone-else' }) }),
       deps,
     );
@@ -170,7 +171,7 @@ describe('updateFlashcardPreferences', () => {
         );
       },
     });
-    const result = await updateFlashcardPreferences(
+    const result = await updateFlashcardPreferencesHandler(
       makeEvent({ body: JSON.stringify({ dailyGoal: 0 }) }),
       deps,
     );
@@ -186,7 +187,7 @@ describe('updateFlashcardPreferences', () => {
         );
       },
     });
-    const result = await updateFlashcardPreferences(
+    const result = await updateFlashcardPreferencesHandler(
       makeEvent({ body: JSON.stringify({ dailyGoal: 20 }) }),
       deps,
     );
@@ -199,7 +200,7 @@ describe('updateFlashcardPreferences', () => {
         throw new Error('duplicate key value violates unique constraint "whatever"');
       },
     });
-    const result = await updateFlashcardPreferences(
+    const result = await updateFlashcardPreferencesHandler(
       makeEvent({ body: JSON.stringify({ dailyGoal: 20 }) }),
       deps,
     );
@@ -213,13 +214,13 @@ describe('updateFlashcardPreferences', () => {
 describe('getFlashcardReviewSummary', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await getFlashcardReviewSummary(makeEvent({ headers: {} }), deps);
+    const result = await getFlashcardReviewSummaryHandler(makeEvent({ headers: {} }), deps);
     assert.equal(result.statusCode, 401);
   });
 
   it('returns the summary for the authenticated user', async () => {
     const { deps, service } = buildDeps();
-    const result = await getFlashcardReviewSummary(makeEvent(), deps);
+    const result = await getFlashcardReviewSummaryHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 200);
     assert.equal(service.calls.getReviewSummary[0]![0], USER_ID);
     assert.deepEqual(parseBody(result).data, SUMMARY_DTO);
@@ -227,13 +228,13 @@ describe('getFlashcardReviewSummary', () => {
 
   it('the "now" passed to the service comes from the server clock provider', async () => {
     const { deps, service } = buildDeps({}, () => NOW);
-    await getFlashcardReviewSummary(makeEvent(), deps);
+    await getFlashcardReviewSummaryHandler(makeEvent(), deps);
     assert.deepEqual(service.calls.getReviewSummary[0]![1], NOW);
   });
 
   it('ignores any date/timezone the client tries to inject via query params', async () => {
     const { deps, service } = buildDeps({}, () => NOW);
-    await getFlashcardReviewSummary(
+    await getFlashcardReviewSummaryHandler(
       makeEvent({
         queryStringParameters: { now: '2020-01-01T00:00:00.000Z', timezone: 'Antarctica/Troll' },
       }),
@@ -248,7 +249,7 @@ describe('getFlashcardReviewSummary', () => {
         throw new FlashcardProgressError('not found', FlashcardProgressErrorCode.USER_NOT_FOUND);
       },
     });
-    const result = await getFlashcardReviewSummary(makeEvent(), deps);
+    const result = await getFlashcardReviewSummaryHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 404);
   });
 
@@ -261,7 +262,7 @@ describe('getFlashcardReviewSummary', () => {
         );
       },
     });
-    const result = await getFlashcardReviewSummary(makeEvent(), deps);
+    const result = await getFlashcardReviewSummaryHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 400);
   });
 
@@ -271,8 +272,48 @@ describe('getFlashcardReviewSummary', () => {
         throw new Error('connection terminated unexpectedly');
       },
     });
-    const result = await getFlashcardReviewSummary(makeEvent(), deps);
+    const result = await getFlashcardReviewSummaryHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── Lambda invocation shape regression guard ───────────────────────────────────────
+//
+// AWS Lambda always calls the exported handler as `handler(event, context)`.
+// A prior version of this controller took `deps:
+// FlashcardProgressControllerDeps = DEFAULT_DEPS` as its second parameter —
+// since `context` is never `undefined`, the default never activated in
+// production and every request crashed with `TypeError: deps.services is not
+// a function`, masked as a generic 500 by handleError. This guards against
+// that shape regressing.
+
+describe('exported Lambda handlers ignore a second (context) argument', () => {
+  it('getFlashcardPreferences declares only one parameter', () => {
+    assert.equal(getFlashcardPreferences.length, 1);
+  });
+
+  it('does not throw "deps.services is not a function" when called with a second argument', async () => {
+    const event = makeEvent();
+    const fakeLambdaContext = { awsRequestId: 'req-1', functionName: 'flashcardsGetPreferences' };
+    // Cast away the 1-arg type to faithfully reproduce how the real Lambda
+    // runtime calls this function; TypeScript itself already prevents this
+    // call shape from compiling, which is part of the fix. DEFAULT_DEPS
+    // points at the real composition root, so this will fail for lack of a
+    // configured DATABASE_URL in the test environment — that failure is
+    // expected and fine; the only thing this guards against is the specific
+    // deps-shadowing TypeError.
+    const call = getFlashcardPreferences as unknown as (
+      event: APIGatewayProxyEvent,
+      context: unknown,
+    ) => Promise<APIGatewayProxyResult>;
+    try {
+      await call(event, fakeLambdaContext);
+    } catch (err) {
+      assert.ok(
+        !(err instanceof TypeError && err.message.includes('deps.services is not a function')),
+        `regressed: ${String(err)}`,
+      );
+    }
   });
 });

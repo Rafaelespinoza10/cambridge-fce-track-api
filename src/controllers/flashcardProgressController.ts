@@ -31,9 +31,16 @@ const DEFAULT_DEPS: FlashcardProgressControllerDeps = {
   services: buildFlashcardProgressServices,
 };
 
-export async function getFlashcardPreferences(
+// AWS Lambda always invokes the exported handler as `handler(event, context)`,
+// so a second parameter with a default value (`deps = DEFAULT_DEPS`) never
+// falls back to the default in production — `context` is a real object, not
+// `undefined`. Each handler below takes `deps` explicitly (only ever supplied
+// by tests); the exported Lambda entry point takes just `event` and always
+// wires in DEFAULT_DEPS itself.
+
+async function getFlashcardPreferencesHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardProgressControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardProgressControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -47,9 +54,15 @@ export async function getFlashcardPreferences(
   }
 }
 
-export async function updateFlashcardPreferences(
+export async function getFlashcardPreferences(
   event: APIGatewayProxyEvent,
-  deps: FlashcardProgressControllerDeps = DEFAULT_DEPS,
+): Promise<APIGatewayProxyResult> {
+  return getFlashcardPreferencesHandler(event, DEFAULT_DEPS);
+}
+
+async function updateFlashcardPreferencesHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardProgressControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -70,9 +83,15 @@ export async function updateFlashcardPreferences(
   }
 }
 
-export async function getFlashcardReviewSummary(
+export async function updateFlashcardPreferences(
   event: APIGatewayProxyEvent,
-  deps: FlashcardProgressControllerDeps = DEFAULT_DEPS,
+): Promise<APIGatewayProxyResult> {
+  return updateFlashcardPreferencesHandler(event, DEFAULT_DEPS);
+}
+
+async function getFlashcardReviewSummaryHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardProgressControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -86,4 +105,15 @@ export async function getFlashcardReviewSummary(
   }
 }
 
+export async function getFlashcardReviewSummary(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return getFlashcardReviewSummaryHandler(event, DEFAULT_DEPS);
+}
+
+export {
+  getFlashcardPreferencesHandler,
+  updateFlashcardPreferencesHandler,
+  getFlashcardReviewSummaryHandler,
+};
 export type { FlashcardProgressControllerDeps, FlashcardProgressServicePort };
