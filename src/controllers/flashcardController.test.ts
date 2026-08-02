@@ -6,12 +6,13 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 import {
   createFlashcard,
-  listFlashcards,
-  getFlashcard,
-  updateFlashcard,
-  suspendFlashcard,
-  reactivateFlashcard,
-  deleteFlashcard,
+  createFlashcardHandler,
+  listFlashcardsHandler,
+  getFlashcardHandler,
+  updateFlashcardHandler,
+  suspendFlashcardHandler,
+  reactivateFlashcardHandler,
+  deleteFlashcardHandler,
 } from './flashcardController';
 import type { FlashcardControllerDeps, FlashcardsServicePort } from './flashcardController';
 import { JwtService } from '../lib/jwt';
@@ -132,7 +133,7 @@ function buildDeps(
 describe('createFlashcard', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await createFlashcard(
+    const result = await createFlashcardHandler(
       makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
       deps,
     );
@@ -141,13 +142,16 @@ describe('createFlashcard', () => {
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await createFlashcard(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    const result = await createFlashcardHandler(
+      makeEvent({ pathParameters: { deckId: 'nope' } }),
+      deps,
+    );
     assert.equal(result.statusCode, 400);
   });
 
   it('rejects malformed JSON', async () => {
     const { deps } = buildDeps();
-    const result = await createFlashcard(
+    const result = await createFlashcardHandler(
       makeEvent({ pathParameters: { deckId: DECK_ID }, body: '{not json' }),
       deps,
     );
@@ -156,7 +160,7 @@ describe('createFlashcard', () => {
 
   it('creates successfully and returns 201', async () => {
     const { deps, service } = buildDeps();
-    const result = await createFlashcard(
+    const result = await createFlashcardHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         body: JSON.stringify({ type: 'vocabulary', front: 'Front', back: 'Back' }),
@@ -170,7 +174,7 @@ describe('createFlashcard', () => {
 
   it('takes userId from the JWT, never from the body', async () => {
     const { deps, service } = buildDeps();
-    await createFlashcard(
+    await createFlashcardHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         body: JSON.stringify({
@@ -187,7 +191,7 @@ describe('createFlashcard', () => {
 
   it('the "now" passed to the service comes from the server clock provider', async () => {
     const { deps, service } = buildDeps({}, () => NOW);
-    await createFlashcard(
+    await createFlashcardHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         body: JSON.stringify({ type: 'vocabulary', front: 'Front', back: 'Back' }),
@@ -203,7 +207,7 @@ describe('createFlashcard', () => {
         throw new FlashcardError('front must not be empty', FlashcardErrorCode.INVALID_INPUT);
       },
     });
-    const result = await createFlashcard(
+    const result = await createFlashcardHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         body: JSON.stringify({ type: 'vocabulary', front: '', back: 'Back' }),
@@ -219,7 +223,7 @@ describe('createFlashcard', () => {
         throw new Error('duplicate key value violates unique constraint "whatever"');
       },
     });
-    const result = await createFlashcard(
+    const result = await createFlashcardHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         body: JSON.stringify({ type: 'vocabulary', front: 'Front', back: 'Back' }),
@@ -236,7 +240,7 @@ describe('createFlashcard', () => {
 describe('listFlashcards', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await listFlashcards(
+    const result = await listFlashcardsHandler(
       makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
       deps,
     );
@@ -245,20 +249,26 @@ describe('listFlashcards', () => {
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await listFlashcards(makeEvent({ pathParameters: { deckId: 'nope' } }), deps);
+    const result = await listFlashcardsHandler(
+      makeEvent({ pathParameters: { deckId: 'nope' } }),
+      deps,
+    );
     assert.equal(result.statusCode, 400);
   });
 
   it('defaults to status=active when no query param is given', async () => {
     const { deps, service } = buildDeps();
-    const result = await listFlashcards(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await listFlashcardsHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 200);
     assert.equal(service.calls.listFlashcards[0][2], 'active');
   });
 
   it('accepts status=suspended and status=all', async () => {
     const { deps, service } = buildDeps();
-    await listFlashcards(
+    await listFlashcardsHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         queryStringParameters: { status: 'suspended' },
@@ -267,7 +277,7 @@ describe('listFlashcards', () => {
     );
     assert.equal(service.calls.listFlashcards[0][2], 'suspended');
 
-    await listFlashcards(
+    await listFlashcardsHandler(
       makeEvent({ pathParameters: { deckId: DECK_ID }, queryStringParameters: { status: 'all' } }),
       deps,
     );
@@ -276,7 +286,7 @@ describe('listFlashcards', () => {
 
   it('rejects an invalid status query value', async () => {
     const { deps } = buildDeps();
-    const result = await listFlashcards(
+    const result = await listFlashcardsHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         queryStringParameters: { status: 'archived' },
@@ -288,7 +298,7 @@ describe('listFlashcards', () => {
 
   it('accepts a valid type filter', async () => {
     const { deps, service } = buildDeps();
-    await listFlashcards(
+    await listFlashcardsHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         queryStringParameters: { type: 'grammar' },
@@ -300,7 +310,7 @@ describe('listFlashcards', () => {
 
   it('rejects an invalid type filter', async () => {
     const { deps } = buildDeps();
-    const result = await listFlashcards(
+    const result = await listFlashcardsHandler(
       makeEvent({
         pathParameters: { deckId: DECK_ID },
         queryStringParameters: { type: 'not-a-type' },
@@ -316,7 +326,10 @@ describe('listFlashcards', () => {
         throw new FlashcardError('not found', FlashcardErrorCode.DECK_NOT_FOUND);
       },
     });
-    const result = await listFlashcards(makeEvent({ pathParameters: { deckId: DECK_ID } }), deps);
+    const result = await listFlashcardsHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
     assert.equal(result.statusCode, 404);
   });
 });
@@ -326,7 +339,7 @@ describe('listFlashcards', () => {
 describe('getFlashcard', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await getFlashcard(
+    const result = await getFlashcardHandler(
       makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -335,7 +348,7 @@ describe('getFlashcard', () => {
 
   it('returns the flashcard for an authenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await getFlashcard(
+    const result = await getFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -344,13 +357,16 @@ describe('getFlashcard', () => {
 
   it('rejects an invalid flashcardId', async () => {
     const { deps } = buildDeps();
-    const result = await getFlashcard(makeEvent({ pathParameters: { flashcardId: 'nope' } }), deps);
+    const result = await getFlashcardHandler(
+      makeEvent({ pathParameters: { flashcardId: 'nope' } }),
+      deps,
+    );
     assert.equal(result.statusCode, 400);
   });
 
   it('rejects a missing flashcardId', async () => {
     const { deps } = buildDeps();
-    const result = await getFlashcard(makeEvent({ pathParameters: null }), deps);
+    const result = await getFlashcardHandler(makeEvent({ pathParameters: null }), deps);
     assert.equal(result.statusCode, 400);
   });
 
@@ -360,7 +376,7 @@ describe('getFlashcard', () => {
         throw new FlashcardError('not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
       },
     });
-    const result = await getFlashcard(
+    const result = await getFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -373,7 +389,7 @@ describe('getFlashcard', () => {
 describe('updateFlashcard', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await updateFlashcard(
+    const result = await updateFlashcardHandler(
       makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -382,7 +398,7 @@ describe('updateFlashcard', () => {
 
   it('rejects an invalid flashcardId', async () => {
     const { deps } = buildDeps();
-    const result = await updateFlashcard(
+    const result = await updateFlashcardHandler(
       makeEvent({
         pathParameters: { flashcardId: 'nope' },
         body: JSON.stringify({ front: 'x' }),
@@ -394,7 +410,7 @@ describe('updateFlashcard', () => {
 
   it('rejects malformed JSON', async () => {
     const { deps } = buildDeps();
-    const result = await updateFlashcard(
+    const result = await updateFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID }, body: '{not json' }),
       deps,
     );
@@ -403,7 +419,7 @@ describe('updateFlashcard', () => {
 
   it('forwards userId from the JWT and ignores protected fields sent by the client', async () => {
     const { deps, service } = buildDeps();
-    await updateFlashcard(
+    await updateFlashcardHandler(
       makeEvent({
         pathParameters: { flashcardId: FLASHCARD_ID },
         body: JSON.stringify({ front: 'New front', status: 'review', userId: 'someone-else' }),
@@ -425,7 +441,7 @@ describe('updateFlashcard', () => {
         );
       },
     });
-    const result = await updateFlashcard(
+    const result = await updateFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID }, body: '{}' }),
       deps,
     );
@@ -438,7 +454,7 @@ describe('updateFlashcard', () => {
         throw new FlashcardError('duplicate', FlashcardErrorCode.FLASHCARD_DUPLICATE);
       },
     });
-    const result = await updateFlashcard(
+    const result = await updateFlashcardHandler(
       makeEvent({
         pathParameters: { flashcardId: FLASHCARD_ID },
         body: JSON.stringify({ front: 'x' }),
@@ -454,7 +470,7 @@ describe('updateFlashcard', () => {
 describe('suspendFlashcard', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await suspendFlashcard(
+    const result = await suspendFlashcardHandler(
       makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -463,7 +479,7 @@ describe('suspendFlashcard', () => {
 
   it('rejects an invalid flashcardId', async () => {
     const { deps } = buildDeps();
-    const result = await suspendFlashcard(
+    const result = await suspendFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: 'nope' } }),
       deps,
     );
@@ -472,7 +488,7 @@ describe('suspendFlashcard', () => {
 
   it('suspends successfully and returns 200', async () => {
     const { deps } = buildDeps();
-    const result = await suspendFlashcard(
+    const result = await suspendFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -486,7 +502,7 @@ describe('suspendFlashcard', () => {
         throw new FlashcardError('not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
       },
     });
-    const result = await suspendFlashcard(
+    const result = await suspendFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -499,7 +515,7 @@ describe('suspendFlashcard', () => {
 describe('reactivateFlashcard', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await reactivateFlashcard(
+    const result = await reactivateFlashcardHandler(
       makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -508,7 +524,7 @@ describe('reactivateFlashcard', () => {
 
   it('rejects an invalid flashcardId', async () => {
     const { deps } = buildDeps();
-    const result = await reactivateFlashcard(
+    const result = await reactivateFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: 'nope' } }),
       deps,
     );
@@ -517,7 +533,7 @@ describe('reactivateFlashcard', () => {
 
   it('reactivates successfully and returns 200', async () => {
     const { deps } = buildDeps();
-    const result = await reactivateFlashcard(
+    const result = await reactivateFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -530,7 +546,7 @@ describe('reactivateFlashcard', () => {
 describe('deleteFlashcard', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await deleteFlashcard(
+    const result = await deleteFlashcardHandler(
       makeEvent({ headers: {}, pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -539,7 +555,7 @@ describe('deleteFlashcard', () => {
 
   it('rejects an invalid flashcardId', async () => {
     const { deps } = buildDeps();
-    const result = await deleteFlashcard(
+    const result = await deleteFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: 'nope' } }),
       deps,
     );
@@ -548,7 +564,7 @@ describe('deleteFlashcard', () => {
 
   it('deletes successfully and returns 200', async () => {
     const { deps, service } = buildDeps();
-    const result = await deleteFlashcard(
+    const result = await deleteFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -563,7 +579,7 @@ describe('deleteFlashcard', () => {
         throw new FlashcardError('not found', FlashcardErrorCode.FLASHCARD_NOT_FOUND);
       },
     });
-    const result = await deleteFlashcard(
+    const result = await deleteFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
@@ -576,11 +592,53 @@ describe('deleteFlashcard', () => {
         throw new Error('relation "flashcards" violates constraint "whatever"');
       },
     });
-    const result = await deleteFlashcard(
+    const result = await deleteFlashcardHandler(
       makeEvent({ pathParameters: { flashcardId: FLASHCARD_ID } }),
       deps,
     );
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── Lambda invocation shape regression guard ───────────────────────────────────────
+//
+// AWS Lambda always calls the exported handler as `handler(event, context)`.
+// A prior version of this controller took `deps: FlashcardControllerDeps =
+// DEFAULT_DEPS` as its second parameter — since `context` is never
+// `undefined`, the default never activated in production and every request
+// crashed with `TypeError: deps.services is not a function`, masked as a
+// generic 500 by handleError. This guards against that shape regressing.
+
+describe('exported Lambda handlers ignore a second (context) argument', () => {
+  it('createFlashcard declares only one parameter', () => {
+    assert.equal(createFlashcard.length, 1);
+  });
+
+  it('does not throw "deps.services is not a function" when called with a second argument', async () => {
+    const event = makeEvent({
+      pathParameters: { deckId: DECK_ID },
+      body: JSON.stringify({ type: 'vocabulary', front: 'Front', back: 'Back' }),
+    });
+    const fakeLambdaContext = { awsRequestId: 'req-1', functionName: 'flashcardsCreateFlashcard' };
+    // Cast away the 1-arg type to faithfully reproduce how the real Lambda
+    // runtime calls this function; TypeScript itself already prevents this
+    // call shape from compiling, which is part of the fix. DEFAULT_DEPS
+    // points at the real composition root, so this will fail for lack of a
+    // configured DATABASE_URL in the test environment — that failure is
+    // expected and fine; the only thing this guards against is the specific
+    // deps-shadowing TypeError.
+    const call = createFlashcard as unknown as (
+      event: APIGatewayProxyEvent,
+      context: unknown,
+    ) => Promise<APIGatewayProxyResult>;
+    try {
+      await call(event, fakeLambdaContext);
+    } catch (err) {
+      assert.ok(
+        !(err instanceof TypeError && err.message.includes('deps.services is not a function')),
+        `regressed: ${String(err)}`,
+      );
+    }
   });
 });

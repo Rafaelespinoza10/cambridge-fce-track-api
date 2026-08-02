@@ -61,9 +61,16 @@ function getFlashcardIdParam(event: APIGatewayProxyEvent): string | null {
   return flashcardId && isValidUuid(flashcardId) ? flashcardId : null;
 }
 
-export async function createFlashcard(
+// AWS Lambda always invokes the exported handler as `handler(event, context)`,
+// so a second parameter with a default value (`deps = DEFAULT_DEPS`) never
+// falls back to the default in production — `context` is a real object, not
+// `undefined`. Each handler below takes `deps` explicitly (only ever supplied
+// by tests); the exported Lambda entry point takes just `event` and always
+// wires in DEFAULT_DEPS itself.
+
+async function createFlashcardHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -87,9 +94,13 @@ export async function createFlashcard(
   }
 }
 
-export async function listFlashcards(
+export async function createFlashcard(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return createFlashcardHandler(event, DEFAULT_DEPS);
+}
+
+async function listFlashcardsHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -121,9 +132,13 @@ export async function listFlashcards(
   }
 }
 
-export async function getFlashcard(
+export async function listFlashcards(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return listFlashcardsHandler(event, DEFAULT_DEPS);
+}
+
+async function getFlashcardHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -140,9 +155,13 @@ export async function getFlashcard(
   }
 }
 
-export async function updateFlashcard(
+export async function getFlashcard(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return getFlashcardHandler(event, DEFAULT_DEPS);
+}
+
+async function updateFlashcardHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -166,9 +185,13 @@ export async function updateFlashcard(
   }
 }
 
-export async function suspendFlashcard(
+export async function updateFlashcard(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return updateFlashcardHandler(event, DEFAULT_DEPS);
+}
+
+async function suspendFlashcardHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -185,9 +208,15 @@ export async function suspendFlashcard(
   }
 }
 
-export async function reactivateFlashcard(
+export async function suspendFlashcard(
   event: APIGatewayProxyEvent,
-  deps: FlashcardControllerDeps = DEFAULT_DEPS,
+): Promise<APIGatewayProxyResult> {
+  return suspendFlashcardHandler(event, DEFAULT_DEPS);
+}
+
+async function reactivateFlashcardHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -204,9 +233,15 @@ export async function reactivateFlashcard(
   }
 }
 
-export async function deleteFlashcard(
+export async function reactivateFlashcard(
   event: APIGatewayProxyEvent,
-  deps: FlashcardControllerDeps = DEFAULT_DEPS,
+): Promise<APIGatewayProxyResult> {
+  return reactivateFlashcardHandler(event, DEFAULT_DEPS);
+}
+
+async function deleteFlashcardHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -223,4 +258,17 @@ export async function deleteFlashcard(
   }
 }
 
+export async function deleteFlashcard(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return deleteFlashcardHandler(event, DEFAULT_DEPS);
+}
+
+export {
+  createFlashcardHandler,
+  listFlashcardsHandler,
+  getFlashcardHandler,
+  updateFlashcardHandler,
+  suspendFlashcardHandler,
+  reactivateFlashcardHandler,
+  deleteFlashcardHandler,
+};
 export type { FlashcardControllerDeps, FlashcardsServicePort };
