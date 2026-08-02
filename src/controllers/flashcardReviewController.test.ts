@@ -6,8 +6,9 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 import {
   startFlashcardReviewSession,
-  answerFlashcard,
-  completeFlashcardReviewSession,
+  startFlashcardReviewSessionHandler,
+  answerFlashcardHandler,
+  completeFlashcardReviewSessionHandler,
 } from './flashcardReviewController';
 import type {
   FlashcardReviewControllerDeps,
@@ -169,19 +170,19 @@ function buildDeps(
 describe('startFlashcardReviewSession', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await startFlashcardReviewSession(makeEvent({ headers: {} }), deps);
+    const result = await startFlashcardReviewSessionHandler(makeEvent({ headers: {} }), deps);
     assert.equal(result.statusCode, 401);
   });
 
   it('accepts a valid empty body', async () => {
     const { deps } = buildDeps();
-    const result = await startFlashcardReviewSession(makeEvent({ body: null }), deps);
+    const result = await startFlashcardReviewSessionHandler(makeEvent({ body: null }), deps);
     assert.equal(result.statusCode, 201);
   });
 
   it('accepts a valid deckId', async () => {
     const { deps, ports } = buildDeps();
-    const result = await startFlashcardReviewSession(
+    const result = await startFlashcardReviewSessionHandler(
       makeEvent({ body: JSON.stringify({ deckId: DECK_ID }) }),
       deps,
     );
@@ -191,7 +192,7 @@ describe('startFlashcardReviewSession', () => {
 
   it('rejects an invalid deckId', async () => {
     const { deps } = buildDeps();
-    const result = await startFlashcardReviewSession(
+    const result = await startFlashcardReviewSessionHandler(
       makeEvent({ body: JSON.stringify({ deckId: 'not-a-uuid' }) }),
       deps,
     );
@@ -200,7 +201,7 @@ describe('startFlashcardReviewSession', () => {
 
   it('rejects malformed JSON', async () => {
     const { deps } = buildDeps();
-    const result = await startFlashcardReviewSession(makeEvent({ body: '{not json' }), deps);
+    const result = await startFlashcardReviewSessionHandler(makeEvent({ body: '{not json' }), deps);
     assert.equal(result.statusCode, 400);
   });
 
@@ -208,7 +209,7 @@ describe('startFlashcardReviewSession', () => {
     const { deps } = buildDeps({
       startExecute: async () => ({ ...START_RESULT, sessionResumed: false }),
     });
-    const result = await startFlashcardReviewSession(makeEvent(), deps);
+    const result = await startFlashcardReviewSessionHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 201);
     const body = parseBody(result);
     assert.equal((body.data as { session: { resumed: boolean } }).session.resumed, false);
@@ -218,7 +219,7 @@ describe('startFlashcardReviewSession', () => {
     const { deps } = buildDeps({
       startExecute: async () => ({ ...START_RESULT, sessionResumed: true }),
     });
-    const result = await startFlashcardReviewSession(makeEvent(), deps);
+    const result = await startFlashcardReviewSessionHandler(makeEvent(), deps);
     assert.equal(result.statusCode, 200);
     const body = parseBody(result);
     assert.equal((body.data as { session: { resumed: boolean } }).session.resumed, true);
@@ -226,7 +227,7 @@ describe('startFlashcardReviewSession', () => {
 
   it('takes userId from the JWT, never from the body', async () => {
     const { deps, ports } = buildDeps();
-    await startFlashcardReviewSession(
+    await startFlashcardReviewSessionHandler(
       makeEvent({ body: JSON.stringify({ userId: 'someone-else', deckId: DECK_ID }) }),
       deps,
     );
@@ -235,7 +236,7 @@ describe('startFlashcardReviewSession', () => {
 
   it('takes requestedAt from the server clock, and ignores a client-supplied timezone', async () => {
     const { deps, ports } = buildDeps();
-    await startFlashcardReviewSession(
+    await startFlashcardReviewSessionHandler(
       makeEvent({
         body: JSON.stringify({ timezone: 'Europe/Madrid', requestedAt: '2000-01-01T00:00:00Z' }),
       }),
@@ -255,7 +256,7 @@ describe('startFlashcardReviewSession', () => {
         );
       },
     });
-    const result = await startFlashcardReviewSession(
+    const result = await startFlashcardReviewSessionHandler(
       makeEvent({ body: JSON.stringify({ deckId: DECK_ID }) }),
       deps,
     );
@@ -280,13 +281,13 @@ function answerEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayP
 describe('answerFlashcard', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(answerEvent({ headers: {} }), deps);
+    const result = await answerFlashcardHandler(answerEvent({ headers: {} }), deps);
     assert.equal(result.statusCode, 401);
   });
 
   it('rejects an invalid sessionId path parameter', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(
+    const result = await answerFlashcardHandler(
       answerEvent({ pathParameters: { sessionId: 'nope' } }),
       deps,
     );
@@ -295,7 +296,7 @@ describe('answerFlashcard', () => {
 
   it('rejects an invalid flashcardId', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(
+    const result = await answerFlashcardHandler(
       answerEvent({
         body: JSON.stringify({
           flashcardId: 'nope',
@@ -310,7 +311,7 @@ describe('answerFlashcard', () => {
 
   it('rejects an invalid idempotencyKey', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(
+    const result = await answerFlashcardHandler(
       answerEvent({
         body: JSON.stringify({ flashcardId: FLASHCARD_ID, rating: 'good', idempotencyKey: 'nope' }),
       }),
@@ -321,7 +322,7 @@ describe('answerFlashcard', () => {
 
   it('rejects an invalid rating', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(
+    const result = await answerFlashcardHandler(
       answerEvent({
         body: JSON.stringify({
           flashcardId: FLASHCARD_ID,
@@ -336,7 +337,7 @@ describe('answerFlashcard', () => {
 
   it('rejects a negative responseTimeMs', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(
+    const result = await answerFlashcardHandler(
       answerEvent({
         body: JSON.stringify({
           flashcardId: FLASHCARD_ID,
@@ -352,7 +353,7 @@ describe('answerFlashcard', () => {
 
   it('rejects a decimal responseTimeMs', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(
+    const result = await answerFlashcardHandler(
       answerEvent({
         body: JSON.stringify({
           flashcardId: FLASHCARD_ID,
@@ -368,13 +369,13 @@ describe('answerFlashcard', () => {
 
   it('rejects malformed JSON', async () => {
     const { deps } = buildDeps();
-    const result = await answerFlashcard(answerEvent({ body: '{not json' }), deps);
+    const result = await answerFlashcardHandler(answerEvent({ body: '{not json' }), deps);
     assert.equal(result.statusCode, 400);
   });
 
   it('takes reviewedAt from the server clock and calls the use case exactly once', async () => {
     const { deps, ports } = buildDeps();
-    const result = await answerFlashcard(answerEvent(), deps);
+    const result = await answerFlashcardHandler(answerEvent(), deps);
     assert.equal(result.statusCode, 200);
     assert.equal(ports.answerFlashcard.calls.length, 1);
     assert.equal(ports.answerFlashcard.calls[0].reviewedAt.getTime(), FIXED_NOW.getTime());
@@ -386,7 +387,7 @@ describe('answerFlashcard', () => {
     const { deps } = buildDeps({
       answerExecute: async () => ({ ...ANSWER_RESULT, idempotentReplay: true }),
     });
-    const result = await answerFlashcard(answerEvent(), deps);
+    const result = await answerFlashcardHandler(answerEvent(), deps);
     assert.equal(result.statusCode, 200);
     const body = parseBody(result);
     assert.equal((body.data as { idempotentReplay: boolean }).idempotentReplay, true);
@@ -401,7 +402,7 @@ describe('answerFlashcard', () => {
         );
       },
     });
-    const result = await answerFlashcard(answerEvent(), deps);
+    const result = await answerFlashcardHandler(answerEvent(), deps);
     assert.equal(result.statusCode, 409);
   });
 
@@ -413,7 +414,7 @@ describe('answerFlashcard', () => {
         );
       },
     });
-    const result = await answerFlashcard(answerEvent(), deps);
+    const result = await answerFlashcardHandler(answerEvent(), deps);
     assert.equal(result.statusCode, 500);
     const body = parseBody(result);
     assert.equal(body.message, 'Internal server error');
@@ -429,13 +430,16 @@ function completeEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewa
 describe('completeFlashcardReviewSession', () => {
   it('rejects an unauthenticated request', async () => {
     const { deps } = buildDeps();
-    const result = await completeFlashcardReviewSession(completeEvent({ headers: {} }), deps);
+    const result = await completeFlashcardReviewSessionHandler(
+      completeEvent({ headers: {} }),
+      deps,
+    );
     assert.equal(result.statusCode, 401);
   });
 
   it('rejects an invalid sessionId path parameter', async () => {
     const { deps } = buildDeps();
-    const result = await completeFlashcardReviewSession(
+    const result = await completeFlashcardReviewSessionHandler(
       completeEvent({ pathParameters: { sessionId: 'nope' } }),
       deps,
     );
@@ -444,19 +448,22 @@ describe('completeFlashcardReviewSession', () => {
 
   it('tolerates an empty body', async () => {
     const { deps } = buildDeps();
-    const result = await completeFlashcardReviewSession(completeEvent({ body: null }), deps);
+    const result = await completeFlashcardReviewSessionHandler(completeEvent({ body: null }), deps);
     assert.equal(result.statusCode, 200);
   });
 
   it('rejects malformed JSON when a body is actually sent', async () => {
     const { deps } = buildDeps();
-    const result = await completeFlashcardReviewSession(completeEvent({ body: '{not json' }), deps);
+    const result = await completeFlashcardReviewSessionHandler(
+      completeEvent({ body: '{not json' }),
+      deps,
+    );
     assert.equal(result.statusCode, 400);
   });
 
   it('takes completedAt from the server clock and ignores a client-supplied duration', async () => {
     const { deps, ports } = buildDeps();
-    await completeFlashcardReviewSession(
+    await completeFlashcardReviewSessionHandler(
       completeEvent({
         body: JSON.stringify({ durationMinutes: 999, completedAt: '2000-01-01T00:00:00Z' }),
       }),
@@ -469,7 +476,7 @@ describe('completeFlashcardReviewSession', () => {
 
   it('closes successfully', async () => {
     const { deps } = buildDeps();
-    const result = await completeFlashcardReviewSession(completeEvent(), deps);
+    const result = await completeFlashcardReviewSessionHandler(completeEvent(), deps);
     assert.equal(result.statusCode, 200);
     const body = parseBody(result);
     assert.equal((body.data as { idempotentReplay: boolean }).idempotentReplay, false);
@@ -479,7 +486,7 @@ describe('completeFlashcardReviewSession', () => {
     const { deps } = buildDeps({
       completeExecute: async () => ({ ...COMPLETE_RESULT, idempotentReplay: true }),
     });
-    const result = await completeFlashcardReviewSession(completeEvent(), deps);
+    const result = await completeFlashcardReviewSessionHandler(completeEvent(), deps);
     assert.equal(result.statusCode, 200);
     const body = parseBody(result);
     assert.equal((body.data as { idempotentReplay: boolean }).idempotentReplay, true);
@@ -494,7 +501,7 @@ describe('completeFlashcardReviewSession', () => {
         );
       },
     });
-    const result = await completeFlashcardReviewSession(completeEvent(), deps);
+    const result = await completeFlashcardReviewSessionHandler(completeEvent(), deps);
     assert.equal(result.statusCode, 404);
   });
 
@@ -507,7 +514,7 @@ describe('completeFlashcardReviewSession', () => {
         );
       },
     });
-    const result = await completeFlashcardReviewSession(completeEvent(), deps);
+    const result = await completeFlashcardReviewSessionHandler(completeEvent(), deps);
     assert.equal(result.statusCode, 409);
   });
 
@@ -520,7 +527,7 @@ describe('completeFlashcardReviewSession', () => {
         );
       },
     });
-    const result = await completeFlashcardReviewSession(completeEvent(), deps);
+    const result = await completeFlashcardReviewSessionHandler(completeEvent(), deps);
     assert.equal(result.statusCode, 500);
     const body = parseBody(result);
     assert.equal(body.message, 'Internal server error');
@@ -532,9 +539,51 @@ describe('completeFlashcardReviewSession', () => {
         throw new Error('relation "study_sessions" violates constraint "chk_whatever"');
       },
     });
-    const result = await completeFlashcardReviewSession(completeEvent(), deps);
+    const result = await completeFlashcardReviewSessionHandler(completeEvent(), deps);
     assert.equal(result.statusCode, 500);
     const body = parseBody(result);
     assert.equal(body.message, 'Internal server error');
+  });
+});
+
+// ── Lambda invocation shape regression guard ───────────────────────────────────────
+//
+// AWS Lambda always calls the exported handler as `handler(event, context)`.
+// A prior version of this controller took `deps: FlashcardReviewControllerDeps
+// = DEFAULT_DEPS` as its second parameter — since `context` is never
+// `undefined`, the default never activated in production and every request
+// crashed with `TypeError: deps.services is not a function`, masked as a
+// generic 500 by handleError. This guards against that shape regressing.
+
+describe('exported Lambda handlers ignore a second (context) argument', () => {
+  it('startFlashcardReviewSession declares only one parameter', () => {
+    assert.equal(startFlashcardReviewSession.length, 1);
+  });
+
+  it('does not throw "deps.services is not a function" when called with a second argument', async () => {
+    const event = makeEvent({ body: JSON.stringify({}) });
+    const fakeLambdaContext = {
+      awsRequestId: 'req-1',
+      functionName: 'flashcardsStartReviewSession',
+    };
+    // Cast away the 1-arg type to faithfully reproduce how the real Lambda
+    // runtime calls this function; TypeScript itself already prevents this
+    // call shape from compiling, which is part of the fix. DEFAULT_DEPS
+    // points at the real composition root, so this will fail for lack of a
+    // configured DATABASE_URL in the test environment — that failure is
+    // expected and fine; the only thing this guards against is the specific
+    // deps-shadowing TypeError.
+    const call = startFlashcardReviewSession as unknown as (
+      event: APIGatewayProxyEvent,
+      context: unknown,
+    ) => Promise<APIGatewayProxyResult>;
+    try {
+      await call(event, fakeLambdaContext);
+    } catch (err) {
+      assert.ok(
+        !(err instanceof TypeError && err.message.includes('deps.services is not a function')),
+        `regressed: ${String(err)}`,
+      );
+    }
   });
 });

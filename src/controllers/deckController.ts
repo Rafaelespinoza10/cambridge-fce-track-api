@@ -36,9 +36,16 @@ function getDeckIdParam(event: APIGatewayProxyEvent): string | null {
   return deckId && isValidUuid(deckId) ? deckId : null;
 }
 
-export async function createDeck(
+// AWS Lambda always invokes the exported handler as `handler(event, context)`,
+// so a second parameter with a default value (`deps = DEFAULT_DEPS`) never
+// falls back to the default in production — `context` is a real object, not
+// `undefined`. Each handler below takes `deps` explicitly (only ever supplied
+// by tests); the exported Lambda entry point takes just `event` and always
+// wires in DEFAULT_DEPS itself.
+
+async function createDeckHandler(
   event: APIGatewayProxyEvent,
-  deps: DeckControllerDeps = DEFAULT_DEPS,
+  deps: DeckControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -59,9 +66,13 @@ export async function createDeck(
   }
 }
 
-export async function listDecks(
+export async function createDeck(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return createDeckHandler(event, DEFAULT_DEPS);
+}
+
+async function listDecksHandler(
   event: APIGatewayProxyEvent,
-  deps: DeckControllerDeps = DEFAULT_DEPS,
+  deps: DeckControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -80,9 +91,13 @@ export async function listDecks(
   }
 }
 
-export async function getDeck(
+export async function listDecks(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return listDecksHandler(event, DEFAULT_DEPS);
+}
+
+async function getDeckHandler(
   event: APIGatewayProxyEvent,
-  deps: DeckControllerDeps = DEFAULT_DEPS,
+  deps: DeckControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -99,9 +114,13 @@ export async function getDeck(
   }
 }
 
-export async function updateDeck(
+export async function getDeck(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return getDeckHandler(event, DEFAULT_DEPS);
+}
+
+async function updateDeckHandler(
   event: APIGatewayProxyEvent,
-  deps: DeckControllerDeps = DEFAULT_DEPS,
+  deps: DeckControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -125,9 +144,13 @@ export async function updateDeck(
   }
 }
 
-export async function archiveDeck(
+export async function updateDeck(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return updateDeckHandler(event, DEFAULT_DEPS);
+}
+
+async function archiveDeckHandler(
   event: APIGatewayProxyEvent,
-  deps: DeckControllerDeps = DEFAULT_DEPS,
+  deps: DeckControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -144,9 +167,13 @@ export async function archiveDeck(
   }
 }
 
-export async function unarchiveDeck(
+export async function archiveDeck(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return archiveDeckHandler(event, DEFAULT_DEPS);
+}
+
+async function unarchiveDeckHandler(
   event: APIGatewayProxyEvent,
-  deps: DeckControllerDeps = DEFAULT_DEPS,
+  deps: DeckControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -163,9 +190,13 @@ export async function unarchiveDeck(
   }
 }
 
-export async function deleteDeck(
+export async function unarchiveDeck(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return unarchiveDeckHandler(event, DEFAULT_DEPS);
+}
+
+async function deleteDeckHandler(
   event: APIGatewayProxyEvent,
-  deps: DeckControllerDeps = DEFAULT_DEPS,
+  deps: DeckControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -182,4 +213,17 @@ export async function deleteDeck(
   }
 }
 
+export async function deleteDeck(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return deleteDeckHandler(event, DEFAULT_DEPS);
+}
+
+export {
+  createDeckHandler,
+  listDecksHandler,
+  getDeckHandler,
+  updateDeckHandler,
+  archiveDeckHandler,
+  unarchiveDeckHandler,
+  deleteDeckHandler,
+};
 export type { DeckControllerDeps, DecksServicePort };

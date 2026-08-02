@@ -129,11 +129,18 @@ function toCompleteSessionHttpResponse(
   };
 }
 
+// AWS Lambda always invokes the exported handler as `handler(event, context)`,
+// so a second parameter with a default value (`deps = DEFAULT_DEPS`) never
+// falls back to the default in production — `context` is a real object, not
+// `undefined`. Each handler below takes `deps` explicitly (only ever supplied
+// by tests); the exported Lambda entry point takes just `event` and always
+// wires in DEFAULT_DEPS itself.
+
 // ── POST /flashcards/review-sessions ──────────────────────────────────────────
 
-export async function startFlashcardReviewSession(
+async function startFlashcardReviewSessionHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardReviewControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardReviewControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -163,11 +170,17 @@ export async function startFlashcardReviewSession(
   }
 }
 
+export async function startFlashcardReviewSession(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return startFlashcardReviewSessionHandler(event, DEFAULT_DEPS);
+}
+
 // ── POST /flashcards/review-sessions/{sessionId}/answers ─────────────────────
 
-export async function answerFlashcard(
+async function answerFlashcardHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardReviewControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardReviewControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -216,11 +229,15 @@ export async function answerFlashcard(
   }
 }
 
+export async function answerFlashcard(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return answerFlashcardHandler(event, DEFAULT_DEPS);
+}
+
 // ── POST /flashcards/review-sessions/{sessionId}/complete ────────────────────
 
-export async function completeFlashcardReviewSession(
+async function completeFlashcardReviewSessionHandler(
   event: APIGatewayProxyEvent,
-  deps: FlashcardReviewControllerDeps = DEFAULT_DEPS,
+  deps: FlashcardReviewControllerDeps,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
@@ -251,6 +268,17 @@ export async function completeFlashcardReviewSession(
   }
 }
 
+export async function completeFlashcardReviewSession(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return completeFlashcardReviewSessionHandler(event, DEFAULT_DEPS);
+}
+
+export {
+  startFlashcardReviewSessionHandler,
+  answerFlashcardHandler,
+  completeFlashcardReviewSessionHandler,
+};
 export type {
   FlashcardReviewControllerDeps,
   NowProvider,
