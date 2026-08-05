@@ -18,6 +18,8 @@ provider:
     DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
     JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
     JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+    OPEN_AI_API_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPEN_AI_API_KEY}
+    OPENAI_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_MODEL, ''}
 
 functions:
   flashcardsStartReviewSession:
@@ -159,6 +161,14 @@ functions:
       - httpApi:
           path: /flashcards/review-summary
           method: GET
+
+  flashcardsGenerateAiDraft:
+    handler: src/controllers/flashcardAiDraftController.generateFlashcardDraft
+    timeout: 30
+    events:
+      - httpApi:
+          path: /flashcards/ai/draft
+          method: POST
 
 package:
   individually: true
