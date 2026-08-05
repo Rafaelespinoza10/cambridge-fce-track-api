@@ -220,4 +220,10 @@ class MocksRepository {
 }
 
 export { MocksRepository };
-export type { CreateMockData, CreateSectionData, UpdateMockData, MockListOptions, MockExportOptions };
+export type {
+  CreateMockData,
+  CreateSectionData,
+  UpdateMockData,
+  MockListOptions,
+  MockExportOptions,
+};

@@ -11,10 +11,7 @@ import { StudySessionsRepository } from '../../repositories/study-sessions.repos
 import type { UpdateStudySessionProgressData } from '../../repositories/study-sessions.repository';
 
 import { SimpleSchedulingStrategy } from './scheduling/simple-scheduling.strategy';
-import type {
-  SchedulingStrategy,
-  FlashcardSchedulingState,
-} from './scheduling/scheduling.types';
+import type { SchedulingStrategy, FlashcardSchedulingState } from './scheduling/scheduling.types';
 
 import { FlashcardStatus, StudySessionStatus, ReviewRating } from '../../models/enums';
 import type { Flashcard } from '../../models/Flashcard';

@@ -345,7 +345,8 @@ class MocksService {
           const rawScoreRaw = (data['Raw Score'] ?? '').trim();
           if (rawScoreRaw === '') throw new Error(`Section "${sectionName}" is missing Raw Score`);
           const rawScore = Number(rawScoreRaw);
-          if (isNaN(rawScore)) throw new Error(`Section "${sectionName}" Raw Score must be a number`);
+          if (isNaN(rawScore))
+            throw new Error(`Section "${sectionName}" Raw Score must be a number`);
 
           const maxScoreRaw = (data['Max Score'] ?? '').trim();
           const maxScore = maxScoreRaw !== '' ? Number(maxScoreRaw) : null;
