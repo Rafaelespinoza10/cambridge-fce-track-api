@@ -2,8 +2,8 @@ import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
-import { RecommendationsService } from '../services/recommendations.service';
-import type { UpdateRecommendationBody } from '../interfaces/recommendations.interface';
+import { RecommendationsService } from '../services/recommendations/recommendations.service';
+import type { UpdateRecommendationBody } from '../interfaces/recommendations/recommendations.interface';
 
 const service = new RecommendationsService();
 

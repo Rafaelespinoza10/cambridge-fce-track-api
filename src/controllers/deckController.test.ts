@@ -16,8 +16,8 @@ import {
 } from './deckController';
 import type { DeckControllerDeps, DecksServicePort } from './deckController';
 import { JwtService } from '../lib/jwt';
-import { DeckError, DeckErrorCode } from '../services/decks.service';
-import type { DeckDto } from '../interfaces/decks.interface';
+import { DeckError, DeckErrorCode } from '../services/decks/decks.service';
+import type { DeckDto } from '../interfaces/decks/decks.interface';
 
 const USER_ID = 'user-1';
 const DECK_ID = '11111111-1111-1111-1111-111111111111';

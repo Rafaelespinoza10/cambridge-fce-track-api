@@ -1,6 +1,6 @@
 import type { Recommendation } from '../models/Recommendation';
 import { RecommendationType, RecommendationPriority, RecommendationSource } from '../models/enums';
-import type { SafeRecommendation } from '../interfaces/recommendations.interface';
+import type { SafeRecommendation } from '../interfaces/recommendations/recommendations.interface';
 
 // ── SPEC Section 9 — Weakness Detection Rules ──────────────────────────────────
 // Score < 60%   → WEAKNESS   / HIGH   priority → recommend 2x/week

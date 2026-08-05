@@ -18,11 +18,11 @@ import { JwtService } from '../lib/jwt';
 import {
   FlashcardProgressError,
   FlashcardProgressErrorCode,
-} from '../services/flashcard-progress.service';
+} from '../services/flashcards/flashcard-progress.service';
 import type {
   FlashcardPreferencesDto,
   FlashcardReviewSummaryDto,
-} from '../interfaces/flashcard-progress.interface';
+} from '../interfaces/flashcards/flashcard-progress.interface';
 
 const USER_ID = 'user-1';
 const NOW = new Date('2026-01-15T14:30:00.000Z');

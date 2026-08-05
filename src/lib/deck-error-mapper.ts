@@ -1,4 +1,4 @@
-import { DeckError, DeckErrorCode } from '../services/decks.service';
+import { DeckError, DeckErrorCode } from '../services/decks/decks.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
