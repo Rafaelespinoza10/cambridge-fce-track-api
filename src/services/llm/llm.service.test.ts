@@ -3,12 +3,24 @@ import * as assert from 'node:assert/strict';
 
 import { LLMService } from './llm.service';
 import { LLMServiceError, LLMErrorCode } from './llm.types';
-import type { LLMProvider, LLMProviderCompletionParams, LLMProviderResult } from './llm.types';
+import type {
+  LLMJsonSchema,
+  LLMProvider,
+  LLMProviderCompletionParams,
+  LLMProviderResult,
+  LLMProviderStructuredCompletionParams,
+  LLMProviderStructuredResult,
+} from './llm.types';
 
 const DEFAULT_DEPS_OVERRIDES = {
   defaultModel: 'fake-model',
   defaultTemperature: 0.7,
   defaultMaxOutputTokens: 1024,
+};
+
+const FAKE_SCHEMA: LLMJsonSchema = {
+  name: 'fake_schema',
+  schema: { type: 'object', properties: {}, additionalProperties: false },
 };
 
 function makeService(
@@ -18,6 +30,25 @@ function makeService(
     name: 'fake',
     defaultModel: 'fake-model',
     createCompletion,
+    createStructuredCompletion: async () => {
+      throw new Error('createStructuredCompletion should not be called in this test');
+    },
+  };
+  return new LLMService({ provider, ...DEFAULT_DEPS_OVERRIDES });
+}
+
+function makeStructuredService(
+  createStructuredCompletion: (
+    params: LLMProviderStructuredCompletionParams,
+  ) => Promise<LLMProviderStructuredResult>,
+): LLMService {
+  const provider: LLMProvider = {
+    name: 'fake',
+    defaultModel: 'fake-model',
+    createCompletion: async () => {
+      throw new Error('createCompletion should not be called in this test');
+    },
+    createStructuredCompletion,
   };
   return new LLMService({ provider, ...DEFAULT_DEPS_OVERRIDES });
 }
@@ -142,5 +173,83 @@ describe('LLMService.chat', () => {
     });
 
     await assert.rejects(() => service.chat([{ role: 'user', content: 'hi' }]), providerError);
+  });
+});
+
+// ── completeStructured ──────────────────────────────────────────────────────────
+
+describe('LLMService.completeStructured', () => {
+  it('forwards the schema and timeout to the provider', async () => {
+    let capturedParams: LLMProviderStructuredCompletionParams | undefined;
+    const service = makeStructuredService(async (params) => {
+      capturedParams = params;
+      return { content: '{"ok":true}' };
+    });
+
+    await service.completeStructured([{ role: 'user', content: 'hi' }], {
+      responseSchema: FAKE_SCHEMA,
+      timeoutMs: 5000,
+    });
+
+    assert.equal(capturedParams?.responseSchema, FAKE_SCHEMA);
+    assert.equal(capturedParams?.timeoutMs, 5000);
+    assert.equal(capturedParams?.model, 'fake-model');
+  });
+
+  it('parses valid JSON content into a value', async () => {
+    const service = makeStructuredService(async () => ({ content: '{"front":"iron out"}' }));
+
+    const result = await service.completeStructured([{ role: 'user', content: 'hi' }], {
+      responseSchema: FAKE_SCHEMA,
+    });
+
+    assert.deepEqual(result, { front: 'iron out' });
+  });
+
+  it('throws EMPTY_RESPONSE when the provider returns no content', async () => {
+    const service = makeStructuredService(async () => ({ content: '' }));
+
+    await assert.rejects(
+      () =>
+        service.completeStructured([{ role: 'user', content: 'hi' }], {
+          responseSchema: FAKE_SCHEMA,
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof LLMServiceError);
+        assert.equal(err.code, LLMErrorCode.EMPTY_RESPONSE);
+        return true;
+      },
+    );
+  });
+
+  it('throws INVALID_JSON_RESPONSE when the provider returns malformed JSON', async () => {
+    const service = makeStructuredService(async () => ({ content: '{not json' }));
+
+    await assert.rejects(
+      () =>
+        service.completeStructured([{ role: 'user', content: 'hi' }], {
+          responseSchema: FAKE_SCHEMA,
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof LLMServiceError);
+        assert.equal(err.code, LLMErrorCode.INVALID_JSON_RESPONSE);
+        return true;
+      },
+    );
+  });
+
+  it('propagates errors thrown by the provider unchanged', async () => {
+    const providerError = new LLMServiceError('boom', LLMErrorCode.TIMEOUT);
+    const service = makeStructuredService(async () => {
+      throw providerError;
+    });
+
+    await assert.rejects(
+      () =>
+        service.completeStructured([{ role: 'user', content: 'hi' }], {
+          responseSchema: FAKE_SCHEMA,
+        }),
+      providerError,
+    );
   });
 });

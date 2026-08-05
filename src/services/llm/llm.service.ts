@@ -1,5 +1,10 @@
 import { LLMServiceError, LLMErrorCode } from './llm.types';
-import type { LLMChatMessage, LLMCompletionOptions, LLMProvider } from './llm.types';
+import type {
+  LLMChatMessage,
+  LLMCompletionOptions,
+  LLMProvider,
+  LLMStructuredCompletionOptions,
+} from './llm.types';
 
 export interface LLMServiceDeps {
   provider: LLMProvider;
@@ -55,5 +60,40 @@ export class LLMService {
       throw new LLMServiceError('LLM returned an empty response', LLMErrorCode.EMPTY_RESPONSE);
     }
     return result.content;
+  }
+
+  /**
+   * Sends a conversation constrained to a strict JSON Schema (Structured
+   * Outputs) and returns the parsed value. Callers still must validate the
+   * parsed shape against their own domain rules — a syntactically valid JSON
+   * response is not the same as a semantically valid one.
+   */
+  async completeStructured(
+    messages: LLMChatMessage[],
+    options: LLMStructuredCompletionOptions,
+  ): Promise<unknown> {
+    const validated = toValidatedMessages(messages);
+
+    const result = await this.deps.provider.createStructuredCompletion({
+      model: options.model ?? this.deps.defaultModel,
+      messages: validated,
+      temperature: options.temperature ?? this.deps.defaultTemperature,
+      maxOutputTokens: options.maxOutputTokens ?? this.deps.defaultMaxOutputTokens,
+      responseSchema: options.responseSchema,
+      timeoutMs: options.timeoutMs,
+    });
+
+    if (typeof result.content !== 'string' || result.content.trim() === '') {
+      throw new LLMServiceError('LLM returned an empty response', LLMErrorCode.EMPTY_RESPONSE);
+    }
+
+    try {
+      return JSON.parse(result.content) as unknown;
+    } catch {
+      throw new LLMServiceError(
+        'LLM returned a response that was not valid JSON',
+        LLMErrorCode.INVALID_JSON_RESPONSE,
+      );
+    }
   }
 }
