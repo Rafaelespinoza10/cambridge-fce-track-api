@@ -1,6 +1,12 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, csvResponse, handleError, isValidUuid } from '@lib/response';
+import {
+  errorResponse,
+  successResponse,
+  csvResponse,
+  handleError,
+  isValidUuid,
+} from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { toCsv } from '@lib/csv';
 import { ScoreType } from '../models/enums';

@@ -1,6 +1,10 @@
 import { getDatabaseConnection } from '../../lib/database';
 import { RecommendationsRepository } from '../../repositories/recommendations.repository';
-import { classifySkill, toSafeRecommendation, RULE_SOURCE } from '../../lib/recommendations-library';
+import {
+  classifySkill,
+  toSafeRecommendation,
+  RULE_SOURCE,
+} from '../../lib/recommendations-library';
 import { RecommendationStatus } from '../../models/enums';
 import type {
   RecommendationFilters,

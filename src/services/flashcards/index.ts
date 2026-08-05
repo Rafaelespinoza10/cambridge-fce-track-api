@@ -10,11 +10,7 @@ export type { FlashcardReviewServices } from './flashcard-review-composition';
 export { buildGenerateFlashcardDraftServices } from './generate-flashcard-draft-composition';
 export type { GenerateFlashcardDraftServices } from './generate-flashcard-draft-composition';
 
-export {
-  FlashcardsService,
-  FlashcardError,
-  FlashcardErrorCode,
-} from './flashcards.service';
+export { FlashcardsService, FlashcardError, FlashcardErrorCode } from './flashcards.service';
 
 export {
   FlashcardProgressService,
@@ -34,9 +30,7 @@ export {
   StartFlashcardReviewSessionErrorCode,
 } from './start-flashcard-review-session.service';
 
-export {
-  AnswerFlashcardRequestService,
-} from './answer-flashcard-request.service';
+export { AnswerFlashcardRequestService } from './answer-flashcard-request.service';
 
 export {
   CompleteFlashcardReviewSessionService,
@@ -52,7 +46,4 @@ export {
 
 export { SimpleSchedulingStrategy } from './scheduling/simple-scheduling.strategy';
 export { SchedulingError } from './scheduling/scheduling.types';
-export type {
-  SchedulingStrategy,
-  FlashcardSchedulingState,
-} from './scheduling/scheduling.types';
+export type { SchedulingStrategy, FlashcardSchedulingState } from './scheduling/scheduling.types';
