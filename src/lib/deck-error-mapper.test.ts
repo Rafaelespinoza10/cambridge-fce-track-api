@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { mapDeckError } from './deck-error-mapper';
-import { DeckError, DeckErrorCode } from '../services/decks.service';
+import { DeckError, DeckErrorCode } from '../services/decks/decks.service';
 
 function statusOf(error: unknown): number | undefined {
   return (error as { statusCode?: number }).statusCode;

@@ -2,16 +2,16 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { mapFlashcardReviewError } from './flashcard-review-error-mapper';
-import { FlashcardReviewError, FlashcardReviewErrorCode } from '../services/flashcard-review.service';
+import { FlashcardReviewError, FlashcardReviewErrorCode } from '../services/flashcards/flashcard-review.service';
 import {
   StartFlashcardReviewSessionError,
   StartFlashcardReviewSessionErrorCode,
-} from '../services/start-flashcard-review-session.service';
+} from '../services/flashcards/start-flashcard-review-session.service';
 import {
   CompleteFlashcardReviewSessionError,
   CompleteFlashcardReviewSessionErrorCode,
-} from '../services/complete-flashcard-review-session.service';
-import { SchedulingError } from '../services/flashcard-scheduling/scheduling.types';
+} from '../services/flashcards/complete-flashcard-review-session.service';
+import { SchedulingError } from '../services/flashcards/scheduling/scheduling.types';
 
 function statusOf(error: unknown): number | undefined {
   return (error as { statusCode?: number }).statusCode;

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 
 import { mapFlashcardError } from './flashcard-error-mapper';
-import { FlashcardError, FlashcardErrorCode } from '../services/flashcards.service';
+import { FlashcardError, FlashcardErrorCode } from '../services/flashcards/flashcards.service';
 
 function statusOf(error: unknown): number | undefined {
   return (error as { statusCode?: number }).statusCode;

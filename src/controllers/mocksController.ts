@@ -3,14 +3,14 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, csvResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { toCsv } from '@lib/csv';
-import { MocksService } from '../services/mocks.service';
+import { MocksService } from '../services/mocks/mocks.service';
 import { ExamType, MockType } from '../models/enums';
 import type {
   CreateMockBody,
   UpdateMockBody,
   MockListFilters,
   MockExportRow,
-} from '../interfaces/mocks.interface';
+} from '../interfaces/mocks/mocks.interface';
 
 const service = new MocksService();
 

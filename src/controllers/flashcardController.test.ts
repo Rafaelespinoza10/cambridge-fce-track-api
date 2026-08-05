@@ -16,8 +16,8 @@ import {
 } from './flashcardController';
 import type { FlashcardControllerDeps, FlashcardsServicePort } from './flashcardController';
 import { JwtService } from '../lib/jwt';
-import { FlashcardError, FlashcardErrorCode } from '../services/flashcards.service';
-import type { FlashcardDto } from '../interfaces/flashcards.interface';
+import { FlashcardError, FlashcardErrorCode } from '../services/flashcards/flashcards.service';
+import type { FlashcardDto } from '../interfaces/flashcards/flashcards.interface';
 import { FlashcardType, FlashcardStatus } from '../models/enums';
 
 const USER_ID = 'user-1';

@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
-import { ProgressService } from '../services/progress.service';
+import { ProgressService } from '../services/progress/progress.service';
 
 const service = new ProgressService();
 

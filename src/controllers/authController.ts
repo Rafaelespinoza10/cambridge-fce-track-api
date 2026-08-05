@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { errorResponse, successResponse, handleError } from '@lib/response';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import type { LoginBody, RegisterBody } from '../interfaces/auth.interface';
-import { AuthService } from '../services/auth.service';
+import type { LoginBody, RegisterBody } from '../interfaces/auth/auth.interface';
+import { AuthService } from '../services/auth/auth.service';
 
 const service = new AuthService();
 

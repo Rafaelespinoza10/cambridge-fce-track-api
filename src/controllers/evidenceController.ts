@@ -2,12 +2,12 @@ import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
-import { EvidenceService } from '../services/evidence.service';
+import { EvidenceService } from '../services/evidence/evidence.service';
 import type {
   CreateEvidenceBody,
   EvidenceListFilters,
   GenerateUploadUrlBody,
-} from '../interfaces/evidence.interface';
+} from '../interfaces/evidence/evidence.interface';
 
 const service = new EvidenceService();
 

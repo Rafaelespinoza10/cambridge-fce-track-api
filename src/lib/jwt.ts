@@ -1,6 +1,6 @@
 import * as jwt from 'jsonwebtoken';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import type { JwtPayload } from '../interfaces/auth.interface';
+import type { JwtPayload } from '../interfaces/auth/auth.interface';
 import type { SignOptions } from 'jsonwebtoken';
 
 class JwtService {

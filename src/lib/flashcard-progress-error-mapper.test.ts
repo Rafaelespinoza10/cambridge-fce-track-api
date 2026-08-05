@@ -5,7 +5,7 @@ import { mapFlashcardProgressError } from './flashcard-progress-error-mapper';
 import {
   FlashcardProgressError,
   FlashcardProgressErrorCode,
-} from '../services/flashcard-progress.service';
+} from '../services/flashcards/flashcard-progress.service';
 
 function statusOf(error: unknown): number | undefined {
   return (error as { statusCode?: number }).statusCode;

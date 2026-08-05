@@ -4,7 +4,7 @@ import { errorResponse, successResponse, csvResponse, handleError, isValidUuid }
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { toCsv } from '@lib/csv';
 import { ScoreType } from '../models/enums';
-import { ActivitiesService } from 'src/services/activities.service';
+import { ActivitiesService } from 'src/services/activities/activities.service';
 import type {
   CreateCustomActivityBody,
   UpdateCustomActivityBody,
@@ -12,7 +12,7 @@ import type {
   ActivityTemplateFilters,
   CustomActivityFilters,
   CustomActivityExportRow,
-} from 'src/interfaces/activities.interface';
+} from 'src/interfaces/activities/activities.interface';
 
 const service = new ActivitiesService();
 

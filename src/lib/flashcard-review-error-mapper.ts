@@ -1,16 +1,16 @@
 import {
   FlashcardReviewError,
   FlashcardReviewErrorCode,
-} from '../services/flashcard-review.service';
+} from '../services/flashcards/flashcard-review.service';
 import {
   StartFlashcardReviewSessionError,
   StartFlashcardReviewSessionErrorCode,
-} from '../services/start-flashcard-review-session.service';
+} from '../services/flashcards/start-flashcard-review-session.service';
 import {
   CompleteFlashcardReviewSessionError,
   CompleteFlashcardReviewSessionErrorCode,
-} from '../services/complete-flashcard-review-session.service';
-import { SchedulingError } from '../services/flashcard-scheduling/scheduling.types';
+} from '../services/flashcards/complete-flashcard-review-session.service';
+import { SchedulingError } from '../services/flashcards/scheduling/scheduling.types';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
