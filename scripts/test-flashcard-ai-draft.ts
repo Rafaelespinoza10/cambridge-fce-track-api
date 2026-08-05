@@ -5,8 +5,8 @@
  * prints each resulting draft. Never logs the API key.
  *
  * Usage:
- *   npx ts-node scripts/test-flashcard-ai-draft.ts
- *   STAGE=prod npx ts-node scripts/test-flashcard-ai-draft.ts
+ *   npx ts-node -r ./scripts/md-require-hook.js scripts/test-flashcard-ai-draft.ts
+ *   STAGE=prod npx ts-node -r ./scripts/md-require-hook.js scripts/test-flashcard-ai-draft.ts
  */
 
 import * as fs from 'fs';

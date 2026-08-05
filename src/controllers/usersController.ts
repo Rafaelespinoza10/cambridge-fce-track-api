@@ -4,7 +4,11 @@ import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/r
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { EnglishLevel, GoalStatus, TargetExam } from '../models/enums';
 import { UsersService } from 'src/services/users/users.service';
-import type { CreateGoalBody, ProfileData, UpdateGoalBody } from 'src/interfaces/users/users.interface';
+import type {
+  CreateGoalBody,
+  ProfileData,
+  UpdateGoalBody,
+} from 'src/interfaces/users/users.interface';
 
 const service = new UsersService();
 
