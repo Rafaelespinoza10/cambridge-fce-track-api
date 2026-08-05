@@ -1,3 +1,4 @@
+/// <reference path="../../types/markdown.d.ts" />
 import { FlashcardType, EnglishLevel } from '../../models/enums';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import type {
@@ -9,6 +10,9 @@ import type {
   GenerateFlashcardDraftRequest,
   GeneratedFlashcardDraftDto,
 } from '../../interfaces/flashcards/generate-flashcard-draft.interface';
+import { renderPromptTemplate } from '../../lib/prompt-template';
+import SYSTEM_PROMPT from '../../prompts/flashcards/generate-draft.system.md';
+import USER_PROMPT_TEMPLATE from '../../prompts/flashcards/generate-draft.user.md';
 
 export enum GenerateFlashcardDraftErrorCode {
   INVALID_INPUT = 'invalid_input',
@@ -59,24 +63,8 @@ const RESPONSE_MAX_OUTPUT_TOKENS = 700;
 const VALID_FLASHCARD_TYPES = new Set<string>(Object.values(FlashcardType));
 const VALID_ENGLISH_LEVELS = new Set<string>(Object.values(EnglishLevel));
 
-const SYSTEM_PROMPT = [
-  'You generate a single flashcard draft for a student preparing for the Cambridge B2 First (FCE) exam.',
-  '',
-  'Rules:',
-  '- The main definition ("back") must be in clear, simple English appropriate for a B1+/B2 learner.',
-  '- The translation must be in Spanish.',
-  '- The example sentence must be natural and appropriate for a B1+/B2 learner.',
-  '- personalExample should relate to software development, work, study, or Cambridge exam preparation when that connection feels natural — never forced.',
-  '- Never invent a URL or a source. sourceName and sourceUrl must always be null.',
-  '- All tags must be lowercase, at most 5 tags.',
-  '- Do not generate offensive, unrelated, or off-topic content.',
-  '- Never claim a word or phrase "officially belongs to Cambridge" or is part of an official Cambridge wordlist.',
-  '- The CEFR level you return is your own estimate, not a certification.',
-  '- Respond only with the JSON object described by the provided schema — no extra commentary.',
-].join('\n');
-
 function buildUserPrompt(term: string, type: FlashcardType): string {
-  return `Generate a flashcard draft for the following term.\n\nTerm: "${term}"\nType: ${type}`;
+  return renderPromptTemplate(USER_PROMPT_TEMPLATE, { term, type });
 }
 
 const RESPONSE_SCHEMA: LLMJsonSchema = {
@@ -347,7 +335,7 @@ export class GenerateFlashcardDraftService {
     const type = normalizeRequestType(input.type);
 
     const messages: LLMChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT.trim() },
       { role: 'user', content: buildUserPrompt(term, type) },
     ];
 
