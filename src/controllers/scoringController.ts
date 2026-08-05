@@ -2,12 +2,12 @@ import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
-import { ScoringService } from '../services/scoring.service';
+import { ScoringService } from '../services/scoring/scoring.service';
 import type {
   RegisterScoreBody,
   UpdateScoreBody,
   ScoreHistoryFilters,
-} from '../interfaces/scoring.interface';
+} from '../interfaces/scoring/scoring.interface';
 import { ScoreType } from '../models/enums';
 
 const service = new ScoringService();

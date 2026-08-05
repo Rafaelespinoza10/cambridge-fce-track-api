@@ -1,7 +1,7 @@
 import {
   FlashcardProgressError,
   FlashcardProgressErrorCode,
-} from '../services/flashcard-progress.service';
+} from '../services/flashcards/flashcard-progress.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });

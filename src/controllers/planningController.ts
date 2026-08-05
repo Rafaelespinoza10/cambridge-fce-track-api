@@ -4,7 +4,7 @@ import { errorResponse, successResponse, csvResponse, handleError, isValidUuid }
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { toCsv } from '@lib/csv';
 import { ActivityPriority, PlannedActivityStatus } from '../models/enums';
-import { PlanningService } from '../services/planning.service';
+import { PlanningService } from '../services/planning/planning.service';
 import type {
   CreateWeekPlanBody,
   AddPlannedActivityBody,
@@ -12,7 +12,7 @@ import type {
   MovePlannedActivityBody,
   ActivityHistoryFilters,
   ActivityHistoryExportRow,
-} from '../interfaces/planning.interface';
+} from '../interfaces/planning/planning.interface';
 
 const service = new PlanningService();
 

@@ -3,13 +3,13 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { mapDeckError } from '@lib/deck-error-mapper';
-import { buildDecksServices } from '../services/decks-composition';
+import { buildDecksServices } from '../services/decks/decks-composition';
 import type {
   CreateDeckRequestBody,
   UpdateDeckRequestBody,
   DeckListStatus,
   DeckDto,
-} from '../interfaces/decks.interface';
+} from '../interfaces/decks/decks.interface';
 
 interface DecksServicePort {
   createDeck(userId: string, input: CreateDeckRequestBody): Promise<DeckDto>;

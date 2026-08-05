@@ -9,7 +9,7 @@ import type {
   ExamSectionFilters,
   ActivityTemplateFilters,
   CustomActivityFilters,
-} from '../interfaces/activities.interface';
+} from '../interfaces/activities/activities.interface';
 
 interface UpdateCustomActivityData {
   skill_id?: string | null;

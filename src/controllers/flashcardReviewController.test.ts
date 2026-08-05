@@ -21,18 +21,18 @@ import { ReviewRating, StudySessionStatus, FlashcardStatus } from '../models/enu
 import {
   FlashcardReviewError,
   FlashcardReviewErrorCode,
-} from '../services/flashcard-review.service';
+} from '../services/flashcards/flashcard-review.service';
 import {
   StartFlashcardReviewSessionError,
   StartFlashcardReviewSessionErrorCode,
-} from '../services/start-flashcard-review-session.service';
+} from '../services/flashcards/start-flashcard-review-session.service';
 import {
   CompleteFlashcardReviewSessionError,
   CompleteFlashcardReviewSessionErrorCode,
-} from '../services/complete-flashcard-review-session.service';
-import type { StartFlashcardReviewSessionResult } from '../interfaces/start-flashcard-review-session.interface';
-import type { AnswerFlashcardResult } from '../interfaces/flashcard-review.interface';
-import type { CompleteFlashcardReviewSessionResult } from '../interfaces/complete-flashcard-review-session.interface';
+} from '../services/flashcards/complete-flashcard-review-session.service';
+import type { StartFlashcardReviewSessionResult } from '../interfaces/flashcards/start-flashcard-review-session.interface';
+import type { AnswerFlashcardResult } from '../interfaces/flashcards/flashcard-review.interface';
+import type { CompleteFlashcardReviewSessionResult } from '../interfaces/flashcards/complete-flashcard-review-session.interface';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────────
 

@@ -3,14 +3,14 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { mapFlashcardError } from '@lib/flashcard-error-mapper';
-import { buildFlashcardsServices } from '../services/flashcards-composition';
+import { buildFlashcardsServices } from '../services/flashcards/flashcards-composition';
 import { FlashcardType } from '../models/enums';
 import type {
   CreateFlashcardRequestBody,
   UpdateFlashcardRequestBody,
   FlashcardListStatus,
   FlashcardDto,
-} from '../interfaces/flashcards.interface';
+} from '../interfaces/flashcards/flashcards.interface';
 
 type NowProvider = () => Date;
 

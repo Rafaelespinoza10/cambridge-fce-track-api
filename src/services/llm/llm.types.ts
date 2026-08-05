@@ -22,6 +22,34 @@ export interface LLMProviderResult {
   content: string;
 }
 
+/** A strict JSON Schema response format for Structured Outputs. */
+export interface LLMJsonSchema {
+  name: string;
+  schema: Record<string, unknown>;
+  /** Defaults to true — the provider must match the schema exactly. */
+  strict?: boolean;
+}
+
+export interface LLMStructuredCompletionOptions extends LLMCompletionOptions {
+  responseSchema: LLMJsonSchema;
+  /** Aborts the request if the provider hasn't responded within this many ms. */
+  timeoutMs?: number;
+}
+
+export interface LLMProviderStructuredCompletionParams {
+  model: string;
+  messages: LLMChatMessage[];
+  temperature: number;
+  maxOutputTokens: number;
+  responseSchema: LLMJsonSchema;
+  timeoutMs?: number;
+}
+
+export interface LLMProviderStructuredResult {
+  /** Raw JSON text from the provider — LLMService parses and validates it. */
+  content: string;
+}
+
 /**
  * Port every LLM provider adapter must implement (OpenAI, and — later —
  * Anthropic, Gemini, etc.). LLMService only ever talks to this interface,
@@ -32,6 +60,9 @@ export interface LLMProvider {
   readonly name: string;
   readonly defaultModel: string;
   createCompletion(params: LLMProviderCompletionParams): Promise<LLMProviderResult>;
+  createStructuredCompletion(
+    params: LLMProviderStructuredCompletionParams,
+  ): Promise<LLMProviderStructuredResult>;
 }
 
 export enum LLMErrorCode {
@@ -41,6 +72,8 @@ export enum LLMErrorCode {
   RATE_LIMITED = 'rate_limited',
   PROVIDER_ERROR = 'provider_error',
   EMPTY_RESPONSE = 'empty_response',
+  INVALID_JSON_RESPONSE = 'invalid_json_response',
+  TIMEOUT = 'timeout',
 }
 
 const LLM_ERROR_STATUS_BY_CODE: Record<LLMErrorCode, number> = {
@@ -50,6 +83,8 @@ const LLM_ERROR_STATUS_BY_CODE: Record<LLMErrorCode, number> = {
   [LLMErrorCode.RATE_LIMITED]: 429,
   [LLMErrorCode.PROVIDER_ERROR]: 502,
   [LLMErrorCode.EMPTY_RESPONSE]: 502,
+  [LLMErrorCode.INVALID_JSON_RESPONSE]: 502,
+  [LLMErrorCode.TIMEOUT]: 504,
 };
 
 export class LLMServiceError extends Error {

@@ -3,8 +3,8 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { EnglishLevel, GoalStatus, TargetExam } from '../models/enums';
-import { UsersService } from 'src/services/users.service';
-import type { CreateGoalBody, ProfileData, UpdateGoalBody } from 'src/interfaces/users.interface';
+import { UsersService } from 'src/services/users/users.service';
+import type { CreateGoalBody, ProfileData, UpdateGoalBody } from 'src/interfaces/users/users.interface';
 
 const service = new UsersService();
 

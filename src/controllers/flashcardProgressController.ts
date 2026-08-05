@@ -3,12 +3,12 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { mapFlashcardProgressError } from '@lib/flashcard-progress-error-mapper';
-import { buildFlashcardProgressServices } from '../services/flashcard-progress-composition';
+import { buildFlashcardProgressServices } from '../services/flashcards/flashcard-progress-composition';
 import type {
   FlashcardPreferencesDto,
   UpdateFlashcardPreferencesRequest,
   FlashcardReviewSummaryDto,
-} from '../interfaces/flashcard-progress.interface';
+} from '../interfaces/flashcards/flashcard-progress.interface';
 
 type NowProvider = () => Date;
 

@@ -3,14 +3,14 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
 import { mapFlashcardReviewError } from '@lib/flashcard-review-error-mapper';
-import { buildFlashcardReviewServices } from '../services/flashcard-review-composition';
+import { buildFlashcardReviewServices } from '../services/flashcards/flashcard-review-composition';
 import { StudySessionStatus, ReviewRating } from '../models/enums';
 import type {
   StartFlashcardReviewSessionResult,
   FlashcardQueueItem,
-} from '../interfaces/start-flashcard-review-session.interface';
-import type { AnswerFlashcardResult } from '../interfaces/flashcard-review.interface';
-import type { CompleteFlashcardReviewSessionResult } from '../interfaces/complete-flashcard-review-session.interface';
+} from '../interfaces/flashcards/start-flashcard-review-session.interface';
+import type { AnswerFlashcardResult } from '../interfaces/flashcards/flashcard-review.interface';
+import type { CompleteFlashcardReviewSessionResult } from '../interfaces/flashcards/complete-flashcard-review-session.interface';
 import type {
   StartReviewSessionRequestBody,
   AnswerFlashcardRequestBody,
@@ -18,7 +18,7 @@ import type {
   AnswerFlashcardHttpResponse,
   CompleteReviewSessionHttpResponse,
   FlashcardQueueItemHttp,
-} from '../interfaces/flashcard-review-http.interface';
+} from '../interfaces/flashcards/flashcard-review-http.interface';
 
 type NowProvider = () => Date;
 

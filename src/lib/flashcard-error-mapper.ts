@@ -1,4 +1,4 @@
-import { FlashcardError, FlashcardErrorCode } from '../services/flashcards.service';
+import { FlashcardError, FlashcardErrorCode } from '../services/flashcards/flashcards.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });

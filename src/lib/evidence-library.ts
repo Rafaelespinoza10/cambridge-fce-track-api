@@ -1,6 +1,6 @@
 import { StorageProvider } from '@models/enums';
 import { EvidenceFile } from '@models/EvidenceFile';
-import type { FileCategory, LinkedTo, SafeEvidence } from '../interfaces/evidence.interface';
+import type { FileCategory, LinkedTo, SafeEvidence } from '../interfaces/evidence/evidence.interface';
 
 export function createError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
