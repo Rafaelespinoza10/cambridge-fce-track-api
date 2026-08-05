@@ -164,7 +164,7 @@ functions:
 
   flashcardsGenerateAiDraft:
     handler: src/controllers/flashcardAiDraftController.generateFlashcardDraft
-    timeout: 30
+    timeout: 25
     events:
       - httpApi:
           path: /flashcards/ai/draft
