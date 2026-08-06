@@ -10,6 +10,7 @@ import type {
   ExamGoalMetric,
   LastMockMetric,
   MetricsResponse,
+  PracticePartMetricsResponse,
   RecentActivityMetric,
   SkillMetric,
   SkillProgressMetric,
@@ -136,6 +137,25 @@ class ProgressService {
       overallWeeklyScores,
       recentActivities,
       examGoal,
+    };
+  }
+
+  async getPracticePartMetrics(userId: string): Promise<PracticePartMetricsResponse> {
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const rows = await repo.getPracticePartMetrics(userId);
+
+    return {
+      parts: rows.map((row) => ({
+        examCode: row.examCode,
+        paperCode: row.paperCode,
+        partCode: row.partCode,
+        completedAttempts: row.completedAttempts,
+        correctCount: row.correctCount,
+        totalCount: row.totalCount,
+        averageScore: roundTwo(row.averageScore),
+        lastAttemptAt: row.lastAttemptAt.toISOString(),
+      })),
     };
   }
 }
