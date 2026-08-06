@@ -25,6 +25,10 @@ import { Flashcard } from '../models/Flashcard';
 import { FlashcardReview } from '../models/FlashcardReview';
 import { DailyReviewStat } from '../models/DailyReviewStat';
 import { FlashcardPreference } from '../models/FlashcardPreference';
+import { PracticeExercise } from '../models/PracticeExercise';
+import { PracticeItem } from '../models/PracticeItem';
+import { PracticeAttempt } from '../models/PracticeAttempt';
+import { PracticeAnswer } from '../models/PracticeAnswer';
 
 function getSslConfig(): boolean | { rejectUnauthorized: boolean } {
   const databaseUrl: string = process.env.DATABASE_URL ?? '';
@@ -69,6 +73,10 @@ export const AppDataSource = new DataSource({
     FlashcardReview,
     DailyReviewStat,
     FlashcardPreference,
+    PracticeExercise,
+    PracticeItem,
+    PracticeAttempt,
+    PracticeAnswer,
   ],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',

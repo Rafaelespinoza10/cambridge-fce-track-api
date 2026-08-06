@@ -171,3 +171,14 @@ export enum StudySessionStatus {
   ACTIVE = 'active',
   COMPLETED = 'completed',
 }
+
+export enum PracticeExerciseSource {
+  AI = 'ai',
+  SYSTEM = 'system',
+}
+
+export enum PracticeAttemptStatus {
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  ABANDONED = 'abandoned',
+}
