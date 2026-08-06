@@ -79,12 +79,23 @@ export class AddPracticeDomain1785977192629 implements MigrationInterface {
 
     // ── practice_attempts ────────────────────────────────────────────────────
     //
-    // exercise_id/user_id FK is DEFERRABLE INITIALLY DEFERRED and ON DELETE NO
-    // ACTION (not CASCADE): attempts are history, and per-domain rule "no
-    // cascadas que eliminen historial accidentalmente" — an exercise hard
-    // delete (account purge / admin cleanup / test rollback — the only paths
-    // that hard-delete at all) must not silently wipe attempt history. Same
-    // pattern as flashcard_reviews -> flashcards in the flashcards migration.
+    // exercise_id/user_id FK: ON DELETE NO ACTION (not CASCADE), DEFERRABLE
+    // INITIALLY DEFERRED. These are two independent things:
+    //   - NO ACTION is what protects history: it makes Postgres REJECT an
+    //     exercise hard delete while attempts still reference it, instead of
+    //     silently cascading the delete into attempts (per-domain rule "no
+    //     cascadas que eliminen historial accidentalmente"). Same pattern as
+    //     flashcard_reviews -> flashcards in the flashcards migration.
+    //   - DEFERRABLE INITIALLY DEFERRED only changes WHEN that check runs —
+    //     at COMMIT instead of immediately after each statement — so a
+    //     transaction can insert an attempt and its exercise (or a batch of
+    //     rows) without caring about statement order. It grants no
+    //     protection by itself: verified empirically (docker/postgres:16,
+    //     see PR description) that inserting a practice_answers row before
+    //     its practice_attempts parent exists succeeds mid-transaction but
+    //     the COMMIT still fails if that parent never shows up.
+    // Exercise hard deletes only happen via account purge / admin cleanup /
+    // test rollback in this domain — there is no user-facing hard delete.
 
     await queryRunner.query(`
       CREATE TABLE "practice_attempts" (
@@ -131,10 +142,11 @@ export class AddPracticeDomain1785977192629 implements MigrationInterface {
 
     // ── practice_answers (log inmutable) ────────────────────────────────────────
     //
-    // Both composite FKs are DEFERRABLE INITIALLY DEFERRED / ON DELETE NO
-    // ACTION for the same "protect history" reason as above — an answer must
-    // never disappear just because its attempt's exercise (or one of its
-    // items) got hard-deleted through an unrelated path.
+    // Both composite FKs: ON DELETE NO ACTION / DEFERRABLE INITIALLY DEFERRED
+    // — same split as practice_attempts above. NO ACTION is the protection
+    // (an answer can't disappear just because its attempt/item got
+    // hard-deleted through an unrelated path); DEFERRABLE INITIALLY DEFERRED
+    // only postpones the check to COMMIT.
 
     await queryRunner.query(`
       CREATE TABLE "practice_answers" (

@@ -66,9 +66,12 @@ export class PracticeAttempt {
   // NOTA: `exercise_id` es una relación simple para queries/joins. La
   // integridad `practice_attempts.user_id = practice_exercises.user_id` la
   // garantiza una FK compuesta (exercise_id, user_id) → practice_exercises(id,
-  // user_id), definida solo en la migración SQL (NO ACTION DEFERRABLE, para no
-  // borrar historial si el ejercicio se hard-deletea) — no existe como
-  // relación TypeORM independiente.
+  // user_id), definida solo en la migración SQL — no existe como relación
+  // TypeORM independiente. Esa FK es ON DELETE NO ACTION (evita que un
+  // hard-delete del ejercicio borre el historial de intentos) y además
+  // DEFERRABLE INITIALLY DEFERRED (solo aplaza cuándo se valida esa FK —
+  // al COMMIT en vez de inmediatamente — sin aportar protección por sí
+  // misma). Ver el comentario de la migración para el detalle.
 
   @ManyToOne('User')
   @JoinColumn({ name: 'user_id' })

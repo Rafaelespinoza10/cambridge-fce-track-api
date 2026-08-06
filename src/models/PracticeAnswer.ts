@@ -53,8 +53,11 @@ export class PracticeAnswer {
   //   practice_answers(attempt_id, exercise_id, user_id)
   //     -> practice_attempts(id, exercise_id, user_id)
   //   practice_answers(item_id, exercise_id) -> practice_items(id, exercise_id)
-  // — la garantizan dos FKs compuestas definidas solo en la migracion SQL
-  // (NO ACTION DEFERRABLE, mismo motivo que PracticeAttempt -> PracticeExercise).
+  // — la garantizan dos FKs compuestas definidas solo en la migracion SQL.
+  // Ambas son ON DELETE NO ACTION (protege el historial de respuestas de un
+  // hard-delete de attempt/item) y DEFERRABLE INITIALLY DEFERRED (aplaza
+  // cuándo se valida esa FK al COMMIT; no protege nada por si sola). Mismo
+  // motivo que PracticeAttempt -> PracticeExercise.
 
   @ManyToOne('User')
   @JoinColumn({ name: 'user_id' })
