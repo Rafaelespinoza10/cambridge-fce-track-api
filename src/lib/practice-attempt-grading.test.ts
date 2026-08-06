@@ -7,6 +7,8 @@ import {
   roundToTwoDecimals,
   computeFeedbackSummary,
   buildPracticeAttemptResultDto,
+  formatAcceptedAnswers,
+  formatUserAnswer,
 } from './practice-attempt-grading';
 
 // ── normalizeTextAnswer ──────────────────────────────────────────────────────
@@ -264,5 +266,82 @@ describe('buildPracticeAttemptResultDto', () => {
       duration_seconds: null,
     } as unknown as import('../models/PracticeAttempt').PracticeAttempt;
     assert.throws(() => buildPracticeAttemptResultDto(inProgress, items, answers));
+  });
+});
+
+// ── formatAcceptedAnswers / formatUserAnswer ────────────────────────────────────
+// Exported for reuse by GeneratePracticeErrorFlashcardDraftService, which
+// needs a human-readable "what was correct" / "what the student answered"
+// string to send as AI context — same reasoning as buildPracticeAttemptResultDto
+// above, kept here so the two never drift on how an option id resolves to a
+// label.
+
+describe('formatAcceptedAnswers', () => {
+  const singleChoiceItem = {
+    id: 'item-1',
+    options: [
+      { id: 'a', label: 'alpha' },
+      { id: 'b', label: 'beta' },
+    ],
+    answer_key: { kind: 'single_choice', acceptedOptionIds: ['a'] },
+  } as unknown as import('../models/PracticeItem').PracticeItem;
+
+  const textItem = {
+    id: 'item-2',
+    options: null,
+    answer_key: { kind: 'text', acceptedAnswers: ['on', 'onto'], caseSensitive: false },
+  } as unknown as import('../models/PracticeItem').PracticeItem;
+
+  it('maps accepted option ids to their labels for single_choice', () => {
+    assert.deepEqual(formatAcceptedAnswers(singleChoiceItem), ['alpha']);
+  });
+
+  it('falls back to the raw option id if the option is missing from the item', () => {
+    const orphanKeyItem = {
+      ...singleChoiceItem,
+      answer_key: { kind: 'single_choice', acceptedOptionIds: ['zzz'] },
+    } as unknown as import('../models/PracticeItem').PracticeItem;
+    assert.deepEqual(formatAcceptedAnswers(orphanKeyItem), ['zzz']);
+  });
+
+  it('returns the literal accepted answers for text items (possibly more than one)', () => {
+    assert.deepEqual(formatAcceptedAnswers(textItem), ['on', 'onto']);
+  });
+});
+
+describe('formatUserAnswer', () => {
+  const singleChoiceItem = {
+    id: 'item-1',
+    options: [
+      { id: 'a', label: 'alpha' },
+      { id: 'b', label: 'beta' },
+    ],
+  } as unknown as import('../models/PracticeItem').PracticeItem;
+
+  const textItem = {
+    id: 'item-2',
+    options: null,
+  } as unknown as import('../models/PracticeItem').PracticeItem;
+
+  it('resolves a single_choice optionId to its option label', () => {
+    assert.equal(
+      formatUserAnswer(singleChoiceItem, { kind: 'single_choice', optionId: 'b' }),
+      'beta',
+    );
+  });
+
+  it('falls back to the raw optionId if the option is missing from the item', () => {
+    assert.equal(
+      formatUserAnswer(singleChoiceItem, { kind: 'single_choice', optionId: 'zzz' }),
+      'zzz',
+    );
+  });
+
+  it('returns the literal text value for a text answer', () => {
+    assert.equal(formatUserAnswer(textItem, { kind: 'text', value: 'of' }), 'of');
+  });
+
+  it('renders an explicit placeholder for unanswered (never an empty string)', () => {
+    assert.equal(formatUserAnswer(textItem, { kind: 'unanswered' }), '(no answer given)');
   });
 });

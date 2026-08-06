@@ -1,18 +1,14 @@
-/// <reference path="../../types/markdown.d.ts" />
-import { FlashcardType, EnglishLevel } from '../../models/enums';
-import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
-import type {
-  LLMChatMessage,
-  LLMJsonSchema,
-  LLMStructuredCompletionOptions,
-} from '../llm/llm.types';
+import { FlashcardType } from '../../models/enums';
+import {
+  FlashcardDraftGenerator,
+  FlashcardDraftGenerationError,
+  FlashcardDraftGenerationErrorCode,
+} from './flashcard-draft-generator';
+import type { FlashcardDraftGeneratorPort, LLMServicePort } from './flashcard-draft-generator';
 import type {
   GenerateFlashcardDraftRequest,
   GeneratedFlashcardDraftDto,
 } from '../../interfaces/flashcards/generate-flashcard-draft.interface';
-import { renderPromptTemplate } from '../../lib/prompt-template';
-import SYSTEM_PROMPT from '../../prompts/flashcards/generate-draft.system.md';
-import USER_PROMPT_TEMPLATE from '../../prompts/flashcards/generate-draft.user.md';
 
 export enum GenerateFlashcardDraftErrorCode {
   INVALID_INPUT = 'invalid_input',
@@ -33,112 +29,32 @@ export class GenerateFlashcardDraftError extends Error {
   }
 }
 
-export interface LLMServicePort {
-  completeStructured(
-    messages: LLMChatMessage[],
-    options: LLMStructuredCompletionOptions,
-  ): Promise<unknown>;
-}
-
 export interface GenerateFlashcardDraftServiceDeps {
   llm: LLMServicePort;
 }
 
-// Mirrors FlashcardsService's own limits so a draft is always compatible
-// with the real POST /flashcards/decks/{deckId}/cards contract.
 const TERM_MAX_LENGTH = 200;
-const FRONT_MAX_LENGTH = 500;
-const BACK_MAX_LENGTH = 500;
-const TRANSLATION_MAX_LENGTH = 500;
-const EXAMPLE_MAX_LENGTH = 2000;
-const PERSONAL_EXAMPLE_MAX_LENGTH = 2000;
-const NOTES_MAX_LENGTH = 5000;
-const TAGS_MAX_COUNT = 20;
-const TAG_MAX_LENGTH = 50;
-
-const REQUEST_TIMEOUT_MS = 20_000;
-const RESPONSE_TEMPERATURE = 0.4;
-const RESPONSE_MAX_OUTPUT_TOKENS = 700;
-
 const VALID_FLASHCARD_TYPES = new Set<string>(Object.values(FlashcardType));
-const VALID_ENGLISH_LEVELS = new Set<string>(Object.values(EnglishLevel));
 
-function buildUserPrompt(term: string, type: FlashcardType): string {
-  return renderPromptTemplate(USER_PROMPT_TEMPLATE, { term, type });
-}
-
-const RESPONSE_SCHEMA: LLMJsonSchema = {
-  name: 'flashcard_draft',
-  strict: true,
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: [
-      'type',
-      'front',
-      'back',
-      'translation',
-      'example',
-      'personalExample',
-      'notes',
-      'sourceName',
-      'sourceUrl',
-      'level',
-      'tags',
-    ],
-    properties: {
-      type: {
-        type: 'string',
-        enum: Object.values(FlashcardType),
-        description: 'Must match the flashcard type requested by the user.',
-      },
-      front: {
-        type: 'string',
-        description: 'The term or phrase exactly as given by the user.',
-      },
-      back: {
-        type: 'string',
-        description: 'Clear definition in English, suitable for a B1+/B2 Cambridge learner.',
-      },
-      translation: {
-        type: ['string', 'null'],
-        description: 'Spanish translation of the term/definition.',
-      },
-      example: {
-        type: ['string', 'null'],
-        description:
-          'One natural example sentence in English using the term, appropriate for B1+/B2.',
-      },
-      personalExample: {
-        type: ['string', 'null'],
-        description:
-          'A second example related to software, work, study, or Cambridge exam prep when natural.',
-      },
-      notes: {
-        type: ['string', 'null'],
-        description: 'Short usage notes (collocations, common contexts, register).',
-      },
-      sourceName: {
-        type: 'null',
-        description: 'Always null — no external source is provided.',
-      },
-      sourceUrl: {
-        type: 'null',
-        description: 'Always null — no external URL is provided.',
-      },
-      level: {
-        anyOf: [{ type: 'string', enum: Object.values(EnglishLevel) }, { type: 'null' }],
-        description:
-          'Estimated CEFR level of the term — an estimate, not an official certification.',
-      },
-      tags: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Up to 5 lowercase topical tags.',
-      },
-    },
-  },
+const GENERATION_ERROR_CODE_MAP: Record<
+  FlashcardDraftGenerationErrorCode,
+  GenerateFlashcardDraftErrorCode
+> = {
+  [FlashcardDraftGenerationErrorCode.AI_CONFIGURATION_ERROR]:
+    GenerateFlashcardDraftErrorCode.AI_CONFIGURATION_ERROR,
+  [FlashcardDraftGenerationErrorCode.AI_RATE_LIMITED]:
+    GenerateFlashcardDraftErrorCode.AI_RATE_LIMITED,
+  [FlashcardDraftGenerationErrorCode.AI_REQUEST_TIMEOUT]:
+    GenerateFlashcardDraftErrorCode.AI_REQUEST_TIMEOUT,
+  [FlashcardDraftGenerationErrorCode.AI_PROVIDER_UNAVAILABLE]:
+    GenerateFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE,
+  [FlashcardDraftGenerationErrorCode.AI_INVALID_RESPONSE]:
+    GenerateFlashcardDraftErrorCode.AI_INVALID_RESPONSE,
 };
+
+function mapGenerationError(error: FlashcardDraftGenerationError): GenerateFlashcardDraftError {
+  return new GenerateFlashcardDraftError(error.message, GENERATION_ERROR_CODE_MAP[error.code]);
+}
 
 function normalizeTerm(value: unknown): string {
   if (typeof value !== 'string') {
@@ -173,184 +89,37 @@ function normalizeRequestType(value: unknown): FlashcardType {
   return value as FlashcardType;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function invalidResponse(message: string): never {
-  throw new GenerateFlashcardDraftError(
-    message,
-    GenerateFlashcardDraftErrorCode.AI_INVALID_RESPONSE,
-  );
-}
-
-function validateRequiredText(value: unknown, field: string, maxLength: number): string {
-  if (typeof value !== 'string') invalidResponse(`${field} must be a string`);
-  const trimmed = value.trim();
-  if (trimmed === '') invalidResponse(`${field} must not be empty`);
-  if (trimmed.length > maxLength) invalidResponse(`${field} exceeds ${maxLength} characters`);
-  return trimmed;
-}
-
-function validateOptionalText(value: unknown, field: string, maxLength: number): string | null {
-  if (value === null) return null;
-  if (typeof value !== 'string') invalidResponse(`${field} must be a string or null`);
-  const trimmed = value.trim();
-  if (trimmed === '') return null;
-  if (trimmed.length > maxLength) invalidResponse(`${field} exceeds ${maxLength} characters`);
-  return trimmed;
-}
-
-function validateTags(value: unknown): string[] {
-  if (!Array.isArray(value)) invalidResponse('tags must be an array');
-
-  const seen = new Set<string>();
-  const tags: string[] = [];
-  for (const raw of value) {
-    if (typeof raw !== 'string') invalidResponse('each tag must be a string');
-    const trimmed = raw.trim();
-    if (trimmed === '') continue;
-    if (trimmed.length > TAG_MAX_LENGTH) {
-      invalidResponse(`each tag must be at most ${TAG_MAX_LENGTH} characters`);
-    }
-    const normalized = trimmed.toLowerCase();
-    if (!seen.has(normalized)) {
-      seen.add(normalized);
-      tags.push(normalized);
-    }
-  }
-  if (tags.length > TAGS_MAX_COUNT) {
-    invalidResponse(`tags must contain at most ${TAGS_MAX_COUNT} items`);
-  }
-  return tags;
-}
-
-function validateDraftShape(
-  value: unknown,
-  expectedType: FlashcardType,
-): GeneratedFlashcardDraftDto {
-  if (!isPlainObject(value)) invalidResponse('response must be a JSON object');
-
-  const rawType = value.type;
-  if (typeof rawType !== 'string' || !VALID_FLASHCARD_TYPES.has(rawType)) {
-    invalidResponse('type must be a valid flashcard type');
-  }
-  if (rawType !== expectedType) {
-    invalidResponse('type does not match the requested flashcard type');
-  }
-
-  const front = validateRequiredText(value.front, 'front', FRONT_MAX_LENGTH);
-  const back = validateRequiredText(value.back, 'back', BACK_MAX_LENGTH);
-  const translation = validateOptionalText(
-    value.translation,
-    'translation',
-    TRANSLATION_MAX_LENGTH,
-  );
-  const example = validateOptionalText(value.example, 'example', EXAMPLE_MAX_LENGTH);
-  const personalExample = validateOptionalText(
-    value.personalExample,
-    'personalExample',
-    PERSONAL_EXAMPLE_MAX_LENGTH,
-  );
-  const notes = validateOptionalText(value.notes, 'notes', NOTES_MAX_LENGTH);
-
-  if (value.sourceName !== null) invalidResponse('sourceName must be null');
-  if (value.sourceUrl !== null) invalidResponse('sourceUrl must be null');
-
-  let level: EnglishLevel | null = null;
-  if (value.level !== null) {
-    if (typeof value.level !== 'string' || !VALID_ENGLISH_LEVELS.has(value.level)) {
-      invalidResponse('level must be a valid English level or null');
-    }
-    level = value.level as EnglishLevel;
-  }
-
-  const tags = validateTags(value.tags);
-
-  return {
-    type: rawType as FlashcardType,
-    front,
-    back,
-    translation,
-    example,
-    personalExample,
-    notes,
-    sourceName: null,
-    sourceUrl: null,
-    level,
-    tags,
-  };
-}
-
-function mapLLMError(error: unknown): GenerateFlashcardDraftError {
-  if (error instanceof LLMServiceError) {
-    switch (error.code) {
-      case LLMErrorCode.NOT_CONFIGURED:
-      case LLMErrorCode.AUTHENTICATION_FAILED:
-        return new GenerateFlashcardDraftError(
-          'The AI provider is not configured correctly',
-          GenerateFlashcardDraftErrorCode.AI_CONFIGURATION_ERROR,
-        );
-      case LLMErrorCode.RATE_LIMITED:
-        return new GenerateFlashcardDraftError(
-          'The AI provider is rate-limiting requests. Try again shortly.',
-          GenerateFlashcardDraftErrorCode.AI_RATE_LIMITED,
-        );
-      case LLMErrorCode.TIMEOUT:
-        return new GenerateFlashcardDraftError(
-          'The AI provider took too long to respond',
-          GenerateFlashcardDraftErrorCode.AI_REQUEST_TIMEOUT,
-        );
-      case LLMErrorCode.PROVIDER_ERROR:
-        return new GenerateFlashcardDraftError(
-          'The AI provider is currently unavailable',
-          GenerateFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE,
-        );
-      case LLMErrorCode.EMPTY_RESPONSE:
-      case LLMErrorCode.INVALID_JSON_RESPONSE:
-      case LLMErrorCode.INVALID_INPUT:
-        return new GenerateFlashcardDraftError(
-          'The AI provider returned an invalid response',
-          GenerateFlashcardDraftErrorCode.AI_INVALID_RESPONSE,
-        );
-    }
-  }
-  return new GenerateFlashcardDraftError(
-    'The AI provider returned an unexpected error',
-    GenerateFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE,
-  );
-}
-
 /**
  * Generates an editable flashcard draft from a short term via the LLM. Pure
  * orchestration: no repository, no DataSource, nothing is persisted here —
  * the caller reviews the draft and saves it (or not) through the existing
  * flashcard CRUD.
+ *
+ * All JSON Schema/validation/tag-normalization/error-mapping mechanics are
+ * shared with the practice-error draft flow via `FlashcardDraftGenerator` —
+ * this service only owns term-request validation and re-wraps the shared
+ * generator's neutral errors into its own `GenerateFlashcardDraftError`, so
+ * this class's public contract (and the existing `/flashcards/ai/draft`
+ * endpoint's behavior) is unchanged by that extraction.
  */
 export class GenerateFlashcardDraftService {
-  constructor(private readonly deps: GenerateFlashcardDraftServiceDeps) {}
+  private readonly generator: FlashcardDraftGeneratorPort;
+
+  constructor(deps: GenerateFlashcardDraftServiceDeps) {
+    this.generator = new FlashcardDraftGenerator({ llm: deps.llm });
+  }
 
   async execute(input: GenerateFlashcardDraftRequest): Promise<GeneratedFlashcardDraftDto> {
     const term = normalizeTerm(input.term);
     const type = normalizeRequestType(input.type);
 
-    const messages: LLMChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT.trim() },
-      { role: 'user', content: buildUserPrompt(term, type) },
-    ];
-
-    let raw: unknown;
     try {
-      raw = await this.deps.llm.completeStructured(messages, {
-        responseSchema: RESPONSE_SCHEMA,
-        timeoutMs: REQUEST_TIMEOUT_MS,
-        temperature: RESPONSE_TEMPERATURE,
-        maxOutputTokens: RESPONSE_MAX_OUTPUT_TOKENS,
-      });
+      return await this.generator.generateFromTerm(term, type);
     } catch (err: unknown) {
-      throw mapLLMError(err);
+      if (err instanceof FlashcardDraftGenerationError) throw mapGenerationError(err);
+      throw err;
     }
-
-    return validateDraftShape(raw, type);
   }
 }
+
+export type { LLMServicePort };

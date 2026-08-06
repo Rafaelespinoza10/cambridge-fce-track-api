@@ -12,6 +12,7 @@ import type {
 } from '../interfaces/practice/practice-attempt.interface';
 import type { PracticeAttemptHistoryResponseDto } from '../interfaces/practice/practice-attempt-history.interface';
 import type { ListPracticeAttemptHistoryRawQuery } from '../services/practice/list-practice-attempt-history.service';
+import type { PracticeErrorFlashcardDraftResponse } from '../interfaces/practice/practice-error-flashcard-draft.interface';
 
 type NowProvider = () => Date;
 
@@ -51,6 +52,14 @@ interface ListAttemptHistoryPort {
   ): Promise<PracticeAttemptHistoryResponseDto>;
 }
 
+interface GenerateErrorFlashcardDraftPort {
+  execute(
+    userId: string,
+    attemptId: string,
+    itemId: string,
+  ): Promise<PracticeErrorFlashcardDraftResponse>;
+}
+
 interface PracticeAttemptControllerDeps {
   now: NowProvider;
   services: () => Promise<{
@@ -60,6 +69,7 @@ interface PracticeAttemptControllerDeps {
     submitAttempt: SubmitAttemptPort;
     abandonAttempt: AbandonAttemptPort;
     listAttemptHistory: ListAttemptHistoryPort;
+    generateErrorFlashcardDraft: GenerateErrorFlashcardDraftPort;
   }>;
 }
 
@@ -76,6 +86,11 @@ function getExerciseIdParam(event: APIGatewayProxyEvent): string | null {
 function getAttemptIdParam(event: APIGatewayProxyEvent): string | null {
   const attemptId = event.pathParameters?.attemptId ?? '';
   return attemptId && isValidUuid(attemptId) ? attemptId : null;
+}
+
+function getItemIdParam(event: APIGatewayProxyEvent): string | null {
+  const itemId = event.pathParameters?.itemId ?? '';
+  return itemId && isValidUuid(itemId) ? itemId : null;
 }
 
 // AWS Lambda always invokes the exported handler as `handler(event, context)`,
@@ -266,6 +281,37 @@ export async function listPracticeAttemptHistory(
   return listPracticeAttemptHistoryHandler(event, DEFAULT_DEPS);
 }
 
+// ── POST /practice/attempts/{attemptId}/items/{itemId}/flashcard-draft ────────
+
+async function generatePracticeErrorFlashcardDraftHandler(
+  event: APIGatewayProxyEvent,
+  deps: PracticeAttemptControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const attemptId = getAttemptIdParam(event);
+  if (attemptId === null) return errorResponse('Invalid or missing attemptId', 400);
+
+  const itemId = getItemIdParam(event);
+  if (itemId === null) return errorResponse('Invalid or missing itemId', 400);
+
+  try {
+    const { generateErrorFlashcardDraft } = await deps.services();
+    // No request body is ever read — any client-sent fields are structurally ignored.
+    const result = await generateErrorFlashcardDraft.execute(payload.sub, attemptId, itemId);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapPracticeAttemptError(err));
+  }
+}
+
+export async function generatePracticeErrorFlashcardDraft(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return generatePracticeErrorFlashcardDraftHandler(event, DEFAULT_DEPS);
+}
+
 export {
   startPracticeAttemptHandler,
   getActivePracticeAttemptHandler,
@@ -273,6 +319,7 @@ export {
   submitPracticeAttemptHandler,
   abandonPracticeAttemptHandler,
   listPracticeAttemptHistoryHandler,
+  generatePracticeErrorFlashcardDraftHandler,
 };
 export type {
   PracticeAttemptControllerDeps,
@@ -283,4 +330,5 @@ export type {
   SubmitAttemptPort,
   AbandonAttemptPort,
   ListAttemptHistoryPort,
+  GenerateErrorFlashcardDraftPort,
 };

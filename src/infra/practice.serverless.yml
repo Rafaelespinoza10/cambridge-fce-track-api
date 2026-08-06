@@ -79,6 +79,14 @@ functions:
           path: /practice/attempts/{attemptId}/abandon
           method: POST
 
+  practiceGenerateErrorFlashcardDraft:
+    handler: src/controllers/practiceAttemptController.generatePracticeErrorFlashcardDraft
+    timeout: 25
+    events:
+      - httpApi:
+          path: /practice/attempts/{attemptId}/items/{itemId}/flashcard-draft
+          method: POST
+
 package:
   individually: true
 
