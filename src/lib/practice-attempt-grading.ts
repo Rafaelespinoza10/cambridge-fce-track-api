@@ -122,13 +122,29 @@ export function computeFeedbackSummary(items: FeedbackInputItem[]): PracticeAtte
   };
 }
 
-function formatAcceptedAnswers(item: PracticeItem): string[] {
+export function formatAcceptedAnswers(item: PracticeItem): string[] {
   const key = item.answer_key;
   if (key.kind === 'single_choice') {
     const optionsById = new Map((item.options ?? []).map((option) => [option.id, option.label]));
     return key.acceptedOptionIds.map((id) => optionsById.get(id) ?? id);
   }
   return key.acceptedAnswers;
+}
+
+/**
+ * Renders what the student actually answered as a single human-readable
+ * string — a single_choice optionId resolves to its option label (falling
+ * back to the raw id if the option was somehow removed), a text answer is
+ * used as-is, and `unanswered` renders as an explicit placeholder rather
+ * than an empty string.
+ */
+export function formatUserAnswer(item: PracticeItem, payload: PracticeAnswerPayload): string {
+  if (payload.kind === 'unanswered') return '(no answer given)';
+  if (payload.kind === 'single_choice') {
+    const optionsById = new Map((item.options ?? []).map((option) => [option.id, option.label]));
+    return optionsById.get(payload.optionId) ?? payload.optionId;
+  }
+  return payload.value;
 }
 
 /**

@@ -60,6 +60,26 @@ class PracticeAnswersRepository {
       .addOrderBy('answer.id', 'ASC')
       .getMany();
   }
+
+  /**
+   * At most one row per (attempt_id, item_id) — enforced by
+   * uq_practice_answers_attempt_item — so this is a direct lookup, not a
+   * "first of many". Used by GeneratePracticeErrorFlashcardDraftService to
+   * confirm exactly one persisted answer exists for the item before
+   * building AI context from it.
+   */
+  async findByAttemptAndItemForUser(
+    attemptId: string,
+    itemId: string,
+    userId: string,
+  ): Promise<PracticeAnswer | null> {
+    return this.answerRepo
+      .createQueryBuilder('answer')
+      .where('answer.attempt_id = :attemptId', { attemptId })
+      .andWhere('answer.item_id = :itemId', { itemId })
+      .andWhere('answer.user_id = :userId', { userId })
+      .getOne();
+  }
 }
 
 export { PracticeAnswersRepository };

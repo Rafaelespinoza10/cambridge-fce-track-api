@@ -17,6 +17,8 @@ import {
   abandonPracticeAttemptHandler,
   listPracticeAttemptHistory,
   listPracticeAttemptHistoryHandler,
+  generatePracticeErrorFlashcardDraft,
+  generatePracticeErrorFlashcardDraftHandler,
 } from './practiceAttemptController';
 import type {
   PracticeAttemptControllerDeps,
@@ -26,9 +28,10 @@ import type {
   SubmitAttemptPort,
   AbandonAttemptPort,
   ListAttemptHistoryPort,
+  GenerateErrorFlashcardDraftPort,
 } from './practiceAttemptController';
 import { JwtService } from '../lib/jwt';
-import { PracticeAttemptStatus } from '../models/enums';
+import { PracticeAttemptStatus, FlashcardType, EnglishLevel } from '../models/enums';
 import {
   StartPracticeAttemptError,
   StartPracticeAttemptErrorCode,
@@ -49,6 +52,10 @@ import {
   ListPracticeAttemptHistoryError,
   ListPracticeAttemptHistoryErrorCode,
 } from '../services/practice/list-practice-attempt-history.service';
+import {
+  GeneratePracticeErrorFlashcardDraftError,
+  GeneratePracticeErrorFlashcardDraftErrorCode,
+} from '../services/practice/generate-practice-error-flashcard-draft.service';
 import type {
   PracticeAttemptStartResultDto,
   PracticeAttemptViewDto,
@@ -56,12 +63,14 @@ import type {
   PracticeAttemptAbandonResultDto,
 } from '../interfaces/practice/practice-attempt.interface';
 import type { PracticeAttemptHistoryResponseDto } from '../interfaces/practice/practice-attempt-history.interface';
+import type { PracticeErrorFlashcardDraftResponse } from '../interfaces/practice/practice-error-flashcard-draft.interface';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────────
 
 const USER_ID = 'user-1';
 const EXERCISE_ID = '11111111-1111-1111-1111-111111111111';
 const ATTEMPT_ID = '22222222-2222-2222-2222-222222222222';
+const ITEM_ID = '33333333-3333-3333-3333-333333333333';
 const FIXED_NOW = new Date('2026-01-15T14:30:00.000Z');
 
 const TOKEN = JwtService.sign({ sub: USER_ID, email: 'user@example.com', role: 'student' });
@@ -166,6 +175,22 @@ const HISTORY_RESULT: PracticeAttemptHistoryResponseDto = {
   pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
 };
 
+const DRAFT_RESULT: PracticeErrorFlashcardDraftResponse = {
+  draft: {
+    type: FlashcardType.GRAMMAR,
+    front: 'Which preposition follows "depend"?',
+    back: 'depend on',
+    translation: 'depender de',
+    example: 'Your progress depends on consistent practice.',
+    personalExample: 'My Cambridge progress depends on studying every day.',
+    notes: 'Use "depend on", not "depend of".',
+    sourceName: null,
+    sourceUrl: null,
+    level: EnglishLevel.B1,
+    tags: ['prepositions', 'grammar'],
+  },
+};
+
 interface FakePorts {
   startAttempt: StartAttemptPort & { calls: Parameters<StartAttemptPort['execute']>[] };
   getActiveAttempt: GetActiveAttemptPort & { calls: Parameters<GetActiveAttemptPort['execute']>[] };
@@ -174,6 +199,9 @@ interface FakePorts {
   abandonAttempt: AbandonAttemptPort & { calls: Parameters<AbandonAttemptPort['execute']>[] };
   listAttemptHistory: ListAttemptHistoryPort & {
     calls: Parameters<ListAttemptHistoryPort['execute']>[];
+  };
+  generateErrorFlashcardDraft: GenerateErrorFlashcardDraftPort & {
+    calls: Parameters<GenerateErrorFlashcardDraftPort['execute']>[];
   };
 }
 
@@ -185,6 +213,7 @@ function buildDeps(
     submitExecute?: SubmitAttemptPort['execute'];
     abandonExecute?: AbandonAttemptPort['execute'];
     listHistoryExecute?: ListAttemptHistoryPort['execute'];
+    generateErrorFlashcardDraftExecute?: GenerateErrorFlashcardDraftPort['execute'];
   } = {},
 ): { deps: PracticeAttemptControllerDeps; ports: FakePorts } {
   const startCalls: Parameters<StartAttemptPort['execute']>[] = [];
@@ -193,6 +222,8 @@ function buildDeps(
   const submitCalls: Parameters<SubmitAttemptPort['execute']>[] = [];
   const abandonCalls: Parameters<AbandonAttemptPort['execute']>[] = [];
   const listHistoryCalls: Parameters<ListAttemptHistoryPort['execute']>[] = [];
+  const generateErrorFlashcardDraftCalls: Parameters<GenerateErrorFlashcardDraftPort['execute']>[] =
+    [];
 
   const ports: FakePorts = {
     startAttempt: {
@@ -243,6 +274,15 @@ function buildDeps(
         return overrides.listHistoryExecute
           ? overrides.listHistoryExecute(userId, rawQuery)
           : HISTORY_RESULT;
+      },
+    },
+    generateErrorFlashcardDraft: {
+      calls: generateErrorFlashcardDraftCalls,
+      execute: async (userId, attemptId, itemId) => {
+        generateErrorFlashcardDraftCalls.push([userId, attemptId, itemId]);
+        return overrides.generateErrorFlashcardDraftExecute
+          ? overrides.generateErrorFlashcardDraftExecute(userId, attemptId, itemId)
+          : DRAFT_RESULT;
       },
     },
   };
@@ -844,6 +884,243 @@ describe('listPracticeAttemptHistory', () => {
   });
 });
 
+// ── generatePracticeErrorFlashcardDraft ────────────────────────────────────────
+
+describe('generatePracticeErrorFlashcardDraft', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ headers: {}, pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid attemptId path parameter', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: 'not-a-uuid', itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('rejects a missing attemptId path parameter', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('rejects an invalid itemId path parameter', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: 'not-a-uuid' } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('rejects a missing itemId path parameter', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('returns 200 with the draft on success', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(parseBody(result).data, JSON.parse(JSON.stringify(DRAFT_RESULT)));
+  });
+
+  it('ignores any request body — no fields are ever read from it', async () => {
+    const { deps, ports } = buildDeps();
+    await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({
+        pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID },
+        body: JSON.stringify({ front: 'client-supplied', deckId: 'sneaky-deck-id' }),
+      }),
+      deps,
+    );
+    assert.deepEqual(ports.generateErrorFlashcardDraft.calls[0], [USER_ID, ATTEMPT_ID, ITEM_ID]);
+  });
+
+  it('takes userId from the JWT and forwards attemptId/itemId from the path', async () => {
+    const { deps, ports } = buildDeps();
+    await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.deepEqual(ports.generateErrorFlashcardDraft.calls[0], [USER_ID, ATTEMPT_ID, ITEM_ID]);
+  });
+
+  it('maps ATTEMPT_NOT_FOUND to 404', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'x',
+          GeneratePracticeErrorFlashcardDraftErrorCode.ATTEMPT_NOT_FOUND,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 404);
+  });
+
+  it('maps ATTEMPT_NOT_COMPLETED to 409', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'x',
+          GeneratePracticeErrorFlashcardDraftErrorCode.ATTEMPT_NOT_COMPLETED,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 409);
+  });
+
+  it('maps PRACTICE_ITEM_NOT_INCORRECT to 409', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'x',
+          GeneratePracticeErrorFlashcardDraftErrorCode.PRACTICE_ITEM_NOT_INCORRECT,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 409);
+  });
+
+  it('maps AI_RATE_LIMITED to 429', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'x',
+          GeneratePracticeErrorFlashcardDraftErrorCode.AI_RATE_LIMITED,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 429);
+  });
+
+  it('maps AI_INVALID_RESPONSE to 502', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'x',
+          GeneratePracticeErrorFlashcardDraftErrorCode.AI_INVALID_RESPONSE,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 502);
+  });
+
+  it('maps AI_PROVIDER_UNAVAILABLE to 503', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'x',
+          GeneratePracticeErrorFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 503);
+  });
+
+  it('maps AI_REQUEST_TIMEOUT to 504', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'x',
+          GeneratePracticeErrorFlashcardDraftErrorCode.AI_REQUEST_TIMEOUT,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 504);
+  });
+
+  // A missing PracticeAnswer for a completed attempt/known item is internal
+  // data corruption (PR 3 guarantees exactly one answer per item on a
+  // completed attempt) — it must surface as a masked 500, never a 404.
+  it('maps PERSISTENCE_INCONSISTENCY to 500, not 404', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new GeneratePracticeErrorFlashcardDraftError(
+          'No persisted answer was found for this item on a completed attempt',
+          GeneratePracticeErrorFlashcardDraftErrorCode.PERSISTENCE_INCONSISTENCY,
+        );
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 500);
+  });
+
+  it('an unexpected error returns 500 without leaking internal details', async () => {
+    const { deps } = buildDeps({
+      generateErrorFlashcardDraftExecute: async () => {
+        throw new Error('OpenAI request failed: invoice #12345 over billing limit');
+      },
+    });
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 500);
+    assert.equal((parseBody(result).message as string).includes('invoice'), false);
+  });
+
+  it('the response never carries id/deckId/userId/status/scheduling/attemptId/itemId/answerKey', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeErrorFlashcardDraftHandler(
+      makeEvent({ pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } }),
+      deps,
+    );
+    assert.doesNotMatch(
+      result.body,
+      /"id"|"deckId"|"userId"|"status"|"scheduling"|"attemptId"|"itemId"|"answerKey"/,
+    );
+  });
+});
+
 // ── Lambda invocation shape regression guard ────────────────────────────────────
 //
 // AWS Lambda always calls the exported handler as `handler(event, context)`.
@@ -851,7 +1128,7 @@ describe('listPracticeAttemptHistory', () => {
 // second parameter — since `context` is never `undefined`, the default never
 // activated in production and every request crashed with `TypeError:
 // deps.services is not a function`, masked as a generic 500 by handleError.
-// This guards against that shape regressing across all 6 exported handlers.
+// This guards against that shape regressing across all 7 exported handlers.
 
 describe('exported Lambda handlers ignore a second (context) argument', () => {
   const cases: [
@@ -873,6 +1150,11 @@ describe('exported Lambda handlers ignore a second (context) argument', () => {
       { pathParameters: { attemptId: ATTEMPT_ID } },
     ],
     ['listPracticeAttemptHistory', listPracticeAttemptHistory, {}],
+    [
+      'generatePracticeErrorFlashcardDraft',
+      generatePracticeErrorFlashcardDraft,
+      { pathParameters: { attemptId: ATTEMPT_ID, itemId: ITEM_ID } },
+    ],
   ];
 
   for (const [name, handler, eventOverrides] of cases) {

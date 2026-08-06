@@ -22,6 +22,10 @@ import {
   ListPracticeAttemptHistoryError,
   ListPracticeAttemptHistoryErrorCode,
 } from '../services/practice/list-practice-attempt-history.service';
+import {
+  GeneratePracticeErrorFlashcardDraftError,
+  GeneratePracticeErrorFlashcardDraftErrorCode,
+} from '../services/practice/generate-practice-error-flashcard-draft.service';
 
 function statusOf(error: unknown): number | undefined {
   return (error as { statusCode?: number }).statusCode;
@@ -226,6 +230,162 @@ describe('mapPracticeAttemptError — list history', () => {
           new ListPracticeAttemptHistoryError(
             'x',
             ListPracticeAttemptHistoryErrorCode.PERSISTENCE_INCONSISTENCY,
+          ),
+        ),
+      ),
+      500,
+    );
+  });
+});
+
+describe('mapPracticeAttemptError — generate error flashcard draft', () => {
+  it('maps INVALID_INPUT to 400', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.INVALID_INPUT,
+          ),
+        ),
+      ),
+      400,
+    );
+  });
+
+  it('maps ATTEMPT_NOT_FOUND to 404', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.ATTEMPT_NOT_FOUND,
+          ),
+        ),
+      ),
+      404,
+    );
+  });
+
+  it('maps PRACTICE_ITEM_NOT_FOUND to 404', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.PRACTICE_ITEM_NOT_FOUND,
+          ),
+        ),
+      ),
+      404,
+    );
+  });
+
+  it('maps ATTEMPT_NOT_COMPLETED to 409', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.ATTEMPT_NOT_COMPLETED,
+          ),
+        ),
+      ),
+      409,
+    );
+  });
+
+  it('maps PRACTICE_ITEM_NOT_INCORRECT to 409', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.PRACTICE_ITEM_NOT_INCORRECT,
+          ),
+        ),
+      ),
+      409,
+    );
+  });
+
+  it('maps AI_RATE_LIMITED to 429', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.AI_RATE_LIMITED,
+          ),
+        ),
+      ),
+      429,
+    );
+  });
+
+  it('maps AI_INVALID_RESPONSE to 502', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.AI_INVALID_RESPONSE,
+          ),
+        ),
+      ),
+      502,
+    );
+  });
+
+  it('maps AI_PROVIDER_UNAVAILABLE to 503', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE,
+          ),
+        ),
+      ),
+      503,
+    );
+  });
+
+  it('maps AI_REQUEST_TIMEOUT to 504', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.AI_REQUEST_TIMEOUT,
+          ),
+        ),
+      ),
+      504,
+    );
+  });
+
+  it('maps AI_CONFIGURATION_ERROR to 500', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.AI_CONFIGURATION_ERROR,
+          ),
+        ),
+      ),
+      500,
+    );
+  });
+
+  it('maps PERSISTENCE_INCONSISTENCY to 500', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new GeneratePracticeErrorFlashcardDraftError(
+            'x',
+            GeneratePracticeErrorFlashcardDraftErrorCode.PERSISTENCE_INCONSISTENCY,
           ),
         ),
       ),

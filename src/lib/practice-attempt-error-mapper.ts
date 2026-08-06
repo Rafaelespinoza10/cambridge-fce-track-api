@@ -18,6 +18,10 @@ import {
   ListPracticeAttemptHistoryError,
   ListPracticeAttemptHistoryErrorCode,
 } from '../services/practice/list-practice-attempt-history.service';
+import {
+  GeneratePracticeErrorFlashcardDraftError,
+  GeneratePracticeErrorFlashcardDraftErrorCode,
+} from '../services/practice/generate-practice-error-flashcard-draft.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -54,6 +58,23 @@ const LIST_HISTORY_STATUS_BY_CODE: Record<ListPracticeAttemptHistoryErrorCode, n
   [ListPracticeAttemptHistoryErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
 };
 
+const GENERATE_ERROR_FLASHCARD_DRAFT_STATUS_BY_CODE: Record<
+  GeneratePracticeErrorFlashcardDraftErrorCode,
+  number
+> = {
+  [GeneratePracticeErrorFlashcardDraftErrorCode.INVALID_INPUT]: 400,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.ATTEMPT_NOT_FOUND]: 404,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.PRACTICE_ITEM_NOT_FOUND]: 404,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.ATTEMPT_NOT_COMPLETED]: 409,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.PRACTICE_ITEM_NOT_INCORRECT]: 409,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.AI_RATE_LIMITED]: 429,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.AI_INVALID_RESPONSE]: 502,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE]: 503,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.AI_REQUEST_TIMEOUT]: 504,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.AI_CONFIGURATION_ERROR]: 500,
+  [GeneratePracticeErrorFlashcardDraftErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
+};
+
 /**
  * Translates every Practice attempt-domain error (start/get/submit/abandon)
  * into an Error with `statusCode`, consumable by @lib/response's
@@ -76,6 +97,9 @@ function mapPracticeAttemptError(error: unknown): unknown {
   }
   if (error instanceof ListPracticeAttemptHistoryError) {
     return httpError(error.message, LIST_HISTORY_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof GeneratePracticeErrorFlashcardDraftError) {
+    return httpError(error.message, GENERATE_ERROR_FLASHCARD_DRAFT_STATUS_BY_CODE[error.code]);
   }
   return error;
 }
