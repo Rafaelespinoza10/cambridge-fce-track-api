@@ -79,7 +79,8 @@ functions:
           path: /practice/attempts/{attemptId}/abandon
           method: POST
 
-  practiceGenerateErrorFlashcardDraft:
+  # Short key: AWS Lambda names are {service}-{stage}-{key} and must be ≤ 64 chars.
+  practiceErrorFcDraft:
     handler: src/controllers/practiceAttemptController.generatePracticeErrorFlashcardDraft
     timeout: 25
     events:
