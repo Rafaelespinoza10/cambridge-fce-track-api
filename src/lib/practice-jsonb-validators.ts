@@ -66,6 +66,10 @@ export function isPracticeAnswerPayload(value: unknown): value is PracticeAnswer
     return typeof value.value === 'string';
   }
 
+  if (value.kind === 'unanswered') {
+    return true;
+  }
+
   return false;
 }
 
