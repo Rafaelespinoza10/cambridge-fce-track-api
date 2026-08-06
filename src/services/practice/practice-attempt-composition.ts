@@ -7,6 +7,7 @@ import { GetActivePracticeAttemptService } from './get-active-practice-attempt.s
 import { GetPracticeAttemptService } from './get-practice-attempt.service';
 import { SubmitPracticeAttemptService } from './submit-practice-attempt.service';
 import { AbandonPracticeAttemptService } from './abandon-practice-attempt.service';
+import { ListPracticeAttemptHistoryService } from './list-practice-attempt-history.service';
 
 interface PracticeAttemptServices {
   startAttempt: StartPracticeAttemptService;
@@ -14,6 +15,7 @@ interface PracticeAttemptServices {
   getAttempt: GetPracticeAttemptService;
   submitAttempt: SubmitPracticeAttemptService;
   abandonAttempt: AbandonPracticeAttemptService;
+  listAttemptHistory: ListPracticeAttemptHistoryService;
 }
 
 async function buildPracticeAttemptServices(): Promise<PracticeAttemptServices> {
@@ -32,6 +34,9 @@ async function buildPracticeAttemptServices(): Promise<PracticeAttemptServices> 
     }),
     submitAttempt: new SubmitPracticeAttemptService(dataSource),
     abandonAttempt: new AbandonPracticeAttemptService({
+      repository: new PracticeAttemptsRepository(dataSource),
+    }),
+    listAttemptHistory: new ListPracticeAttemptHistoryService({
       repository: new PracticeAttemptsRepository(dataSource),
     }),
   };

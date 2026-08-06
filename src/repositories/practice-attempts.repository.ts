@@ -1,8 +1,109 @@
 import { IsNull } from 'typeorm';
 import type { DataSource, EntityManager, Repository, UpdateResult } from 'typeorm';
 import { PracticeAttempt } from '../models/PracticeAttempt';
+import { PracticeExercise } from '../models/PracticeExercise';
 import { PracticeAttemptStatus } from '../models/enums';
+import type { EnglishLevel } from '../models/enums';
 import type { PracticeAttemptFeedbackSummary } from '../models/practice-json-types';
+import { toNullableNumber, toRequiredNumber } from '../lib/pg-numeric';
+
+/** Never IN_PROGRESS — the history listing only ever shows finished attempts. */
+type PracticeAttemptHistoryStatusFilter =
+  | PracticeAttemptStatus.COMPLETED
+  | PracticeAttemptStatus.ABANDONED;
+
+interface ListPracticeAttemptHistoryFilters {
+  userId: string;
+  statuses: PracticeAttemptHistoryStatusFilter[];
+  examCode?: string;
+  paperCode?: string;
+  partCode?: string;
+  page: number;
+  pageSize: number;
+}
+
+/** Flat projection — attempt scalars + just enough PracticeExercise metadata to filter/display. Never PracticeItems/PracticeAnswers/answer keys. */
+interface PracticeAttemptHistoryRow {
+  attemptId: string;
+  exerciseId: string;
+  status: PracticeAttemptHistoryStatusFilter;
+  examCode: string;
+  paperCode: string;
+  partCode: string;
+  targetLevel: EnglishLevel | null;
+  title: string;
+  itemCount: number;
+  startedAt: Date;
+  submittedAt: Date | null;
+  durationSeconds: number | null;
+  correctCount: number | null;
+  totalCount: number;
+  percentage: number | null;
+  feedbackSummary: PracticeAttemptFeedbackSummary | null;
+}
+
+interface ListPracticeAttemptHistoryResult {
+  rows: PracticeAttemptHistoryRow[];
+  totalItems: number;
+}
+
+/**
+ * The raw shape `getRawMany()` actually hands back, before any type
+ * normalization. Every numeric-ish column is typed as `number | string`
+ * (or nullable variants) here on purpose — node-postgres returns `integer`
+ * columns as `number` but `numeric`/`decimal` columns (percentage) as
+ * `string`, and nothing about a raw query builder result enforces either
+ * shape. `toHistoryRow` is the one place that resolves the ambiguity.
+ */
+interface PracticeAttemptHistoryRawRow {
+  attemptId: string;
+  exerciseId: string;
+  status: PracticeAttemptHistoryStatusFilter;
+  startedAt: Date;
+  submittedAt: Date | null;
+  durationSeconds: number | string | null;
+  correctCount: number | string | null;
+  totalCount: number | string;
+  percentage: number | string | null;
+  feedbackSummary: PracticeAttemptFeedbackSummary | null;
+  examCode: string;
+  paperCode: string;
+  partCode: string;
+  targetLevel: EnglishLevel | null;
+  title: string;
+  itemCount: number | string;
+}
+
+/**
+ * Exported only for the raw->row type-normalization regression test
+ * (`practice-attempts.repository.test.ts`) — never used outside this file
+ * otherwise. Every numeric-ish field is converted explicitly via
+ * `toNullableNumber`/`toRequiredNumber`, never left to whatever shape the
+ * driver happened to hand back; `null` is always preserved as `null`.
+ * `startedAt`/`submittedAt` are left untouched — node-postgres already
+ * parses `timestamptz` into real `Date` objects, and the HTTP layer relies
+ * on `JSON.stringify`'s own `Date -> ISO string` serialization.
+ */
+function toHistoryRow(raw: PracticeAttemptHistoryRawRow): PracticeAttemptHistoryRow {
+  return {
+    attemptId: raw.attemptId,
+    exerciseId: raw.exerciseId,
+    status: raw.status,
+    examCode: raw.examCode,
+    paperCode: raw.paperCode,
+    partCode: raw.partCode,
+    targetLevel: raw.targetLevel,
+    title: raw.title,
+    itemCount: toRequiredNumber(raw.itemCount),
+    startedAt: raw.startedAt,
+    submittedAt: raw.submittedAt,
+    durationSeconds: toNullableNumber(raw.durationSeconds),
+    correctCount: toNullableNumber(raw.correctCount),
+    totalCount: toRequiredNumber(raw.totalCount),
+    percentage: toNullableNumber(raw.percentage),
+    feedbackSummary: raw.feedbackSummary,
+  };
+}
 
 interface CreateAttemptData {
   userId: string;
@@ -120,19 +221,85 @@ class PracticeAttemptsRepository {
   }
 
   /**
-   * No pagination yet (no consumer). Adding `limit`/`offset` later is
-   * additive — this signature won't need to break to support it.
+   * Filtered, paginated history of finished (completed/abandoned) attempts.
+   * Joins PracticeExercise only for filtering/display metadata — never loads
+   * PracticeItems/PracticeAnswers/answer keys. A raw, hand-selected
+   * projection (not `getMany()`) keeps this to exactly the columns the
+   * history DTO needs, and means an exercise's `answer_key`/`explanation`
+   * (already `select: false` at the column level) are never even in the
+   * query's reach.
+   *
+   * The exercise join filters `deleted_at IS NULL` — an attempt whose
+   * exercise was independently soft-deleted silently drops out of the
+   * history list, the same "exercise not found" semantics every other
+   * exercise-touching query in this repository already applies.
    */
-  async listHistoryByUser(userId: string): Promise<PracticeAttempt[]> {
-    return this.attemptRepo
+  async listHistoryByUser(
+    filters: ListPracticeAttemptHistoryFilters,
+  ): Promise<ListPracticeAttemptHistoryResult> {
+    const qb = this.attemptRepo
       .createQueryBuilder('attempt')
-      .where('attempt.user_id = :userId', { userId })
+      .innerJoin(
+        PracticeExercise,
+        'exercise',
+        'exercise.id = attempt.exercise_id AND exercise.deleted_at IS NULL',
+      )
+      .where('attempt.user_id = :userId', { userId: filters.userId })
       .andWhere('attempt.deleted_at IS NULL')
+      .andWhere('attempt.status IN (:...statuses)', { statuses: filters.statuses });
+
+    if (filters.examCode !== undefined) {
+      qb.andWhere('exercise.exam_code = :examCode', { examCode: filters.examCode });
+    }
+    if (filters.paperCode !== undefined) {
+      qb.andWhere('exercise.paper_code = :paperCode', { paperCode: filters.paperCode });
+    }
+    if (filters.partCode !== undefined) {
+      qb.andWhere('exercise.part_code = :partCode', { partCode: filters.partCode });
+    }
+
+    // getCount() clones the builder internally before overriding SELECT, so
+    // it never mutates `qb` — safe to keep building on the same instance.
+    const totalItems = await qb.getCount();
+
+    const raw = await qb
+      .select('attempt.id', 'attemptId')
+      .addSelect('attempt.exercise_id', 'exerciseId')
+      .addSelect('attempt.status', 'status')
+      .addSelect('attempt.started_at', 'startedAt')
+      .addSelect('attempt.submitted_at', 'submittedAt')
+      .addSelect('attempt.duration_seconds', 'durationSeconds')
+      .addSelect('attempt.correct_count', 'correctCount')
+      .addSelect('attempt.total_count', 'totalCount')
+      .addSelect('attempt.percentage', 'percentage')
+      .addSelect('attempt.feedback_summary', 'feedbackSummary')
+      .addSelect('exercise.exam_code', 'examCode')
+      .addSelect('exercise.paper_code', 'paperCode')
+      .addSelect('exercise.part_code', 'partCode')
+      .addSelect('exercise.target_level', 'targetLevel')
+      .addSelect('exercise.title', 'title')
+      .addSelect('exercise.item_count', 'itemCount')
       .orderBy('attempt.started_at', 'DESC')
       .addOrderBy('attempt.id', 'ASC')
-      .getMany();
+      // `.skip()/.take()` are silently ignored by TypeORM whenever the query
+      // has a registered join (`createLimitOffsetExpression` only falls back
+      // to them when `joinAttributes.length === 0`) — `.offset()/.limit()`
+      // are read unconditionally, so those are the ones that actually apply
+      // here given the join to `practice_exercises` above.
+      .offset((filters.page - 1) * filters.pageSize)
+      .limit(filters.pageSize)
+      .getRawMany<PracticeAttemptHistoryRawRow>();
+
+    return { rows: raw.map(toHistoryRow), totalItems };
   }
 }
 
-export { PracticeAttemptsRepository };
+export { PracticeAttemptsRepository, toHistoryRow };
 export type { CreateAttemptData, CompleteAttemptData };
+export type {
+  PracticeAttemptHistoryStatusFilter,
+  ListPracticeAttemptHistoryFilters,
+  PracticeAttemptHistoryRow,
+  ListPracticeAttemptHistoryResult,
+  PracticeAttemptHistoryRawRow,
+};

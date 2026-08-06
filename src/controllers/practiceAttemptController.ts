@@ -10,6 +10,8 @@ import type {
   PracticeAttemptSubmitResultDto,
   PracticeAttemptAbandonResultDto,
 } from '../interfaces/practice/practice-attempt.interface';
+import type { PracticeAttemptHistoryResponseDto } from '../interfaces/practice/practice-attempt-history.interface';
+import type { ListPracticeAttemptHistoryRawQuery } from '../services/practice/list-practice-attempt-history.service';
 
 type NowProvider = () => Date;
 
@@ -42,6 +44,13 @@ interface AbandonAttemptPort {
   execute(userId: string, attemptId: string): Promise<PracticeAttemptAbandonResultDto>;
 }
 
+interface ListAttemptHistoryPort {
+  execute(
+    userId: string,
+    rawQuery: ListPracticeAttemptHistoryRawQuery,
+  ): Promise<PracticeAttemptHistoryResponseDto>;
+}
+
 interface PracticeAttemptControllerDeps {
   now: NowProvider;
   services: () => Promise<{
@@ -50,6 +59,7 @@ interface PracticeAttemptControllerDeps {
     getAttempt: GetAttemptPort;
     submitAttempt: SubmitAttemptPort;
     abandonAttempt: AbandonAttemptPort;
+    listAttemptHistory: ListAttemptHistoryPort;
   }>;
 }
 
@@ -220,12 +230,49 @@ export async function abandonPracticeAttempt(
   return abandonPracticeAttemptHandler(event, DEFAULT_DEPS);
 }
 
+// ── GET /practice/attempts ─────────────────────────────────────────────────────
+
+function getHistoryQueryParams(event: APIGatewayProxyEvent): ListPracticeAttemptHistoryRawQuery {
+  const qs = event.queryStringParameters ?? {};
+  return {
+    status: qs['status'],
+    examCode: qs['examCode'],
+    paperCode: qs['paperCode'],
+    partCode: qs['partCode'],
+    page: qs['page'],
+    pageSize: qs['pageSize'],
+  };
+}
+
+async function listPracticeAttemptHistoryHandler(
+  event: APIGatewayProxyEvent,
+  deps: PracticeAttemptControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const { listAttemptHistory } = await deps.services();
+    const result = await listAttemptHistory.execute(payload.sub, getHistoryQueryParams(event));
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapPracticeAttemptError(err));
+  }
+}
+
+export async function listPracticeAttemptHistory(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return listPracticeAttemptHistoryHandler(event, DEFAULT_DEPS);
+}
+
 export {
   startPracticeAttemptHandler,
   getActivePracticeAttemptHandler,
   getPracticeAttemptHandler,
   submitPracticeAttemptHandler,
   abandonPracticeAttemptHandler,
+  listPracticeAttemptHistoryHandler,
 };
 export type {
   PracticeAttemptControllerDeps,
@@ -235,4 +282,5 @@ export type {
   GetAttemptPort,
   SubmitAttemptPort,
   AbandonAttemptPort,
+  ListAttemptHistoryPort,
 };
