@@ -9,3 +9,4 @@ export * from './evidence';
 export * from './progress';
 export * from './decks';
 export * from './flashcards';
+export * from './practice';

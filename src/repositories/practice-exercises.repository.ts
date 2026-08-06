@@ -14,6 +14,11 @@ import {
   isPracticeItemOptionArray,
   isSafeGenerationMetadata,
 } from '../lib/practice-jsonb-validators';
+import type {
+  PracticeExerciseSafeDto,
+  PracticeItemSafeDto,
+  PracticeExerciseSafeWithItems,
+} from '../interfaces/practice/practice-exercise.interface';
 
 interface CreateExerciseData {
   userId: string;
@@ -41,36 +46,6 @@ interface CreateItemData {
   explanation: string | null;
   skillTags: string[];
   metadata: PracticeItemMetadata | null;
-}
-
-/** Never carries answerKey, explanation, generationMetadata, userId or soft-delete fields. */
-interface PracticeExerciseSafeDto {
-  id: string;
-  examCode: string;
-  paperCode: string;
-  partCode: string;
-  targetLevel: EnglishLevel | null;
-  title: string;
-  instructions: string;
-  stimulus: string | null;
-  timeLimitSeconds: number | null;
-  itemCount: number;
-  createdAt: Date;
-}
-
-/** Never carries answerKey or explanation — those stay server-side until submit/evaluation. */
-interface PracticeItemSafeDto {
-  id: string;
-  position: number;
-  taskType: string;
-  prompt: string;
-  options: PracticeItemOption[] | null;
-  skillTags: string[];
-}
-
-interface PracticeExerciseSafeWithItems {
-  exercise: PracticeExerciseSafeDto;
-  items: PracticeItemSafeDto[];
 }
 
 /** Internal-only: includes answerKey/explanation, fetched via an explicit addSelect(). */
@@ -232,11 +207,9 @@ class PracticeExercisesRepository {
 }
 
 export { PracticeExercisesRepository };
+export type { CreateExerciseData, CreateItemData, PracticeExerciseWithAnswerKeysForEvaluation };
 export type {
-  CreateExerciseData,
-  CreateItemData,
   PracticeExerciseSafeDto,
   PracticeItemSafeDto,
   PracticeExerciseSafeWithItems,
-  PracticeExerciseWithAnswerKeysForEvaluation,
-};
+} from '../interfaces/practice/practice-exercise.interface';
