@@ -37,6 +37,41 @@ functions:
           path: /practice/exercises/{exerciseId}
           method: GET
 
+  practiceStartAttempt:
+    handler: src/controllers/practiceAttemptController.startPracticeAttempt
+    events:
+      - httpApi:
+          path: /practice/exercises/{exerciseId}/attempts
+          method: POST
+
+  practiceGetActiveAttempt:
+    handler: src/controllers/practiceAttemptController.getActivePracticeAttempt
+    events:
+      - httpApi:
+          path: /practice/attempts/active
+          method: GET
+
+  practiceGetAttempt:
+    handler: src/controllers/practiceAttemptController.getPracticeAttempt
+    events:
+      - httpApi:
+          path: /practice/attempts/{attemptId}
+          method: GET
+
+  practiceSubmitAttempt:
+    handler: src/controllers/practiceAttemptController.submitPracticeAttempt
+    events:
+      - httpApi:
+          path: /practice/attempts/{attemptId}/submit
+          method: POST
+
+  practiceAbandonAttempt:
+    handler: src/controllers/practiceAttemptController.abandonPracticeAttempt
+    events:
+      - httpApi:
+          path: /practice/attempts/{attemptId}/abandon
+          method: POST
+
 package:
   individually: true
 

@@ -1,0 +1,84 @@
+import type { PracticeAttemptStatus } from '../../models/enums';
+import type {
+  PracticeAnswerPayload,
+  PracticeItemOption,
+  PracticeAttemptFeedbackSummary,
+} from '../../models/practice-json-types';
+import type { PracticeExerciseSafeWithItems } from './practice-exercise.interface';
+
+export interface SubmitPracticeAttemptAnswerInput {
+  itemId: string;
+  answer: PracticeAnswerPayload;
+  responseTimeMs?: number | null;
+}
+
+export interface SubmitPracticeAttemptRequest {
+  answers: SubmitPracticeAttemptAnswerInput[];
+}
+
+/** Never carries userId or soft-delete fields. */
+export interface PracticeAttemptSafeDto {
+  id: string;
+  exerciseId: string;
+  status: PracticeAttemptStatus;
+  startedAt: Date;
+  totalCount: number;
+}
+
+/**
+ * Only ever built for a `completed` attempt — this is the one place in the
+ * whole Practice domain allowed to reveal a correct answer, since the
+ * student has already submitted and been graded.
+ */
+export interface PracticeAttemptItemResultDto {
+  itemId: string;
+  position: number;
+  prompt: string;
+  options: PracticeItemOption[] | null;
+  userAnswer: PracticeAnswerPayload;
+  normalizedAnswer: string | null;
+  isCorrect: boolean;
+  /** Correct option labels (single_choice) or the literal accepted strings (text). */
+  acceptedAnswers: string[];
+  explanation: string | null;
+  skillTags: string[];
+  responseTimeMs: number | null;
+}
+
+export interface PracticeAttemptResultDto {
+  attemptId: string;
+  exerciseId: string;
+  submittedAt: Date;
+  durationSeconds: number;
+  correctCount: number;
+  totalCount: number;
+  percentage: number;
+  feedbackSummary: PracticeAttemptFeedbackSummary;
+  items: PracticeAttemptItemResultDto[];
+}
+
+/**
+ * `exercise` is populated for `in_progress`/`abandoned` (never carries an
+ * answerKey — reuses PR 2's safe projection verbatim). `result` is populated
+ * only for `completed`. Exactly one of the two is non-null.
+ */
+export interface PracticeAttemptViewDto {
+  attempt: PracticeAttemptSafeDto;
+  exercise: PracticeExerciseSafeWithItems | null;
+  result: PracticeAttemptResultDto | null;
+}
+
+export interface PracticeAttemptStartResultDto {
+  view: PracticeAttemptViewDto;
+  resumed: boolean;
+}
+
+export interface PracticeAttemptSubmitResultDto {
+  result: PracticeAttemptResultDto;
+  idempotentReplay: boolean;
+}
+
+export interface PracticeAttemptAbandonResultDto {
+  attempt: PracticeAttemptSafeDto;
+  idempotentReplay: boolean;
+}

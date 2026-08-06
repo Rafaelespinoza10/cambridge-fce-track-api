@@ -26,6 +26,9 @@ export type PracticeAnswerPayload =
   | {
       kind: 'text';
       value: string;
+    }
+  | {
+      kind: 'unanswered';
     };
 
 /**
@@ -41,8 +44,31 @@ export interface PracticeExerciseGenerationMetadata {
   schemaVersion?: string;
 }
 
-// Open-ended placeholders — no consumer defines their shape yet. Kept as
-// plain JSON bags on purpose; a later PR (grading/feedback) will narrow them.
+// Open-ended placeholder — no consumer defines its shape yet. Kept as a
+// plain JSON bag on purpose.
 export type PracticeItemMetadata = Record<string, unknown>;
-export type PracticeAttemptFeedbackSummary = Record<string, unknown>;
+
+// Still an open placeholder — no consumer defines a shape for a single
+// answer's own feedback yet (everything PR 3 needs is reconstructable from
+// PracticeAnswer's own columns joined with PracticeItem, so nothing is
+// persisted here yet).
 export type PracticeAnswerFeedback = Record<string, unknown>;
+
+/** Per-skill correctness breakdown for one completed attempt. */
+export interface PracticeAttemptSkillBreakdownEntry {
+  skillTag: string;
+  correctCount: number;
+  totalCount: number;
+  percentage: number;
+}
+
+/**
+ * Narrows the PR 1 placeholder into a concrete shape: computed once, at
+ * submit time, by src/lib/practice-attempt-grading.ts — never AI-generated,
+ * no recommendations, no estimated level.
+ */
+export interface PracticeAttemptFeedbackSummary {
+  version: 'practice-attempt-feedback-v1';
+  unansweredCount: number;
+  skillBreakdown: PracticeAttemptSkillBreakdownEntry[];
+}

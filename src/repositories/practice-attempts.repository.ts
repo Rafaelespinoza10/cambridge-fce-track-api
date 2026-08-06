@@ -51,6 +51,28 @@ class PracticeAttemptsRepository {
       .getOne();
   }
 
+  /**
+   * Bloquea la fila con SELECT ... FOR UPDATE. Requiere un EntityManager
+   * transaccional (obtenido de dataSource.transaction(async manager => {...})) —
+   * TypeORM lanza en runtime si se invoca fuera de una transacción activa. No
+   * filtra por status: el caller decide qué hacer según el estado que
+   * encuentre (in_progress/completed/abandoned).
+   */
+  async findByIdForUpdate(
+    attemptId: string,
+    userId: string,
+    manager: EntityManager,
+  ): Promise<PracticeAttempt | null> {
+    return manager
+      .getRepository(PracticeAttempt)
+      .createQueryBuilder('attempt')
+      .setLock('pessimistic_write')
+      .where('attempt.id = :attemptId', { attemptId })
+      .andWhere('attempt.user_id = :userId', { userId })
+      .andWhere('attempt.deleted_at IS NULL')
+      .getOne();
+  }
+
   async findActiveByUser(userId: string): Promise<PracticeAttempt | null> {
     return this.attemptRepo
       .createQueryBuilder('attempt')
