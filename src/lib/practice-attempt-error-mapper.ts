@@ -14,6 +14,10 @@ import {
   AbandonPracticeAttemptError,
   AbandonPracticeAttemptErrorCode,
 } from '../services/practice/abandon-practice-attempt.service';
+import {
+  ListPracticeAttemptHistoryError,
+  ListPracticeAttemptHistoryErrorCode,
+} from '../services/practice/list-practice-attempt-history.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -42,6 +46,14 @@ const ABANDON_STATUS_BY_CODE: Record<AbandonPracticeAttemptErrorCode, number> = 
   [AbandonPracticeAttemptErrorCode.ATTEMPT_COMPLETED]: 409,
 };
 
+const LIST_HISTORY_STATUS_BY_CODE: Record<ListPracticeAttemptHistoryErrorCode, number> = {
+  [ListPracticeAttemptHistoryErrorCode.INVALID_INPUT]: 400,
+  [ListPracticeAttemptHistoryErrorCode.UNSUPPORTED_EXAM]: 400,
+  [ListPracticeAttemptHistoryErrorCode.UNSUPPORTED_PAPER]: 400,
+  [ListPracticeAttemptHistoryErrorCode.UNSUPPORTED_PART]: 400,
+  [ListPracticeAttemptHistoryErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
+};
+
 /**
  * Translates every Practice attempt-domain error (start/get/submit/abandon)
  * into an Error with `statusCode`, consumable by @lib/response's
@@ -61,6 +73,9 @@ function mapPracticeAttemptError(error: unknown): unknown {
   }
   if (error instanceof AbandonPracticeAttemptError) {
     return httpError(error.message, ABANDON_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof ListPracticeAttemptHistoryError) {
+    return httpError(error.message, LIST_HISTORY_STATUS_BY_CODE[error.code]);
   }
   return error;
 }

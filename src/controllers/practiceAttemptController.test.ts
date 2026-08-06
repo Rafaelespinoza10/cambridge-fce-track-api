@@ -15,6 +15,8 @@ import {
   submitPracticeAttemptHandler,
   abandonPracticeAttempt,
   abandonPracticeAttemptHandler,
+  listPracticeAttemptHistory,
+  listPracticeAttemptHistoryHandler,
 } from './practiceAttemptController';
 import type {
   PracticeAttemptControllerDeps,
@@ -23,6 +25,7 @@ import type {
   GetAttemptPort,
   SubmitAttemptPort,
   AbandonAttemptPort,
+  ListAttemptHistoryPort,
 } from './practiceAttemptController';
 import { JwtService } from '../lib/jwt';
 import { PracticeAttemptStatus } from '../models/enums';
@@ -42,12 +45,17 @@ import {
   AbandonPracticeAttemptError,
   AbandonPracticeAttemptErrorCode,
 } from '../services/practice/abandon-practice-attempt.service';
+import {
+  ListPracticeAttemptHistoryError,
+  ListPracticeAttemptHistoryErrorCode,
+} from '../services/practice/list-practice-attempt-history.service';
 import type {
   PracticeAttemptStartResultDto,
   PracticeAttemptViewDto,
   PracticeAttemptSubmitResultDto,
   PracticeAttemptAbandonResultDto,
 } from '../interfaces/practice/practice-attempt.interface';
+import type { PracticeAttemptHistoryResponseDto } from '../interfaces/practice/practice-attempt-history.interface';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────────
 
@@ -134,12 +142,39 @@ const ABANDON_RESULT: PracticeAttemptAbandonResultDto = {
   idempotentReplay: false,
 };
 
+const HISTORY_RESULT: PracticeAttemptHistoryResponseDto = {
+  items: [
+    {
+      attemptId: ATTEMPT_ID,
+      exerciseId: EXERCISE_ID,
+      status: PracticeAttemptStatus.COMPLETED,
+      examCode: 'B2_FIRST',
+      paperCode: 'PAPER_1',
+      partCode: 'UOE_PART_1',
+      targetLevel: null,
+      title: 'Title',
+      itemCount: 8,
+      startedAt: FIXED_NOW,
+      submittedAt: FIXED_NOW,
+      durationSeconds: 120,
+      correctCount: 6,
+      totalCount: 8,
+      percentage: 75,
+      unansweredCount: 1,
+    },
+  ],
+  pagination: { page: 1, pageSize: 20, totalItems: 1, totalPages: 1 },
+};
+
 interface FakePorts {
   startAttempt: StartAttemptPort & { calls: Parameters<StartAttemptPort['execute']>[] };
   getActiveAttempt: GetActiveAttemptPort & { calls: Parameters<GetActiveAttemptPort['execute']>[] };
   getAttempt: GetAttemptPort & { calls: Parameters<GetAttemptPort['execute']>[] };
   submitAttempt: SubmitAttemptPort & { calls: Parameters<SubmitAttemptPort['execute']>[] };
   abandonAttempt: AbandonAttemptPort & { calls: Parameters<AbandonAttemptPort['execute']>[] };
+  listAttemptHistory: ListAttemptHistoryPort & {
+    calls: Parameters<ListAttemptHistoryPort['execute']>[];
+  };
 }
 
 function buildDeps(
@@ -149,6 +184,7 @@ function buildDeps(
     getExecute?: GetAttemptPort['execute'];
     submitExecute?: SubmitAttemptPort['execute'];
     abandonExecute?: AbandonAttemptPort['execute'];
+    listHistoryExecute?: ListAttemptHistoryPort['execute'];
   } = {},
 ): { deps: PracticeAttemptControllerDeps; ports: FakePorts } {
   const startCalls: Parameters<StartAttemptPort['execute']>[] = [];
@@ -156,6 +192,7 @@ function buildDeps(
   const getCalls: Parameters<GetAttemptPort['execute']>[] = [];
   const submitCalls: Parameters<SubmitAttemptPort['execute']>[] = [];
   const abandonCalls: Parameters<AbandonAttemptPort['execute']>[] = [];
+  const listHistoryCalls: Parameters<ListAttemptHistoryPort['execute']>[] = [];
 
   const ports: FakePorts = {
     startAttempt: {
@@ -197,6 +234,15 @@ function buildDeps(
         return overrides.abandonExecute
           ? overrides.abandonExecute(userId, attemptId)
           : ABANDON_RESULT;
+      },
+    },
+    listAttemptHistory: {
+      calls: listHistoryCalls,
+      execute: async (userId, rawQuery) => {
+        listHistoryCalls.push([userId, rawQuery]);
+        return overrides.listHistoryExecute
+          ? overrides.listHistoryExecute(userId, rawQuery)
+          : HISTORY_RESULT;
       },
     },
   };
@@ -641,6 +687,163 @@ describe('abandonPracticeAttempt', () => {
   });
 });
 
+// ── listPracticeAttemptHistory ────────────────────────────────────────────────────
+
+describe('listPracticeAttemptHistory', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await listPracticeAttemptHistoryHandler(makeEvent({ headers: {} }), deps);
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('returns 200 with the paginated history on success', async () => {
+    const { deps } = buildDeps();
+    const result = await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    assert.equal(result.statusCode, 200);
+    const data = parseBody(result).data as Record<string, unknown>;
+    assert.deepEqual(data, JSON.parse(JSON.stringify(HISTORY_RESULT)));
+  });
+
+  it('serializes numeric fields as raw JSON numbers (not quoted strings) and dates as ISO strings', async () => {
+    const { deps } = buildDeps();
+    const result = await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    // JSON.parse preserves the string/number distinction from the wire
+    // format, so typeof here reflects exactly what was actually sent —
+    // this would fail if any field were serialized as e.g. "75" (a quoted
+    // string in the JSON body) instead of 75 (a raw JSON number).
+    const item = (parseBody(result).data as { items: Record<string, unknown>[] }).items[0];
+    for (const field of [
+      'itemCount',
+      'durationSeconds',
+      'correctCount',
+      'totalCount',
+      'percentage',
+      'unansweredCount',
+    ]) {
+      assert.equal(typeof item[field], 'number', `${field} should serialize as a JSON number`);
+    }
+    const isoDate = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+    assert.match(item.startedAt as string, isoDate);
+    assert.match(item.submittedAt as string, isoDate);
+  });
+
+  it('forwards known query params (status/examCode/paperCode/partCode/page/pageSize) to the service, unvalidated', async () => {
+    const { deps, ports } = buildDeps();
+    await listPracticeAttemptHistoryHandler(
+      makeEvent({
+        queryStringParameters: {
+          status: 'completed',
+          examCode: 'B2_FIRST',
+          paperCode: 'PAPER_1',
+          partCode: 'UOE_PART_1',
+          page: '2',
+          pageSize: '10',
+          unknownField: 'ignored',
+        },
+      }),
+      deps,
+    );
+    assert.deepEqual(ports.listAttemptHistory.calls[0], [
+      USER_ID,
+      {
+        status: 'completed',
+        examCode: 'B2_FIRST',
+        paperCode: 'PAPER_1',
+        partCode: 'UOE_PART_1',
+        page: '2',
+        pageSize: '10',
+      },
+    ]);
+  });
+
+  it('passes undefined for every query param when none are sent', async () => {
+    const { deps, ports } = buildDeps();
+    await listPracticeAttemptHistoryHandler(makeEvent({ queryStringParameters: null }), deps);
+    assert.deepEqual(ports.listAttemptHistory.calls[0], [
+      USER_ID,
+      {
+        status: undefined,
+        examCode: undefined,
+        paperCode: undefined,
+        partCode: undefined,
+        page: undefined,
+        pageSize: undefined,
+      },
+    ]);
+  });
+
+  it('takes userId from the JWT', async () => {
+    const { deps, ports } = buildDeps();
+    await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    assert.equal(ports.listAttemptHistory.calls[0][0], USER_ID);
+  });
+
+  it('maps INVALID_INPUT to 400', async () => {
+    const { deps } = buildDeps({
+      listHistoryExecute: async () => {
+        throw new ListPracticeAttemptHistoryError(
+          'x',
+          ListPracticeAttemptHistoryErrorCode.INVALID_INPUT,
+        );
+      },
+    });
+    const result = await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('maps UNSUPPORTED_EXAM to 400', async () => {
+    const { deps } = buildDeps({
+      listHistoryExecute: async () => {
+        throw new ListPracticeAttemptHistoryError(
+          'x',
+          ListPracticeAttemptHistoryErrorCode.UNSUPPORTED_EXAM,
+        );
+      },
+    });
+    const result = await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('maps PERSISTENCE_INCONSISTENCY to 500', async () => {
+    const { deps } = buildDeps({
+      listHistoryExecute: async () => {
+        throw new ListPracticeAttemptHistoryError(
+          'x',
+          ListPracticeAttemptHistoryErrorCode.PERSISTENCE_INCONSISTENCY,
+        );
+      },
+    });
+    const result = await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    assert.equal(result.statusCode, 500);
+  });
+
+  it('an unexpected error returns 500 without leaking internal details', async () => {
+    const { deps } = buildDeps({
+      listHistoryExecute: async () => {
+        throw new Error('duplicate key value violates constraint xyz');
+      },
+    });
+    const result = await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    assert.equal(result.statusCode, 500);
+    assert.equal((parseBody(result).message as string).includes('constraint'), false);
+  });
+
+  it('an empty page returns 200 with an empty items array', async () => {
+    const { deps } = buildDeps({
+      listHistoryExecute: async () => ({
+        items: [],
+        pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+      }),
+    });
+    const result = await listPracticeAttemptHistoryHandler(makeEvent(), deps);
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(parseBody(result).data, {
+      items: [],
+      pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+    });
+  });
+});
+
 // ── Lambda invocation shape regression guard ────────────────────────────────────
 //
 // AWS Lambda always calls the exported handler as `handler(event, context)`.
@@ -648,7 +851,7 @@ describe('abandonPracticeAttempt', () => {
 // second parameter — since `context` is never `undefined`, the default never
 // activated in production and every request crashed with `TypeError:
 // deps.services is not a function`, masked as a generic 500 by handleError.
-// This guards against that shape regressing across all 5 exported handlers.
+// This guards against that shape regressing across all 6 exported handlers.
 
 describe('exported Lambda handlers ignore a second (context) argument', () => {
   const cases: [
@@ -669,6 +872,7 @@ describe('exported Lambda handlers ignore a second (context) argument', () => {
       abandonPracticeAttempt,
       { pathParameters: { attemptId: ATTEMPT_ID } },
     ],
+    ['listPracticeAttemptHistory', listPracticeAttemptHistory, {}],
   ];
 
   for (const [name, handler, eventOverrides] of cases) {

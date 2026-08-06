@@ -18,6 +18,10 @@ import {
   AbandonPracticeAttemptError,
   AbandonPracticeAttemptErrorCode,
 } from '../services/practice/abandon-practice-attempt.service';
+import {
+  ListPracticeAttemptHistoryError,
+  ListPracticeAttemptHistoryErrorCode,
+} from '../services/practice/list-practice-attempt-history.service';
 
 function statusOf(error: unknown): number | undefined {
   return (error as { statusCode?: number }).statusCode;
@@ -154,6 +158,78 @@ describe('mapPracticeAttemptError — abandon', () => {
         ),
       ),
       409,
+    );
+  });
+});
+
+describe('mapPracticeAttemptError — list history', () => {
+  it('maps INVALID_INPUT to 400', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new ListPracticeAttemptHistoryError(
+            'x',
+            ListPracticeAttemptHistoryErrorCode.INVALID_INPUT,
+          ),
+        ),
+      ),
+      400,
+    );
+  });
+
+  it('maps UNSUPPORTED_EXAM to 400', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new ListPracticeAttemptHistoryError(
+            'x',
+            ListPracticeAttemptHistoryErrorCode.UNSUPPORTED_EXAM,
+          ),
+        ),
+      ),
+      400,
+    );
+  });
+
+  it('maps UNSUPPORTED_PAPER to 400', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new ListPracticeAttemptHistoryError(
+            'x',
+            ListPracticeAttemptHistoryErrorCode.UNSUPPORTED_PAPER,
+          ),
+        ),
+      ),
+      400,
+    );
+  });
+
+  it('maps UNSUPPORTED_PART to 400', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new ListPracticeAttemptHistoryError(
+            'x',
+            ListPracticeAttemptHistoryErrorCode.UNSUPPORTED_PART,
+          ),
+        ),
+      ),
+      400,
+    );
+  });
+
+  it('maps PERSISTENCE_INCONSISTENCY to 500', () => {
+    assert.equal(
+      statusOf(
+        mapPracticeAttemptError(
+          new ListPracticeAttemptHistoryError(
+            'x',
+            ListPracticeAttemptHistoryErrorCode.PERSISTENCE_INCONSISTENCY,
+          ),
+        ),
+      ),
+      500,
     );
   });
 });

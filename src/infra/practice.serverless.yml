@@ -44,6 +44,13 @@ functions:
           path: /practice/exercises/{exerciseId}/attempts
           method: POST
 
+  practiceListAttemptHistory:
+    handler: src/controllers/practiceAttemptController.listPracticeAttemptHistory
+    events:
+      - httpApi:
+          path: /practice/attempts
+          method: GET
+
   practiceGetActiveAttempt:
     handler: src/controllers/practiceAttemptController.getActivePracticeAttempt
     events:
