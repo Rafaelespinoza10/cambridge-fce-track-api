@@ -70,6 +70,14 @@ export class PracticeExercise {
   @Column({ type: 'jsonb', nullable: true })
   generation_metadata: PracticeExerciseGenerationMetadata | null;
 
+  // Client-supplied, checked before ever calling the LLM (see
+  // GeneratePracticeExerciseService) so a retried request replays the
+  // already-persisted exercise instead of generating (and billing) again.
+  // Unique per (user_id, idempotency_key) among non-deleted rows only — see
+  // AddPracticeExerciseIdempotency.
+  @Column({ type: 'uuid' })
+  idempotency_key: string;
+
   @CreateDateColumn({ type: 'timestamp with time zone' })
   created_at: Date;
 

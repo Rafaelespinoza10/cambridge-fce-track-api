@@ -14,9 +14,15 @@ import {
   isPracticeItemOptionArray,
   isSafeGenerationMetadata,
 } from '../lib/practice-jsonb-validators';
+import type {
+  PracticeExerciseSafeDto,
+  PracticeItemSafeDto,
+  PracticeExerciseSafeWithItems,
+} from '../interfaces/practice/practice-exercise.interface';
 
 interface CreateExerciseData {
   userId: string;
+  idempotencyKey: string;
   examCode: string;
   paperCode: string;
   partCode: string;
@@ -41,36 +47,6 @@ interface CreateItemData {
   explanation: string | null;
   skillTags: string[];
   metadata: PracticeItemMetadata | null;
-}
-
-/** Never carries answerKey, explanation, generationMetadata, userId or soft-delete fields. */
-interface PracticeExerciseSafeDto {
-  id: string;
-  examCode: string;
-  paperCode: string;
-  partCode: string;
-  targetLevel: EnglishLevel | null;
-  title: string;
-  instructions: string;
-  stimulus: string | null;
-  timeLimitSeconds: number | null;
-  itemCount: number;
-  createdAt: Date;
-}
-
-/** Never carries answerKey or explanation — those stay server-side until submit/evaluation. */
-interface PracticeItemSafeDto {
-  id: string;
-  position: number;
-  taskType: string;
-  prompt: string;
-  options: PracticeItemOption[] | null;
-  skillTags: string[];
-}
-
-interface PracticeExerciseSafeWithItems {
-  exercise: PracticeExerciseSafeDto;
-  items: PracticeItemSafeDto[];
 }
 
 /** Internal-only: includes answerKey/explanation, fetched via an explicit addSelect(). */
@@ -122,6 +98,7 @@ class PracticeExercisesRepository {
 
     const exercise = this.exerciseRepo.create({
       user_id: data.userId,
+      idempotency_key: data.idempotencyKey,
       exam_code: data.examCode,
       paper_code: data.paperCode,
       part_code: data.partCode,
@@ -170,6 +147,23 @@ class PracticeExercisesRepository {
       .createQueryBuilder('exercise')
       .where('exercise.id = :exerciseId', { exerciseId })
       .andWhere('exercise.user_id = :userId', { userId })
+      .andWhere('exercise.deleted_at IS NULL')
+      .getOne();
+  }
+
+  /**
+   * Ignores soft-deleted rows — matches uq_practice_exercises_user_idempotency
+   * (partial, WHERE deleted_at IS NULL), so a soft-deleted exercise never
+   * blocks reusing its idempotency_key for a brand new generation.
+   */
+  async findByIdempotencyKeyForUser(
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<PracticeExercise | null> {
+    return this.exerciseRepo
+      .createQueryBuilder('exercise')
+      .where('exercise.user_id = :userId', { userId })
+      .andWhere('exercise.idempotency_key = :idempotencyKey', { idempotencyKey })
       .andWhere('exercise.deleted_at IS NULL')
       .getOne();
   }
@@ -232,11 +226,9 @@ class PracticeExercisesRepository {
 }
 
 export { PracticeExercisesRepository };
+export type { CreateExerciseData, CreateItemData, PracticeExerciseWithAnswerKeysForEvaluation };
 export type {
-  CreateExerciseData,
-  CreateItemData,
   PracticeExerciseSafeDto,
   PracticeItemSafeDto,
   PracticeExerciseSafeWithItems,
-  PracticeExerciseWithAnswerKeysForEvaluation,
-};
+} from '../interfaces/practice/practice-exercise.interface';
