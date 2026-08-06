@@ -7,6 +7,7 @@ import {
   isPracticePaperCode,
   isPracticePartCode,
   isPracticeTaskType,
+  isPracticeGenerationSupported,
   findExamInCatalog,
   findPaperInCatalog,
   findPartInCatalog,
@@ -203,5 +204,53 @@ describe('PRACTICE_EXAM_CATALOG — B2 First (verified)', () => {
 
   it('rejects a real part code under the wrong paper', () => {
     assert.equal(isPracticePartCode('B2_FIRST', 'PAPER_2', 'UOE_PART_1'), false);
+  });
+});
+
+// ── generationSupported ──────────────────────────────────────────────────────
+
+const B2_FIRST_UOE_PARTS = ['UOE_PART_1', 'UOE_PART_2', 'UOE_PART_3', 'UOE_PART_4'];
+
+describe('isPracticeGenerationSupported', () => {
+  it('is true for exactly the 4 Use of English parts', () => {
+    for (const partCode of B2_FIRST_UOE_PARTS) {
+      assert.equal(
+        isPracticeGenerationSupported('B2_FIRST', 'PAPER_1', partCode),
+        true,
+        `expected ${partCode} to be generation-supported`,
+      );
+    }
+  });
+
+  it('is false for every other real, catalogued B2 First part', () => {
+    const b2First = findExamInCatalog(PRACTICE_EXAM_CATALOG, 'B2_FIRST');
+    assert.ok(b2First);
+
+    let checked = 0;
+    for (const paper of b2First.papers) {
+      for (const part of paper.parts) {
+        if (paper.code === 'PAPER_1' && B2_FIRST_UOE_PARTS.includes(part.code)) continue;
+        checked += 1;
+        assert.equal(
+          isPracticeGenerationSupported('B2_FIRST', paper.code, part.code),
+          false,
+          `expected ${paper.code}/${part.code} to NOT be generation-supported`,
+        );
+      }
+    }
+    // Sanity: makes sure this test actually exercised every non-UoE part
+    // (3 Reading + 2 Writing + 4 Listening + 4 Speaking = 13).
+    assert.equal(checked, 13);
+  });
+
+  it('is false for an unknown exam/paper/part', () => {
+    assert.equal(isPracticeGenerationSupported('NOT_AN_EXAM', 'PAPER_1', 'UOE_PART_1'), false);
+    assert.equal(isPracticeGenerationSupported('B2_FIRST', 'NOT_A_PAPER', 'UOE_PART_1'), false);
+    assert.equal(isPracticeGenerationSupported('B2_FIRST', 'PAPER_1', 'NOT_A_PART'), false);
+  });
+
+  it('B1_PRELIMINARY has no generation-supported parts (no papers registered at all)', () => {
+    const pet = findExamInCatalog(PRACTICE_EXAM_CATALOG, 'B1_PRELIMINARY');
+    assert.deepEqual(pet?.papers, []);
   });
 });

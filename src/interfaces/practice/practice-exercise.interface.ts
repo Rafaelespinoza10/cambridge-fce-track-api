@@ -7,6 +7,8 @@ export interface GeneratePracticeExerciseRequest {
   partCode: string;
   taskType: string;
   targetLevel?: EnglishLevel;
+  /** Client-supplied. Same key + same user replays the persisted exercise instead of calling the LLM again. */
+  idempotencyKey: string;
 }
 
 /** Never carries answerKey, explanation, generationMetadata, userId or soft-delete fields. */

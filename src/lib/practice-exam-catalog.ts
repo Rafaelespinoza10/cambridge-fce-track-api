@@ -25,6 +25,14 @@ export interface PracticePartCatalogEntry {
   defaultItemCount?: number;
   /** Real default duration for this part in the official exam, when known. */
   defaultDurationMinutes?: number;
+  /**
+   * True only for the parts GeneratePracticeExerciseService actually has a
+   * prompt/schema for. A part being registered in this catalog (real,
+   * verified Cambridge structure) is independent from it being generatable
+   * today — most parts are catalogued but not yet generatable. Defaults to
+   * false/absent everywhere except the 4 Use of English parts.
+   */
+  generationSupported?: boolean;
 }
 
 export interface PracticePaperCatalogEntry {
@@ -88,6 +96,7 @@ export const PRACTICE_EXAM_CATALOG: readonly PracticeExamCatalogEntry[] = deepFr
             taskTypes: [{ code: 'multiple_choice_cloze', label: 'Multiple Choice Cloze' }],
             defaultItemCount: 8,
             defaultDurationMinutes: 15,
+            generationSupported: true,
           },
           {
             code: 'UOE_PART_2',
@@ -95,6 +104,7 @@ export const PRACTICE_EXAM_CATALOG: readonly PracticeExamCatalogEntry[] = deepFr
             taskTypes: [{ code: 'open_cloze', label: 'Open Cloze' }],
             defaultItemCount: 8,
             defaultDurationMinutes: 15,
+            generationSupported: true,
           },
           {
             code: 'UOE_PART_3',
@@ -102,6 +112,7 @@ export const PRACTICE_EXAM_CATALOG: readonly PracticeExamCatalogEntry[] = deepFr
             taskTypes: [{ code: 'word_formation', label: 'Word Formation' }],
             defaultItemCount: 8,
             defaultDurationMinutes: 15,
+            generationSupported: true,
           },
           {
             code: 'UOE_PART_4',
@@ -109,6 +120,7 @@ export const PRACTICE_EXAM_CATALOG: readonly PracticeExamCatalogEntry[] = deepFr
             taskTypes: [{ code: 'key_word_transformation', label: 'Key Word Transformation' }],
             defaultItemCount: 6,
             defaultDurationMinutes: 20,
+            generationSupported: true,
           },
           {
             code: 'READING_PART_5',
@@ -266,5 +278,21 @@ export function isPracticeTaskType(
   return (
     findTaskTypeInCatalog(PRACTICE_EXAM_CATALOG, examCode, paperCode, partCode, taskType) !==
     undefined
+  );
+}
+
+/**
+ * Whether GeneratePracticeExerciseService has a prompt/schema for this part
+ * — independent from whether the part exists in the catalog (most parts do,
+ * few are generatable). False for an unknown exam/paper/part too.
+ */
+export function isPracticeGenerationSupported(
+  examCode: string,
+  paperCode: string,
+  partCode: string,
+): boolean {
+  return (
+    findPartInCatalog(PRACTICE_EXAM_CATALOG, examCode, paperCode, partCode)?.generationSupported ===
+    true
   );
 }

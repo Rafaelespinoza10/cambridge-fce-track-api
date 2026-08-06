@@ -25,6 +25,7 @@ import {
 } from '../../lib/practice-jsonb-validators';
 import {
   isPracticeTaskType,
+  isPracticeGenerationSupported,
   findPartInCatalog,
   PRACTICE_EXAM_CATALOG,
 } from '../../lib/practice-exam-catalog';
@@ -79,6 +80,10 @@ export interface PracticeExercisesRepositoryPort {
     exerciseId: string,
     userId: string,
   ): Promise<PracticeExerciseSafeWithItems | null>;
+  findByIdempotencyKeyForUser(
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<PracticeExercise | null>;
 }
 
 type GeneratedItem = Omit<CreateItemData, 'metadata'>;
@@ -195,6 +200,9 @@ function normalizeRequest(input: GeneratePracticeExerciseRequest): NormalizedReq
   // Defense in depth: the hardcoded map above must never drift from the catalog.
   if (!isPracticeTaskType(part.examCode, part.paperCode, part.partCode, part.taskType)) {
     invalidInput('taskType is not registered in the practice exam catalog');
+  }
+  if (!isPracticeGenerationSupported(part.examCode, part.paperCode, part.partCode)) {
+    invalidInput('this part is not marked as generation-supported in the practice exam catalog');
   }
 
   let targetLevel = EnglishLevel.B2;
@@ -453,6 +461,24 @@ function validateGeneratedExercise(
   return { title, instructions, stimulus, items };
 }
 
+const IDEMPOTENCY_CONSTRAINT_NAME = 'uq_practice_exercises_user_idempotency';
+const POSTGRES_UNIQUE_VIOLATION_CODE = '23505';
+
+// Same detection pattern as FlashcardReviewService's idempotency handling —
+// matches on the specific constraint name, not just the Postgres error code,
+// so an unrelated unique violation is never mistaken for a replay.
+function isIdempotencyConstraintViolation(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const driverError = error as {
+    code?: string;
+    constraint?: string;
+    driverError?: { code?: string; constraint?: string };
+  };
+  const code = driverError.code ?? driverError.driverError?.code;
+  const constraint = driverError.constraint ?? driverError.driverError?.constraint;
+  return code === POSTGRES_UNIQUE_VIOLATION_CODE && constraint === IDEMPOTENCY_CONSTRAINT_NAME;
+}
+
 function mapLLMError(error: unknown): GeneratePracticeExerciseError {
   if (error instanceof LLMServiceError) {
     switch (error.code) {
@@ -513,8 +539,24 @@ export class GeneratePracticeExerciseService {
     if (typeof userId !== 'string' || userId.trim() === '') {
       invalidInput('userId is required');
     }
+    if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.trim() === '') {
+      invalidInput('idempotencyKey is required');
+    }
 
     const normalized = normalizeRequest(input);
+
+    // Idempotency pre-check: same user + same key never reaches the LLM at
+    // all, not even once — this is the primary path, the race-condition
+    // catch below only covers two concurrent requests racing past this check.
+    const factory = this.deps.practiceExercises ?? DEFAULT_PRACTICE_EXERCISES_FACTORY;
+    const existing = await factory(this.dataSource).findByIdempotencyKeyForUser(
+      userId,
+      input.idempotencyKey,
+    );
+    if (existing !== null) {
+      return this.buildReplayResult(this.dataSource, userId, input.idempotencyKey);
+    }
+
     const messages = buildMessages(normalized);
 
     let raw: unknown;
@@ -535,14 +577,61 @@ export class GeneratePracticeExerciseService {
       schemaVersion: PROMPT_VERSION,
     };
 
-    return this.dataSource.transaction((manager) =>
-      this.persist(manager, userId, normalized, generated, generationMetadata),
-    );
+    try {
+      return await this.dataSource.transaction((manager) =>
+        this.persist(
+          manager,
+          userId,
+          input.idempotencyKey,
+          normalized,
+          generated,
+          generationMetadata,
+        ),
+      );
+    } catch (err: unknown) {
+      // Two concurrent requests with the same (userId, idempotencyKey) can
+      // both pass the pre-check above and both reach this insert — exactly
+      // one wins, the other's transaction aborts on the unique index. Only
+      // THIS specific constraint counts as a replay; any other 23505 (or
+      // any other error) propagates normally.
+      if (isIdempotencyConstraintViolation(err)) {
+        return this.buildReplayResult(this.dataSource, userId, input.idempotencyKey);
+      }
+      throw err;
+    }
+  }
+
+  /** Re-reads outside the aborted/committed transaction — never trusts anything from within it. */
+  private async buildReplayResult(
+    source: RepositorySource,
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<PracticeExerciseSafeWithItems> {
+    const factory = this.deps.practiceExercises ?? DEFAULT_PRACTICE_EXERCISES_FACTORY;
+    const repo = factory(source);
+
+    const existing = await repo.findByIdempotencyKeyForUser(userId, idempotencyKey);
+    if (existing === null) {
+      throw new GeneratePracticeExerciseError(
+        'Idempotency conflict detected but no matching exercise could be found',
+        GeneratePracticeExerciseErrorCode.AI_INVALID_RESPONSE,
+      );
+    }
+
+    const safe = await repo.findSafeExerciseWithItemsForUser(existing.id, userId);
+    if (safe === null) {
+      throw new GeneratePracticeExerciseError(
+        'Idempotency conflict detected but the matching exercise could not be re-read',
+        GeneratePracticeExerciseErrorCode.AI_INVALID_RESPONSE,
+      );
+    }
+    return safe;
   }
 
   private async persist(
     manager: EntityManager,
     userId: string,
+    idempotencyKey: string,
     normalized: NormalizedRequest,
     generated: {
       title: string;
@@ -557,6 +646,7 @@ export class GeneratePracticeExerciseService {
 
     const exerciseData: CreateExerciseData = {
       userId,
+      idempotencyKey,
       examCode: normalized.part.examCode,
       paperCode: normalized.part.paperCode,
       partCode: normalized.part.partCode,

@@ -22,6 +22,7 @@ import type {
 
 interface CreateExerciseData {
   userId: string;
+  idempotencyKey: string;
   examCode: string;
   paperCode: string;
   partCode: string;
@@ -97,6 +98,7 @@ class PracticeExercisesRepository {
 
     const exercise = this.exerciseRepo.create({
       user_id: data.userId,
+      idempotency_key: data.idempotencyKey,
       exam_code: data.examCode,
       paper_code: data.paperCode,
       part_code: data.partCode,
@@ -145,6 +147,23 @@ class PracticeExercisesRepository {
       .createQueryBuilder('exercise')
       .where('exercise.id = :exerciseId', { exerciseId })
       .andWhere('exercise.user_id = :userId', { userId })
+      .andWhere('exercise.deleted_at IS NULL')
+      .getOne();
+  }
+
+  /**
+   * Ignores soft-deleted rows — matches uq_practice_exercises_user_idempotency
+   * (partial, WHERE deleted_at IS NULL), so a soft-deleted exercise never
+   * blocks reusing its idempotency_key for a brand new generation.
+   */
+  async findByIdempotencyKeyForUser(
+    userId: string,
+    idempotencyKey: string,
+  ): Promise<PracticeExercise | null> {
+    return this.exerciseRepo
+      .createQueryBuilder('exercise')
+      .where('exercise.user_id = :userId', { userId })
+      .andWhere('exercise.idempotency_key = :idempotencyKey', { idempotencyKey })
       .andWhere('exercise.deleted_at IS NULL')
       .getOne();
   }

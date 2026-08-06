@@ -60,7 +60,7 @@ async function generatePracticeExerciseHandler(
 
   try {
     const { generateExercise } = await deps.services();
-    // Only these 4 fields are ever forwarded — unknown fields (including a
+    // Only these 5 fields are ever forwarded — unknown fields (including a
     // client-supplied userId) are structurally ignored.
     const exercise = await generateExercise.execute(payload.sub, {
       examCode: body.examCode,
@@ -68,6 +68,7 @@ async function generatePracticeExerciseHandler(
       partCode: body.partCode,
       taskType: body.taskType,
       targetLevel: body.targetLevel,
+      idempotencyKey: body.idempotencyKey,
     });
     return successResponse({ success: true, data: exercise }, 201);
   } catch (err: unknown) {

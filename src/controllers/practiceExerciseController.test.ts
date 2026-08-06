@@ -29,6 +29,7 @@ import type { PracticeExerciseSafeWithItems } from '../interfaces/practice/pract
 const USER_ID = 'user-1';
 const TOKEN = JwtService.sign({ sub: USER_ID, email: 'user@example.com', role: 'student' });
 const EXERCISE_ID = '22222222-2222-2222-2222-222222222222';
+const IDEMPOTENCY_KEY = 'aaaaaaaa-1111-1111-1111-111111111111';
 
 function makeEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent {
   return {
@@ -38,6 +39,7 @@ function makeEvent(overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayPro
       paperCode: 'PAPER_1',
       partCode: 'UOE_PART_1',
       taskType: 'multiple_choice_cloze',
+      idempotencyKey: IDEMPOTENCY_KEY,
     }),
     pathParameters: null,
     queryStringParameters: null,
@@ -63,8 +65,52 @@ const SAFE_RESULT: PracticeExerciseSafeWithItems = {
     itemCount: 8,
     createdAt: new Date(),
   },
-  items: [],
+  items: [
+    {
+      id: 'item-1',
+      position: 1,
+      taskType: 'multiple_choice_cloze',
+      prompt: 'Choose the best option for gap (1).',
+      options: [
+        { id: 'a', label: 'alpha' },
+        { id: 'b', label: 'beta' },
+        { id: 'c', label: 'gamma' },
+        { id: 'd', label: 'delta' },
+      ],
+      skillTags: ['collocations'],
+    },
+  ],
 };
+
+// Keys that must NEVER appear anywhere in a client-facing response —
+// answer keys, explanations, or internal AI trace/ownership fields.
+const FORBIDDEN_RESPONSE_KEYS = [
+  'answerKey',
+  'acceptedAnswers',
+  'acceptedOptionIds',
+  'explanation',
+  'generationMetadata',
+  'model',
+  'promptVersion',
+  'userId',
+  'deletedAt',
+];
+
+function assertNoForbiddenKeys(value: unknown, path = 'data'): void {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => assertNoForbiddenKeys(entry, `${path}[${index}]`));
+    return;
+  }
+  if (value === null || typeof value !== 'object') return;
+
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    assert.ok(
+      !FORBIDDEN_RESPONSE_KEYS.includes(key),
+      `forbidden key "${key}" found in HTTP response at ${path}.${key}`,
+    );
+    assertNoForbiddenKeys(child, `${path}.${key}`);
+  }
+}
 
 // createdAt is a Date in the fake service's return value but a JSON string
 // once it round-trips through the controller's JSON.stringify response body.
@@ -136,6 +182,12 @@ describe('generatePracticeExercise', () => {
     assert.equal(generateService.calls.length, 1);
   });
 
+  it('never includes a forbidden key anywhere in the full serialized HTTP response', async () => {
+    const { deps } = buildDeps();
+    const result = await generatePracticeExerciseHandler(makeEvent(), deps);
+    assertNoForbiddenKeys(JSON.parse(result.body));
+  });
+
   it('forwards the authenticated userId as the first arg, never from the body', async () => {
     const { deps, generateService } = buildDeps();
     await generatePracticeExerciseHandler(
@@ -145,6 +197,7 @@ describe('generatePracticeExercise', () => {
           paperCode: 'PAPER_1',
           partCode: 'UOE_PART_1',
           taskType: 'multiple_choice_cloze',
+          idempotencyKey: IDEMPOTENCY_KEY,
           userId: 'someone-else',
         }),
       }),
@@ -162,6 +215,7 @@ describe('generatePracticeExercise', () => {
           paperCode: 'PAPER_1',
           partCode: 'UOE_PART_1',
           taskType: 'multiple_choice_cloze',
+          idempotencyKey: IDEMPOTENCY_KEY,
           itemCount: 999,
           extraField: 'should be ignored',
         }),
@@ -174,6 +228,7 @@ describe('generatePracticeExercise', () => {
       partCode: 'UOE_PART_1',
       taskType: 'multiple_choice_cloze',
       targetLevel: undefined,
+      idempotencyKey: IDEMPOTENCY_KEY,
     });
   });
 
@@ -290,6 +345,12 @@ describe('getPracticeExercise', () => {
     assert.deepEqual(getService.calls[0], [USER_ID, EXERCISE_ID]);
   });
 
+  it('never includes a forbidden key anywhere in the full serialized HTTP response', async () => {
+    const { deps } = buildDeps();
+    const result = await getPracticeExerciseHandler(getEvent(), deps);
+    assertNoForbiddenKeys(JSON.parse(result.body));
+  });
+
   it('maps EXERCISE_NOT_FOUND to 404', async () => {
     const { deps } = buildDeps(undefined, async () => {
       throw new PracticeExerciseError(
@@ -307,6 +368,20 @@ describe('getPracticeExercise', () => {
 // AWS Lambda always calls the exported handler as `handler(event, context)`.
 // A second parameter with a default value never falls back to that default in
 // production since `context` is never `undefined`.
+
+// Proves assertNoForbiddenKeys actually catches a violation — otherwise the
+// "never includes a forbidden key" tests above could pass vacuously.
+describe('assertNoForbiddenKeys (self-test)', () => {
+  it('throws when a forbidden key is present, nested at any depth', () => {
+    assert.throws(() => assertNoForbiddenKeys({ exercise: { userId: 'leak' } }));
+    assert.throws(() => assertNoForbiddenKeys({ items: [{ answerKey: { kind: 'text' } }] }));
+    assert.throws(() => assertNoForbiddenKeys({ exercise: { generationMetadata: {} } }));
+  });
+
+  it('does not throw for a clean object', () => {
+    assert.doesNotThrow(() => assertNoForbiddenKeys(SAFE_RESULT_JSON));
+  });
+});
 
 describe('exported Lambda handlers ignore a second (context) argument', () => {
   it('generatePracticeExercise declares only one parameter', () => {
