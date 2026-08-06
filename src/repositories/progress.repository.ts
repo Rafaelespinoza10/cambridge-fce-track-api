@@ -6,6 +6,9 @@ import { ActivityScore } from '../models/ActivityScore';
 import { MockTest } from '../models/MockTest';
 import { UserGoal } from '../models/UserGoal';
 import { Skill } from '../models/Skill';
+import { PracticeAttempt } from '../models/PracticeAttempt';
+import { PracticeExercise } from '../models/PracticeExercise';
+import { PracticeAttemptStatus } from '../models/enums';
 
 interface WeeklyActivityStats {
   total: number;
@@ -39,6 +42,17 @@ interface RecentActivityRow {
 interface OverallWeekRow {
   weekStart: string;
   avgScore: number;
+}
+
+interface PracticePartMetricRow {
+  examCode: string;
+  paperCode: string;
+  partCode: string;
+  completedAttempts: number;
+  correctCount: number;
+  totalCount: number;
+  averageScore: number;
+  lastAttemptAt: Date;
 }
 
 class ProgressRepository {
@@ -221,6 +235,59 @@ class ProgressRepository {
       avgScore: parseFloat(r.avgScore) || 0,
     }));
   }
+
+  /**
+   * Completed practice attempts grouped by the exact exam paper part. This
+   * intentionally does not use ActivityScore: Practice attempts have their
+   * own reliable counts and percentage, and are not categorised as Skills.
+   */
+  async getPracticePartMetrics(userId: string): Promise<PracticePartMetricRow[]> {
+    const rows = await this.ds
+      .createQueryBuilder(PracticeAttempt, 'attempt')
+      .innerJoin(
+        PracticeExercise,
+        'exercise',
+        'exercise.id = attempt.exercise_id AND exercise.deleted_at IS NULL',
+      )
+      .select('exercise.exam_code', 'examCode')
+      .addSelect('exercise.paper_code', 'paperCode')
+      .addSelect('exercise.part_code', 'partCode')
+      .addSelect('COUNT(attempt.id)', 'completedAttempts')
+      .addSelect('COALESCE(SUM(attempt.correct_count), 0)', 'correctCount')
+      .addSelect('COALESCE(SUM(attempt.total_count), 0)', 'totalCount')
+      .addSelect('AVG(CAST(attempt.percentage AS FLOAT))', 'averageScore')
+      .addSelect('MAX(attempt.submitted_at)', 'lastAttemptAt')
+      .where('attempt.user_id = :userId', { userId })
+      .andWhere('attempt.deleted_at IS NULL')
+      .andWhere('attempt.status = :status', { status: PracticeAttemptStatus.COMPLETED })
+      .groupBy('exercise.exam_code')
+      .addGroupBy('exercise.paper_code')
+      .addGroupBy('exercise.part_code')
+      .orderBy('exercise.exam_code', 'ASC')
+      .addOrderBy('exercise.paper_code', 'ASC')
+      .addOrderBy('exercise.part_code', 'ASC')
+      .getRawMany<{
+        examCode: string;
+        paperCode: string;
+        partCode: string;
+        completedAttempts: string;
+        correctCount: string;
+        totalCount: string;
+        averageScore: string;
+        lastAttemptAt: Date;
+      }>();
+
+    return rows.map((row) => ({
+      examCode: row.examCode,
+      paperCode: row.paperCode,
+      partCode: row.partCode,
+      completedAttempts: parseInt(row.completedAttempts, 10),
+      correctCount: parseInt(row.correctCount, 10),
+      totalCount: parseInt(row.totalCount, 10),
+      averageScore: parseFloat(row.averageScore),
+      lastAttemptAt: row.lastAttemptAt,
+    }));
+  }
 }
 
 export { ProgressRepository };
@@ -231,4 +298,5 @@ export type {
   SkillWeekRow,
   RecentActivityRow,
   OverallWeekRow,
+  PracticePartMetricRow,
 };

@@ -34,6 +34,22 @@ export interface ExamGoalMetric {
   daysUntilExam: number;
 }
 
+/** Aggregate performance for one concrete Cambridge exam part (for example UOE_PART_1). */
+export interface PracticePartMetric {
+  examCode: string;
+  paperCode: string;
+  partCode: string;
+  completedAttempts: number;
+  correctCount: number;
+  totalCount: number;
+  averageScore: number;
+  lastAttemptAt: string;
+}
+
+export interface PracticePartMetricsResponse {
+  parts: PracticePartMetric[];
+}
+
 export interface MetricsResponse {
   weeklyActivities: WeeklyActivitiesMetric;
   studyMinutes: number;
