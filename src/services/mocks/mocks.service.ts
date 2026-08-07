@@ -21,8 +21,21 @@ import {
   VALID_MOCK_TYPES,
   validateSections,
 } from '@lib/mocks-library';
+import { findMockExamSectionByName, getMockExamCatalog } from '@lib/mock-exam-catalog';
 
 class MocksService {
+  getSectionCatalog(examType: ExamType) {
+    if (!VALID_EXAM_TYPES.has(examType)) {
+      throw createError(`examType must be one of: ${Object.values(ExamType).join(', ')}`, 400);
+    }
+    const catalog = getMockExamCatalog(examType);
+    return {
+      examType,
+      scoreScale: catalog.scoreScale,
+      sections: catalog.sections,
+    };
+  }
+
   async createMock(userId: string, body: CreateMockBody): Promise<SafeMock> {
     if (!body.name || typeof body.name !== 'string' || body.name.trim() === '') {
       throw createError('name is required', 400);
@@ -56,7 +69,7 @@ class MocksService {
     }
 
     const sections = body.sections ?? [];
-    if (sections.length > 0) validateSections(sections);
+    validateSections(examType, mockType, sections);
 
     const ds = await getDatabaseConnection();
     const repo = new MocksRepository(ds);
@@ -67,14 +80,13 @@ class MocksService {
       examType,
       mockType,
       takenAt,
-      estimatedCambridgeScore: body.estimatedCambridgeScore ?? null,
+      estimatedStandardizedScore: body.estimatedStandardizedScore ?? null,
+      scoreScale: getMockExamCatalog(examType).scoreScale,
       estimatedLevel: body.estimatedLevel ?? null,
       notes: body.notes ?? null,
     });
 
-    if (sections.length > 0) {
-      await repo.createSections(sections.map((s) => buildSectionData(mock.id, s)));
-    }
+    await repo.createSections(sections.map((s) => buildSectionData(mock.id, examType, s)));
 
     const full = await repo.findMockWithSections(mock.id);
     if (full === null) throw createError('Mock not found after creation', 500);
@@ -211,10 +223,20 @@ class MocksService {
       }
       updateData.name = body.name.trim();
     }
-    if (body.examType !== undefined) updateData.exam_type = body.examType ?? undefined;
+    const nextExamType = body.examType ?? existing.exam_type;
+    const nextMockType = body.mockType ?? existing.mock_type;
+    const typeChanged = nextExamType !== existing.exam_type || nextMockType !== existing.mock_type;
+    if (typeChanged && body.sections === undefined) {
+      throw createError('sections are required when changing examType or mockType', 400);
+    }
+
+    if (body.examType !== undefined) {
+      updateData.exam_type = body.examType ?? undefined;
+      updateData.score_scale = getMockExamCatalog(nextExamType).scoreScale;
+    }
     if (body.mockType !== undefined) updateData.mock_type = body.mockType ?? undefined;
-    if (body.estimatedCambridgeScore !== undefined) {
-      updateData.estimated_cambridge_score = body.estimatedCambridgeScore;
+    if (body.estimatedStandardizedScore !== undefined) {
+      updateData.estimated_standardized_score = body.estimatedStandardizedScore;
     }
     if (body.estimatedLevel !== undefined) updateData.estimated_level = body.estimatedLevel;
     if (body.notes !== undefined) updateData.notes = body.notes;
@@ -235,10 +257,10 @@ class MocksService {
     }
 
     if (body.sections !== undefined && body.sections !== null) {
-      validateSections(body.sections);
+      validateSections(nextExamType, nextMockType, body.sections);
       await repo.replaceSections(
         mockId,
-        body.sections.map((s) => buildSectionData(mockId, s)),
+        body.sections.map((s) => buildSectionData(mockId, nextExamType, s)),
       );
     }
 
@@ -319,13 +341,18 @@ class MocksService {
           continue;
         }
 
-        const estimatedScoreRaw = (first['Estimated Cambridge Score'] ?? '').trim();
-        const estimatedCambridgeScore = estimatedScoreRaw !== '' ? Number(estimatedScoreRaw) : null;
+        const estimatedScoreRaw = (
+          first['Estimated Standardized Score'] ??
+          first['Estimated Cambridge Score'] ??
+          ''
+        ).trim();
+        const estimatedStandardizedScore =
+          estimatedScoreRaw !== '' ? Number(estimatedScoreRaw) : null;
         if (
           estimatedScoreRaw !== '' &&
-          (estimatedCambridgeScore === null || isNaN(estimatedCambridgeScore))
+          (estimatedStandardizedScore === null || isNaN(estimatedStandardizedScore))
         ) {
-          throw new Error('Estimated Cambridge Score must be a number');
+          throw new Error('Estimated Standardized Score must be a number');
         }
 
         const estimatedLevelRaw = (first['Estimated Level'] ?? '').trim();
@@ -340,32 +367,56 @@ class MocksService {
         const sections: SectionScoreInput[] = [];
         for (const data of group.rows) {
           const sectionName = (data['Section'] ?? '').trim();
-          if (sectionName === '') continue;
+          const sectionCodeRaw = (data['Section Code'] ?? '').trim();
+          if (sectionName === '' && sectionCodeRaw === '') continue;
+          const catalogSection =
+            sectionCodeRaw !== ''
+              ? getMockExamCatalog(examType).sections.find(
+                  (section) => section.code === sectionCodeRaw,
+                )
+              : findMockExamSectionByName(examType, sectionName);
+          if (catalogSection === undefined)
+            throw new Error(`Unknown section "${sectionCodeRaw || sectionName}" for ${examType}`);
+          const sectionCode = catalogSection.code;
 
           const rawScoreRaw = (data['Raw Score'] ?? '').trim();
-          if (rawScoreRaw === '') throw new Error(`Section "${sectionName}" is missing Raw Score`);
+          if (rawScoreRaw === '') throw new Error(`Section "${sectionCode}" is missing Raw Score`);
           const rawScore = Number(rawScoreRaw);
           if (isNaN(rawScore))
-            throw new Error(`Section "${sectionName}" Raw Score must be a number`);
+            throw new Error(`Section "${sectionCode}" Raw Score must be a number`);
 
           const maxScoreRaw = (data['Max Score'] ?? '').trim();
           const maxScore = maxScoreRaw !== '' ? Number(maxScoreRaw) : null;
           if (maxScoreRaw !== '' && (maxScore === null || isNaN(maxScore))) {
-            throw new Error(`Section "${sectionName}" Max Score must be a number`);
+            throw new Error(`Section "${sectionCode}" Max Score must be a number`);
           }
 
-          const cambridgeScoreRaw = (data['Section Cambridge Score'] ?? '').trim();
-          const cambridgeScore = cambridgeScoreRaw !== '' ? Number(cambridgeScoreRaw) : null;
-          if (cambridgeScoreRaw !== '' && (cambridgeScore === null || isNaN(cambridgeScore))) {
-            throw new Error(`Section "${sectionName}" Cambridge Score must be a number`);
+          const standardizedScoreRaw = (
+            data['Section Standardized Score'] ??
+            data['Section Cambridge Score'] ??
+            ''
+          ).trim();
+          const standardizedScore =
+            standardizedScoreRaw !== '' ? Number(standardizedScoreRaw) : null;
+          if (
+            standardizedScoreRaw !== '' &&
+            (standardizedScore === null || isNaN(standardizedScore))
+          ) {
+            throw new Error(`Section "${sectionCode}" Standardized Score must be a number`);
           }
 
           const sectionNotes = (data['Section Notes'] ?? '').trim() || null;
 
-          sections.push({ sectionName, rawScore, maxScore, cambridgeScore, notes: sectionNotes });
+          sections.push({
+            sectionCode,
+            rawScore,
+            maxScore,
+            standardizedScore,
+            notes: sectionNotes,
+          });
         }
 
-        if (sections.length > 0) validateSections(sections);
+        validateSections(examType, mockType, sections);
 
         const mock = await repo.createMock({
           userId,
@@ -373,14 +424,13 @@ class MocksService {
           examType,
           mockType,
           takenAt,
-          estimatedCambridgeScore,
+          estimatedStandardizedScore,
+          scoreScale: getMockExamCatalog(examType).scoreScale,
           estimatedLevel,
           notes,
         });
 
-        if (sections.length > 0) {
-          await repo.createSections(sections.map((s) => buildSectionData(mock.id, s)));
-        }
+        await repo.createSections(sections.map((s) => buildSectionData(mock.id, examType, s)));
 
         result.imported++;
       } catch (err) {

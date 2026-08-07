@@ -2,21 +2,13 @@ import type { ExamType, MockType, EnglishLevel } from '../../models/enums';
 
 // ── Section score maximums per spec section 8 ──────────────────────────────────
 
-export const SECTION_MAX_SCORES: Readonly<Record<string, number>> = {
-  Reading: 30,
-  'Use of English': 28,
-  Writing: 40,
-  Listening: 30,
-  Speaking: 40,
-};
-
 // ── Input interfaces ───────────────────────────────────────────────────────────
 
 export interface SectionScoreInput {
-  sectionName: string;
+  sectionCode: string;
   rawScore: number;
   maxScore?: number | null;
-  cambridgeScore?: number | null;
+  standardizedScore?: number | null;
   notes?: string | null;
 }
 
@@ -25,7 +17,7 @@ export interface CreateMockBody {
   examType?: ExamType | null;
   mockType?: MockType | null;
   takenAt?: string | null;
-  estimatedCambridgeScore?: number | null;
+  estimatedStandardizedScore?: number | null;
   estimatedLevel?: EnglishLevel | null;
   notes?: string | null;
   sections?: SectionScoreInput[] | null;
@@ -36,7 +28,7 @@ export interface UpdateMockBody {
   examType?: ExamType | null;
   mockType?: MockType | null;
   takenAt?: string | null;
-  estimatedCambridgeScore?: number | null;
+  estimatedStandardizedScore?: number | null;
   estimatedLevel?: EnglishLevel | null;
   notes?: string | null;
   sections?: SectionScoreInput[] | null;
@@ -55,11 +47,12 @@ export interface MockListFilters {
 
 export interface SafeSectionScore {
   id: string;
+  sectionCode: string;
   sectionName: string;
   rawScore: number | null;
   maxScore: number | null;
   percentage: number | null;
-  cambridgeScore: number | null;
+  standardizedScore: number | null;
   notes: string | null;
 }
 
@@ -69,7 +62,8 @@ export interface SafeMock {
   examType: ExamType;
   mockType: MockType;
   takenAt: Date | null;
-  estimatedCambridgeScore: number | null;
+  estimatedStandardizedScore: number | null;
+  scoreScale: string;
   estimatedLevel: EnglishLevel | null;
   notes: string | null;
   sections: SafeSectionScore[];
@@ -85,13 +79,15 @@ export interface MockExportRow {
   examType: ExamType;
   mockType: MockType;
   takenAt: string;
-  estimatedCambridgeScore: number | string;
+  estimatedStandardizedScore: number | string;
+  scoreScale: string;
   estimatedLevel: EnglishLevel | string;
   notes: string;
+  sectionCode: string;
   sectionName: string;
   rawScore: number | string;
   maxScore: number | string;
   percentage: number | string;
-  cambridgeScore: number | string;
+  standardizedScore: number | string;
   sectionNotes: string;
 }

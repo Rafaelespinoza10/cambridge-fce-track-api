@@ -20,6 +20,13 @@ provider:
     JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
 functions:
+  mocksSectionCatalog:
+    handler: src/controllers/mocksController.getMockSectionCatalog
+    events:
+      - httpApi:
+          path: /mocks/catalog/{examType}/sections
+          method: GET
+
   mocksCreate:
     handler: src/controllers/mocksController.createMock
     events:
