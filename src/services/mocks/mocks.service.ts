@@ -341,8 +341,13 @@ class MocksService {
           continue;
         }
 
-        const estimatedScoreRaw = (first['Estimated Standardized Score'] ?? first['Estimated Cambridge Score'] ?? '').trim();
-        const estimatedStandardizedScore = estimatedScoreRaw !== '' ? Number(estimatedScoreRaw) : null;
+        const estimatedScoreRaw = (
+          first['Estimated Standardized Score'] ??
+          first['Estimated Cambridge Score'] ??
+          ''
+        ).trim();
+        const estimatedStandardizedScore =
+          estimatedScoreRaw !== '' ? Number(estimatedScoreRaw) : null;
         if (
           estimatedScoreRaw !== '' &&
           (estimatedStandardizedScore === null || isNaN(estimatedStandardizedScore))
@@ -364,10 +369,14 @@ class MocksService {
           const sectionName = (data['Section'] ?? '').trim();
           const sectionCodeRaw = (data['Section Code'] ?? '').trim();
           if (sectionName === '' && sectionCodeRaw === '') continue;
-          const catalogSection = sectionCodeRaw !== ''
-            ? getMockExamCatalog(examType).sections.find((section) => section.code === sectionCodeRaw)
-            : findMockExamSectionByName(examType, sectionName);
-          if (catalogSection === undefined) throw new Error(`Unknown section "${sectionCodeRaw || sectionName}" for ${examType}`);
+          const catalogSection =
+            sectionCodeRaw !== ''
+              ? getMockExamCatalog(examType).sections.find(
+                  (section) => section.code === sectionCodeRaw,
+                )
+              : findMockExamSectionByName(examType, sectionName);
+          if (catalogSection === undefined)
+            throw new Error(`Unknown section "${sectionCodeRaw || sectionName}" for ${examType}`);
           const sectionCode = catalogSection.code;
 
           const rawScoreRaw = (data['Raw Score'] ?? '').trim();
@@ -382,15 +391,29 @@ class MocksService {
             throw new Error(`Section "${sectionCode}" Max Score must be a number`);
           }
 
-          const standardizedScoreRaw = (data['Section Standardized Score'] ?? data['Section Cambridge Score'] ?? '').trim();
-          const standardizedScore = standardizedScoreRaw !== '' ? Number(standardizedScoreRaw) : null;
-          if (standardizedScoreRaw !== '' && (standardizedScore === null || isNaN(standardizedScore))) {
+          const standardizedScoreRaw = (
+            data['Section Standardized Score'] ??
+            data['Section Cambridge Score'] ??
+            ''
+          ).trim();
+          const standardizedScore =
+            standardizedScoreRaw !== '' ? Number(standardizedScoreRaw) : null;
+          if (
+            standardizedScoreRaw !== '' &&
+            (standardizedScore === null || isNaN(standardizedScore))
+          ) {
             throw new Error(`Section "${sectionCode}" Standardized Score must be a number`);
           }
 
           const sectionNotes = (data['Section Notes'] ?? '').trim() || null;
 
-          sections.push({ sectionCode, rawScore, maxScore, standardizedScore, notes: sectionNotes });
+          sections.push({
+            sectionCode,
+            rawScore,
+            maxScore,
+            standardizedScore,
+            notes: sectionNotes,
+          });
         }
 
         validateSections(examType, mockType, sections);

@@ -21,7 +21,9 @@ import type {
 const service = new MocksService();
 
 // GET /mocks/catalog/{examType}/sections
-export async function getMockSectionCatalog(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+export async function getMockSectionCatalog(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
