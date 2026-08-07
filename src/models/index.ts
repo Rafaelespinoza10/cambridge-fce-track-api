@@ -17,6 +17,7 @@ export * from './PracticeAnswer';
 export * from './PracticeAttempt';
 export * from './PracticeExercise';
 export * from './PracticeItem';
+export * from './PracticeRecommendation';
 export * from './practice-json-types';
 export * from './Recommendation';
 export * from './Resource';

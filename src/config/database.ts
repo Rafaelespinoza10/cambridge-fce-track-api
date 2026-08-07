@@ -29,6 +29,7 @@ import { PracticeExercise } from '../models/PracticeExercise';
 import { PracticeItem } from '../models/PracticeItem';
 import { PracticeAttempt } from '../models/PracticeAttempt';
 import { PracticeAnswer } from '../models/PracticeAnswer';
+import { PracticeRecommendation } from '../models/PracticeRecommendation';
 
 function getSslConfig(): boolean | { rejectUnauthorized: boolean } {
   const databaseUrl: string = process.env.DATABASE_URL ?? '';
@@ -77,6 +78,7 @@ export const AppDataSource = new DataSource({
     PracticeItem,
     PracticeAttempt,
     PracticeAnswer,
+    PracticeRecommendation,
   ],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',
