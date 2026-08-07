@@ -19,3 +19,17 @@ export async function getMetrics(event: APIGatewayProxyEvent): Promise<APIGatewa
     return handleError(err);
   }
 }
+
+export async function getPracticePartMetrics(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const result = await service.getPracticePartMetrics(payload.sub);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}

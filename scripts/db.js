@@ -52,11 +52,15 @@ function readDatabaseUrl(filePath, stage) {
 }
 
 function main() {
-  const databaseUrl = readDatabaseUrl(ENV_FILE, STAGE);
+  // An explicitly exported DATABASE_URL (e.g. pointing at a local/disposable
+  // database for testing) always wins over serverless.env.yml, so this
+  // wrapper never silently redirects a caller's intended target to the
+  // configured dev database.
+  const databaseUrl = process.env.DATABASE_URL || readDatabaseUrl(ENV_FILE, STAGE);
 
   if (!databaseUrl) {
     console.error(
-      `[db.js] ERROR: DATABASE_URL not found in serverless.env.yml under stage "${STAGE}".`,
+      `[db.js] ERROR: DATABASE_URL not found in the environment or in serverless.env.yml under stage "${STAGE}".`,
     );
     process.exit(1);
   }

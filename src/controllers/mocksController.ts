@@ -20,6 +20,22 @@ import type {
 
 const service = new MocksService();
 
+// GET /mocks/catalog/{examType}/sections
+export async function getMockSectionCatalog(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const examType = event.pathParameters?.examType as ExamType | undefined;
+  if (examType === undefined) return errorResponse('examType is required', 400);
+  try {
+    return successResponse({ success: true, data: service.getSectionCatalog(examType) }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
 // ── POST /mocks ────────────────────────────────────────────────────────────────
 
 export async function createMock(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -93,14 +109,16 @@ const MOCK_EXPORT_COLUMNS: { key: keyof MockExportRow; header: string }[] = [
   { key: 'examType', header: 'Exam Type' },
   { key: 'mockType', header: 'Mock Type' },
   { key: 'takenAt', header: 'Taken At' },
-  { key: 'estimatedCambridgeScore', header: 'Estimated Cambridge Score' },
+  { key: 'estimatedStandardizedScore', header: 'Estimated Standardized Score' },
+  { key: 'scoreScale', header: 'Score Scale' },
   { key: 'estimatedLevel', header: 'Estimated Level' },
   { key: 'notes', header: 'Notes' },
+  { key: 'sectionCode', header: 'Section Code' },
   { key: 'sectionName', header: 'Section' },
   { key: 'rawScore', header: 'Raw Score' },
   { key: 'maxScore', header: 'Max Score' },
   { key: 'percentage', header: 'Percentage' },
-  { key: 'cambridgeScore', header: 'Section Cambridge Score' },
+  { key: 'standardizedScore', header: 'Section Standardized Score' },
   { key: 'sectionNotes', header: 'Section Notes' },
 ];
 

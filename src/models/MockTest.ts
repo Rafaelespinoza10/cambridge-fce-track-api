@@ -42,8 +42,11 @@ export class MockTest {
   @Column({ type: 'timestamp with time zone', nullable: true })
   taken_at: Date | null;
 
-  @Column({ type: 'integer', nullable: true })
-  estimated_cambridge_score: number | null;
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  estimated_standardized_score: number | null;
+
+  @Column({ type: 'varchar', length: 32 })
+  score_scale: string;
 
   @Column({
     type: 'enum',

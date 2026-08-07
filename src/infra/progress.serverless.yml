@@ -27,6 +27,13 @@ functions:
           path: /metrics
           method: GET
 
+  progressPracticePartMetrics:
+    handler: src/controllers/progressController.getPracticePartMetrics
+    events:
+      - httpApi:
+          path: /metrics/practice/parts
+          method: GET
+
 package:
   individually: true
 

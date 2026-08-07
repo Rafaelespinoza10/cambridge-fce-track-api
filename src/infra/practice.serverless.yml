@@ -88,6 +88,21 @@ functions:
           path: /practice/attempts/{attemptId}/items/{itemId}/flashcard-draft
           method: POST
 
+  practiceInsights:
+    handler: src/controllers/practiceAdaptiveController.getPracticeInsights
+    events:
+      - httpApi:
+          path: /practice/insights
+          method: GET
+
+  practiceRecommendations:
+    handler: src/controllers/practiceAdaptiveController.postPracticeRecommendations
+    timeout: 29
+    events:
+      - httpApi:
+          path: /practice/recommendations
+          method: POST
+
 package:
   individually: true
 
