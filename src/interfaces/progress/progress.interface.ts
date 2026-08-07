@@ -12,7 +12,8 @@ export interface LastMockMetric {
   id: string;
   name: string;
   date: string | null;
-  cambridgeScale: number | null;
+  standardizedScore: number | null;
+  scoreScale: string;
 }
 
 export interface SkillProgressMetric {

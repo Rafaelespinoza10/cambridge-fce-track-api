@@ -76,7 +76,11 @@ class ProgressService {
         id: lastMock.id,
         name: lastMock.name,
         date: lastMock.taken_at ? lastMock.taken_at.toISOString().split('T')[0]! : null,
-        cambridgeScale: lastMock.estimated_cambridge_score,
+        standardizedScore:
+          lastMock.estimated_standardized_score === null
+            ? null
+            : Number(lastMock.estimated_standardized_score),
+        scoreScale: lastMock.score_scale,
       };
     }
 

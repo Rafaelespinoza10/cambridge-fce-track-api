@@ -21,8 +21,8 @@ export class MockSectionScore {
   @Column({ type: 'uuid', nullable: true })
   skill_id: string | null;
 
-  @Column({ type: 'varchar', length: 255 })
-  section_name: string;
+  @Column({ type: 'varchar', length: 100 })
+  section_code: string;
 
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   raw_score: string | null;
@@ -33,8 +33,8 @@ export class MockSectionScore {
   @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true })
   percentage: string | null;
 
-  @Column({ type: 'integer', nullable: true })
-  cambridge_score: number | null;
+  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  standardized_score: number | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;

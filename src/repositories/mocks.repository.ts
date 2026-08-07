@@ -9,18 +9,19 @@ interface CreateMockData {
   examType: ExamType;
   mockType: MockType;
   takenAt: Date | null;
-  estimatedCambridgeScore: number | null;
+  estimatedStandardizedScore: number | null;
+  scoreScale: string;
   estimatedLevel: EnglishLevel | null;
   notes: string | null;
 }
 
 interface CreateSectionData {
   mockTestId: string;
-  sectionName: string;
+  sectionCode: string;
   rawScore: number | null;
   maxScore: number | null;
   percentage: number | null;
-  cambridgeScore: number | null;
+  standardizedScore: number | null;
   notes: string | null;
 }
 
@@ -29,7 +30,8 @@ interface UpdateMockData {
   exam_type?: ExamType;
   mock_type?: MockType;
   taken_at?: Date | null;
-  estimated_cambridge_score?: number | null;
+  estimated_standardized_score?: number | null;
+  score_scale?: string;
   estimated_level?: EnglishLevel | null;
   notes?: string | null;
 }
@@ -70,7 +72,8 @@ class MocksRepository {
       exam_type: data.examType,
       mock_type: data.mockType,
       taken_at: data.takenAt,
-      estimated_cambridge_score: data.estimatedCambridgeScore,
+      estimated_standardized_score: data.estimatedStandardizedScore,
+      score_scale: data.scoreScale,
       estimated_level: data.estimatedLevel,
       notes: data.notes,
     });
@@ -81,11 +84,11 @@ class MocksRepository {
     const built = sections.map((s) =>
       this.sectionRepo.create({
         mock_test_id: s.mockTestId,
-        section_name: s.sectionName,
+        section_code: s.sectionCode,
         raw_score: s.rawScore !== null ? String(s.rawScore) : null,
         max_score: s.maxScore !== null ? String(s.maxScore) : null,
         percentage: s.percentage !== null ? String(s.percentage) : null,
-        cambridge_score: s.cambridgeScore,
+        standardized_score: s.standardizedScore,
         notes: s.notes,
       }),
     );
@@ -98,7 +101,7 @@ class MocksRepository {
       .leftJoinAndSelect('mock.section_scores', 'ss')
       .where('mock.id = :mockId', { mockId })
       .andWhere('mock.deleted_at IS NULL')
-      .orderBy('ss.section_name', 'ASC')
+      .orderBy('ss.section_code', 'ASC')
       .getOne();
   }
 
@@ -109,7 +112,7 @@ class MocksRepository {
       .where('mock.id = :mockId', { mockId })
       .andWhere('mock.user_id = :userId', { userId })
       .andWhere('mock.deleted_at IS NULL')
-      .orderBy('ss.section_name', 'ASC')
+      .orderBy('ss.section_code', 'ASC')
       .getOne();
   }
 
@@ -163,7 +166,7 @@ class MocksRepository {
 
     qb.orderBy('mock.taken_at', 'DESC', 'NULLS LAST')
       .addOrderBy('mock.created_at', 'DESC')
-      .addOrderBy('ss.section_name', 'ASC');
+      .addOrderBy('ss.section_code', 'ASC');
 
     return qb.getMany();
   }
@@ -202,11 +205,11 @@ class MocksRepository {
       const built = sections.map((s) =>
         manager.create(MockSectionScore, {
           mock_test_id: s.mockTestId,
-          section_name: s.sectionName,
+          section_code: s.sectionCode,
           raw_score: s.rawScore !== null ? String(s.rawScore) : null,
           max_score: s.maxScore !== null ? String(s.maxScore) : null,
           percentage: s.percentage !== null ? String(s.percentage) : null,
-          cambridge_score: s.cambridgeScore,
+          standardized_score: s.standardizedScore,
           notes: s.notes,
         }),
       );
