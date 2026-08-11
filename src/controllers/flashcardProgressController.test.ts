@@ -60,6 +60,7 @@ const SUMMARY_DTO: FlashcardReviewSummaryDto = {
     goalCompleted: false,
   },
   streak: { current: 0, best: 0 },
+  week: [],
 };
 
 interface FakeService extends FlashcardProgressServicePort {
