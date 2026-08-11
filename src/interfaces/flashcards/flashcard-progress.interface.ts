@@ -27,8 +27,14 @@ export interface FlashcardStreakDto {
   best: number;
 }
 
+export interface FlashcardReviewWeekDayDto {
+  date: string;
+  completed: boolean;
+}
+
 export interface FlashcardReviewSummaryDto {
   preferences: FlashcardPreferencesDto;
   day: FlashcardReviewSummaryDayDto;
   streak: FlashcardStreakDto;
+  week: FlashcardReviewWeekDayDto[];
 }
