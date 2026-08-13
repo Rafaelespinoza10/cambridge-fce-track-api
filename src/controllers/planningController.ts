@@ -154,7 +154,26 @@ export async function addActivity(event: APIGatewayProxyEvent): Promise<APIGatew
   }
 }
 
-// ── PATCH /plans/activities/:plannedActivityId ─────────────────────────────────
+// ── GET /plans/activities/:plannedActivityId ───────────────────────────────────
+
+export async function getActivity(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const plannedActivityId = event.pathParameters?.plannedActivityId ?? '';
+  if (!plannedActivityId || !isValidUuid(plannedActivityId)) {
+    return errorResponse('Invalid or missing plannedActivityId', 400);
+  }
+
+  try {
+    const result = await service.getActivity(payload.sub, plannedActivityId);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── PATCH /plans/activities/:plannedActivityId ──────────────────────────────────
 
 export async function updateActivity(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);

@@ -270,6 +270,18 @@ class PlanningService {
     return toSafePlannedActivity(withSkill);
   }
 
+  async getActivity(userId: string, plannedActivityId: string): Promise<SafeActivityHistoryItem> {
+    const ds = await getDatabaseConnection();
+    const repo = new PlanningRepository(ds);
+
+    const existing = await repo.findPlannedActivityWithContext(plannedActivityId);
+    if (existing === null || existing.plan_day.weekly_plan.user_id !== userId) {
+      throw createError('Planned activity not found', 404);
+    }
+
+    return toSafeActivityHistoryItem(existing);
+  }
+
   async updateActivity(
     userId: string,
     plannedActivityId: string,
