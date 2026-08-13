@@ -1,12 +1,20 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
+import {
+  errorResponse,
+  successResponse,
+  csvResponse,
+  handleError,
+  isValidUuid,
+} from '@lib/response';
 import { getAuthenticatedPayload } from '@lib/jwt';
+import { toCsv } from '@lib/csv';
 import { ScoringService } from '../services/scoring/scoring.service';
 import type {
   RegisterScoreBody,
   UpdateScoreBody,
   ScoreHistoryFilters,
+  ScoreHistoryExportRow,
 } from '../interfaces/scoring/scoring.interface';
 import { ScoreType } from '../models/enums';
 
@@ -217,6 +225,59 @@ export async function getScoreHistory(event: APIGatewayProxyEvent): Promise<APIG
   try {
     const result = await service.getScoreHistory(payload.sub, filters);
     return successResponse({ success: true, ...result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+// ── GET /scores/export ───────────────────────────────────────────────────────
+
+const SCORE_HISTORY_EXPORT_COLUMNS: { key: keyof ScoreHistoryExportRow; header: string }[] = [
+  { key: 'scoreId', header: 'Score ID' },
+  { key: 'plannedActivityId', header: 'Planned Activity ID' },
+  { key: 'activityTitle', header: 'Activity Title' },
+  { key: 'skillName', header: 'Skill' },
+  { key: 'scoreType', header: 'Score Type' },
+  { key: 'correctAnswers', header: 'Correct Answers' },
+  { key: 'totalQuestions', header: 'Total Questions' },
+  { key: 'percentage', header: 'Percentage' },
+  { key: 'rawScore', header: 'Raw Score' },
+  { key: 'maxScore', header: 'Max Score' },
+  { key: 'timeSpentMinutes', header: 'Time Spent (min)' },
+  { key: 'difficulty', header: 'Difficulty' },
+  { key: 'notes', header: 'Notes' },
+  { key: 'attemptedAt', header: 'Attempted At' },
+];
+
+export async function exportScoreHistory(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const qs = event.queryStringParameters ?? {};
+
+  const skillId = qs['skillId'] ?? undefined;
+  if (skillId !== undefined && !isValidUuid(skillId)) {
+    return errorResponse('skillId must be a valid UUID', 400);
+  }
+
+  const scoreType = qs['scoreType'] as ScoreType | undefined;
+  if (scoreType !== undefined && !(Object.values(ScoreType) as string[]).includes(scoreType)) {
+    return errorResponse(`scoreType must be one of: ${Object.values(ScoreType).join(', ')}`, 400);
+  }
+
+  const filters: Omit<ScoreHistoryFilters, 'limit' | 'offset'> = {
+    skillId,
+    scoreType,
+    from: qs['from'] ?? undefined,
+    to: qs['to'] ?? undefined,
+  };
+
+  try {
+    const rows = await service.exportScoreHistory(payload.sub, filters);
+    const csv = toCsv(rows, SCORE_HISTORY_EXPORT_COLUMNS);
+    return csvResponse(csv, 'score-history-export.csv');
   } catch (err: unknown) {
     return handleError(err);
   }

@@ -25,6 +25,10 @@ import type {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+// Raised from 100 so a calendar view can fetch a full month (or a few months) of
+// activity history in one request without pagination.
+const MAX_ACTIVITY_HISTORY_LIMIT = 500;
+
 function createError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
 }
@@ -270,6 +274,18 @@ class PlanningService {
     return toSafePlannedActivity(withSkill);
   }
 
+  async getActivity(userId: string, plannedActivityId: string): Promise<SafeActivityHistoryItem> {
+    const ds = await getDatabaseConnection();
+    const repo = new PlanningRepository(ds);
+
+    const existing = await repo.findPlannedActivityWithContext(plannedActivityId);
+    if (existing === null || existing.plan_day.weekly_plan.user_id !== userId) {
+      throw createError('Planned activity not found', 404);
+    }
+
+    return toSafeActivityHistoryItem(existing);
+  }
+
   async updateActivity(
     userId: string,
     plannedActivityId: string,
@@ -389,7 +405,7 @@ class PlanningService {
     limit: number;
     offset: number;
   }> {
-    const limit = Math.min(filters.limit ?? 20, 100);
+    const limit = Math.min(filters.limit ?? 20, MAX_ACTIVITY_HISTORY_LIMIT);
     const offset = filters.offset ?? 0;
 
     let fromDate: Date | undefined;

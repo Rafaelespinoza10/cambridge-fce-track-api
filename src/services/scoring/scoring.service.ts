@@ -13,6 +13,7 @@ import type {
   SafeScoreDetail,
   SafeScoreSkill,
   ScoreHistoryFilters,
+  ScoreHistoryExportRow,
 } from '../../interfaces/scoring/scoring.interface';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -29,6 +30,21 @@ function parseNumeric(value: string | null): number | null {
 
 function roundTwo(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * Fallback percentage derivation for score types that don't compute it from
+ * correct_answers/total_questions (CORRECT_ANSWERS) or rubric details
+ * (RUBRIC) — namely CUSTOM, PERCENTAGE and TIME_ONLY. Exported standalone
+ * (rather than inlined) so it's unit-testable without the DB seam
+ * registerScore/updateScore both require.
+ */
+export function deriveFallbackPercentage(
+  rawScore: number | null,
+  maxScore: number | null,
+): number | null {
+  if (rawScore === null || maxScore === null || maxScore <= 0) return null;
+  return roundTwo((rawScore / maxScore) * 100);
 }
 
 // ── Mappers ────────────────────────────────────────────────────────────────────
@@ -73,6 +89,29 @@ function toSafeScore(score: ActivityScore): SafeScore {
     updatedAt: score.updated_at,
   };
 }
+
+function toScoreHistoryExportRow(score: ActivityScore): ScoreHistoryExportRow {
+  return {
+    scoreId: score.id,
+    plannedActivityId: score.planned_activity_id ?? '',
+    activityTitle: score.planned_activity?.title ?? '',
+    skillName: score.skill?.name ?? '',
+    scoreType: score.score_type,
+    correctAnswers: score.correct_answers ?? '',
+    totalQuestions: score.total_questions ?? '',
+    percentage: parseNumeric(score.percentage) ?? '',
+    rawScore: parseNumeric(score.raw_score) ?? '',
+    maxScore: parseNumeric(score.max_score) ?? '',
+    timeSpentMinutes: score.time_spent_minutes ?? '',
+    difficulty: score.difficulty ?? '',
+    notes: score.notes ?? '',
+    attemptedAt: score.attempted_at.toISOString(),
+  };
+}
+
+// Raised from 100 so a progress report can fetch a full score history in one
+// request without pagination.
+const MAX_SCORE_HISTORY_LIMIT = 500;
 
 // ── Validation ─────────────────────────────────────────────────────────────────
 
@@ -156,6 +195,16 @@ class ScoringService {
         maxScore = roundTwo(details.reduce((sum, d) => sum + (d.maxScore ?? 0), 0));
         percentage = roundTwo((rawScore / maxScore) * 100);
       }
+    }
+
+    // Fallback for score types with no dedicated calculation above (custom,
+    // percentage, time_only, or correct_answers/rubric sent without the
+    // fields they normally derive percentage from): derive it directly from
+    // rawScore/maxScore whenever both are present, so every stat that reads
+    // ActivityScore.percentage (home summary, recent activities, skill
+    // averages) sees a value instead of silently skipping the row.
+    if (percentage === null) {
+      percentage = deriveFallbackPercentage(rawScore, maxScore);
     }
 
     if (
@@ -276,6 +325,23 @@ class ScoringService {
     if (body.maxScore !== undefined)
       updateData.max_score = body.maxScore !== null ? String(body.maxScore) : null;
 
+    // Same fallback as registerScore: for score types that don't derive
+    // percentage from correct_answers/total_questions or rubric details,
+    // recompute it whenever rawScore or maxScore changes so it never drifts
+    // out of sync with the values actually shown/edited by the user.
+    if (
+      existing.score_type !== ScoreType.CORRECT_ANSWERS &&
+      existing.score_type !== ScoreType.RUBRIC &&
+      (body.rawScore !== undefined || body.maxScore !== undefined)
+    ) {
+      const effectiveRawScore =
+        body.rawScore !== undefined ? body.rawScore : parseNumeric(existing.raw_score);
+      const effectiveMaxScore =
+        body.maxScore !== undefined ? body.maxScore : parseNumeric(existing.max_score);
+      const fallback = deriveFallbackPercentage(effectiveRawScore, effectiveMaxScore);
+      updateData.percentage = fallback !== null ? String(fallback) : null;
+    }
+
     if (body.attemptedAt !== undefined && body.attemptedAt !== null) {
       const parsed = new Date(body.attemptedAt);
       if (isNaN(parsed.getTime()))
@@ -348,7 +414,7 @@ class ScoringService {
     limit: number;
     offset: number;
   }> {
-    const limit = Math.min(filters.limit ?? 20, 100);
+    const limit = Math.min(filters.limit ?? 20, MAX_SCORE_HISTORY_LIMIT);
     const offset = filters.offset ?? 0;
 
     if (filters.scoreType !== undefined && !VALID_SCORE_TYPES.has(filters.scoreType)) {
@@ -381,6 +447,40 @@ class ScoringService {
     });
 
     return { data: scores.map(toSafeScore), total, limit, offset };
+  }
+
+  async exportScoreHistory(
+    userId: string,
+    filters: Omit<ScoreHistoryFilters, 'limit' | 'offset'>,
+  ): Promise<ScoreHistoryExportRow[]> {
+    if (filters.scoreType !== undefined && !VALID_SCORE_TYPES.has(filters.scoreType)) {
+      throw createError(`scoreType must be one of: ${Object.values(ScoreType).join(', ')}`, 400);
+    }
+
+    let fromDate: Date | undefined;
+    let toDate: Date | undefined;
+
+    if (filters.from !== undefined) {
+      fromDate = new Date(filters.from);
+      if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    }
+    if (filters.to !== undefined) {
+      toDate = new Date(filters.to);
+      if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+    }
+
+    const ds = await getDatabaseConnection();
+    const repo = new ScoringRepository(ds);
+
+    const scores = await repo.findScoreHistoryForExport({
+      userId,
+      skillId: filters.skillId,
+      scoreType: filters.scoreType,
+      from: fromDate,
+      to: toDate,
+    });
+
+    return scores.map(toScoreHistoryExportRow);
   }
 }
 

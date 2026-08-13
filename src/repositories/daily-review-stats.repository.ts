@@ -95,7 +95,7 @@ class DailyReviewStatsRepository {
   async findCompletedDates(userId: string, range: Partial<DateRange> = {}): Promise<string[]> {
     const qb = this.statRepo
       .createQueryBuilder('stat')
-      .select('stat.local_date', 'local_date')
+      .select('stat.local_date::text', 'local_date')
       .where('stat.user_id = :userId', { userId })
       .andWhere('stat.goal_completed = true');
 
@@ -104,8 +104,16 @@ class DailyReviewStatsRepository {
 
     qb.orderBy('stat.local_date', 'DESC');
 
-    const rows = await qb.getRawMany<{ local_date: string }>();
-    return rows.map((r) => r.local_date);
+    const rows = await qb.getRawMany<{ local_date: string | Date }>();
+
+    // PostgreSQL/TypeORM puede hidratar una columna DATE como Date. El cálculo
+    // de racha trabaja con fechas locales en formato YYYY-MM-DD, no con
+    // instantes UTC; el cast a texto conserva exactamente la fecha almacenada.
+    return rows.map((r) =>
+      r.local_date instanceof Date
+        ? r.local_date.toISOString().slice(0, 10)
+        : String(r.local_date).slice(0, 10),
+    );
   }
 
   async findByUserAndDateRange(

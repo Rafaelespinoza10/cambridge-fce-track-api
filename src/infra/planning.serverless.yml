@@ -48,6 +48,13 @@ functions:
           path: /plans/weeks/{weekId}/days/{dayId}/activities
           method: POST
 
+  planningGetActivity:
+    handler: src/controllers/planningController.getActivity
+    events:
+      - httpApi:
+          path: /plans/activities/{plannedActivityId}
+          method: GET
+
   planningUpdateActivity:
     handler: src/controllers/planningController.updateActivity
     events:

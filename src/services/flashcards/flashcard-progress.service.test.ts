@@ -461,13 +461,9 @@ describe('FlashcardProgressService.getReviewSummary — timezone resolution', ()
     );
   });
 
-  it('rejects when the user has no profile', async () => {
+  it('defaults to UTC when the user has no profile', async () => {
     const { service } = setup({ user: makeUser({}, null) });
-    await assert.rejects(
-      () => service.getReviewSummary(USER_ID, NOW),
-      (error: unknown) =>
-        error instanceof FlashcardProgressError &&
-        error.code === FlashcardProgressErrorCode.PROFILE_NOT_FOUND,
-    );
+    const summary = await service.getReviewSummary(USER_ID, NOW);
+    assert.equal(summary.day.timezone, 'UTC');
   });
 });

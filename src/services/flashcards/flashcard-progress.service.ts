@@ -17,6 +17,20 @@ import type {
   FlashcardReviewSummaryDto,
 } from '../../interfaces/flashcards/flashcard-progress.interface';
 
+function addCalendarDays(dateString: string, days: number): string {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function buildReviewWeek(localDate: string, completedDates: string[]) {
+  const completed = new Set(completedDates);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = addCalendarDays(localDate, index - 6);
+    return { date, completed: completed.has(date) };
+  });
+}
+
 export enum FlashcardProgressErrorCode {
   INVALID_INPUT = 'invalid_input',
   USER_NOT_FOUND = 'user_not_found',
@@ -141,12 +155,10 @@ class FlashcardProgressService {
       throw new FlashcardProgressError('User not found', FlashcardProgressErrorCode.USER_NOT_FOUND);
     }
     const profile = user.profile as User['profile'] | null;
-    if (profile === null || profile === undefined) {
-      throw new FlashcardProgressError(
-        'User profile not found',
-        FlashcardProgressErrorCode.PROFILE_NOT_FOUND,
-      );
-    }
+    // El resumen también se muestra en la pantalla de mazos, incluso para
+    // cuentas antiguas que todavía no tienen fila en user_profiles. UTC es
+    // un fallback seguro hasta que el usuario configure su zona horaria.
+    if (profile === null || profile === undefined) return DEFAULT_TIMEZONE;
 
     if (profile.timezone === null) {
       return DEFAULT_TIMEZONE;
@@ -201,6 +213,7 @@ class FlashcardProgressService {
 
     const completedDates = await this.dailyReviewStatsRepo().findCompletedDates(userId);
     const streak = calculateFlashcardStreak(completedDates, localDate);
+    const week = buildReviewWeek(localDate, completedDates);
 
     const day =
       dailyStat === null
@@ -233,6 +246,7 @@ class FlashcardProgressService {
       preferences: toPreferencesDto(preference),
       day,
       streak,
+      week,
     };
   }
 }
