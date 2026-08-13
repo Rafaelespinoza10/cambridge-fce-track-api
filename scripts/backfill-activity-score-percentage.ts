@@ -35,8 +35,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DataSource, IsNull } from 'typeorm';
 
+import { AppDataSource } from '../src/config/database';
 import { ActivityScore } from '../src/models/ActivityScore';
-import { ActivityScoreDetail } from '../src/models/ActivityScoreDetail';
 import { ScoreType } from '../src/models/enums';
 import { deriveFallbackPercentage } from '../src/services/scoring/scoring.service';
 
@@ -133,13 +133,17 @@ async function main(): Promise<void> {
   console.log(`Mode       : ${APPLY ? 'APPLY (will write changes)' : 'DRY RUN (no writes — pass --apply to write)'}`);
   console.log('');
 
+  // Reuses AppDataSource's full entity list instead of a local subset —
+  // ActivityScore has string-referenced relations (User, PlannedActivity,
+  // Skill, ExamSection, ActivityScoreDetail) that TypeORM can't resolve
+  // unless every referenced entity is registered on the same DataSource.
   const dataSource = new DataSource({
     type: 'postgres',
     url: databaseUrl,
     ssl: getSslConfig(databaseUrl),
     synchronize: false,
     logging: false,
-    entities: [ActivityScore, ActivityScoreDetail],
+    entities: AppDataSource.options.entities,
   });
 
   await dataSource.initialize();
