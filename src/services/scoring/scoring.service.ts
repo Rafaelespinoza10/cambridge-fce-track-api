@@ -31,6 +31,21 @@ function roundTwo(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Fallback percentage derivation for score types that don't compute it from
+ * correct_answers/total_questions (CORRECT_ANSWERS) or rubric details
+ * (RUBRIC) — namely CUSTOM, PERCENTAGE and TIME_ONLY. Exported standalone
+ * (rather than inlined) so it's unit-testable without the DB seam
+ * registerScore/updateScore both require.
+ */
+export function deriveFallbackPercentage(
+  rawScore: number | null,
+  maxScore: number | null,
+): number | null {
+  if (rawScore === null || maxScore === null || maxScore <= 0) return null;
+  return roundTwo((rawScore / maxScore) * 100);
+}
+
 // ── Mappers ────────────────────────────────────────────────────────────────────
 
 function toSafeSkill(skill: Skill): SafeScoreSkill {
@@ -158,6 +173,16 @@ class ScoringService {
       }
     }
 
+    // Fallback for score types with no dedicated calculation above (custom,
+    // percentage, time_only, or correct_answers/rubric sent without the
+    // fields they normally derive percentage from): derive it directly from
+    // rawScore/maxScore whenever both are present, so every stat that reads
+    // ActivityScore.percentage (home summary, recent activities, skill
+    // averages) sees a value instead of silently skipping the row.
+    if (percentage === null) {
+      percentage = deriveFallbackPercentage(rawScore, maxScore);
+    }
+
     if (
       body.difficulty !== undefined &&
       body.difficulty !== null &&
@@ -275,6 +300,23 @@ class ScoringService {
       updateData.raw_score = body.rawScore !== null ? String(body.rawScore) : null;
     if (body.maxScore !== undefined)
       updateData.max_score = body.maxScore !== null ? String(body.maxScore) : null;
+
+    // Same fallback as registerScore: for score types that don't derive
+    // percentage from correct_answers/total_questions or rubric details,
+    // recompute it whenever rawScore or maxScore changes so it never drifts
+    // out of sync with the values actually shown/edited by the user.
+    if (
+      existing.score_type !== ScoreType.CORRECT_ANSWERS &&
+      existing.score_type !== ScoreType.RUBRIC &&
+      (body.rawScore !== undefined || body.maxScore !== undefined)
+    ) {
+      const effectiveRawScore =
+        body.rawScore !== undefined ? body.rawScore : parseNumeric(existing.raw_score);
+      const effectiveMaxScore =
+        body.maxScore !== undefined ? body.maxScore : parseNumeric(existing.max_score);
+      const fallback = deriveFallbackPercentage(effectiveRawScore, effectiveMaxScore);
+      updateData.percentage = fallback !== null ? String(fallback) : null;
+    }
 
     if (body.attemptedAt !== undefined && body.attemptedAt !== null) {
       const parsed = new Date(body.attemptedAt);
