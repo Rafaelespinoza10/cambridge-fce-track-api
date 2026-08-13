@@ -75,3 +75,20 @@ export interface ScoreHistoryFilters {
   limit?: number;
   offset?: number;
 }
+
+export interface ScoreHistoryExportRow {
+  scoreId: string;
+  plannedActivityId: string;
+  activityTitle: string;
+  skillName: string;
+  scoreType: ScoreType;
+  correctAnswers: number | string;
+  totalQuestions: number | string;
+  percentage: number | string;
+  rawScore: number | string;
+  maxScore: number | string;
+  timeSpentMinutes: number | string;
+  difficulty: DifficultyLevel | string;
+  notes: string;
+  attemptedAt: string;
+}

@@ -41,6 +41,13 @@ functions:
           path: /scores
           method: GET
 
+  scoringExportScoreHistory:
+    handler: src/controllers/scoringController.exportScoreHistory
+    events:
+      - httpApi:
+          path: /scores/export
+          method: GET
+
   scoringGetScore:
     handler: src/controllers/scoringController.getScore
     events:

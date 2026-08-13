@@ -50,6 +50,14 @@ interface HistoryQueryOptions {
   offset: number;
 }
 
+interface HistoryExportQueryOptions {
+  userId: string;
+  skillId?: string;
+  scoreType?: ScoreType;
+  from?: Date;
+  to?: Date;
+}
+
 class ScoringRepository {
   private readonly scoreRepo: Repository<ActivityScore>;
   private readonly detailRepo: Repository<ActivityScoreDetail>;
@@ -162,6 +170,33 @@ class ScoringRepository {
     return qb.getManyAndCount();
   }
 
+  async findScoreHistoryForExport(options: HistoryExportQueryOptions): Promise<ActivityScore[]> {
+    const qb = this.scoreRepo
+      .createQueryBuilder('score')
+      .leftJoinAndSelect('score.score_details', 'sd')
+      .leftJoinAndSelect('score.skill', 'skill')
+      .leftJoinAndSelect('score.planned_activity', 'pa')
+      .where('score.user_id = :userId', { userId: options.userId })
+      .andWhere('score.deleted_at IS NULL');
+
+    if (options.skillId !== undefined) {
+      qb.andWhere('score.skill_id = :skillId', { skillId: options.skillId });
+    }
+    if (options.scoreType !== undefined) {
+      qb.andWhere('score.score_type = :scoreType', { scoreType: options.scoreType });
+    }
+    if (options.from !== undefined) {
+      qb.andWhere('score.attempted_at >= :from', { from: options.from });
+    }
+    if (options.to !== undefined) {
+      qb.andWhere('score.attempted_at <= :to', { to: options.to });
+    }
+
+    qb.orderBy('score.attempted_at', 'DESC');
+
+    return qb.getMany();
+  }
+
   async updateScore(scoreId: string, data: UpdateScoreData): Promise<void> {
     await this.scoreRepo.update({ id: scoreId }, data);
   }
@@ -192,4 +227,10 @@ class ScoringRepository {
 }
 
 export { ScoringRepository };
-export type { CreateScoreData, CreateScoreDetailData, UpdateScoreData, HistoryQueryOptions };
+export type {
+  CreateScoreData,
+  CreateScoreDetailData,
+  UpdateScoreData,
+  HistoryQueryOptions,
+  HistoryExportQueryOptions,
+};
