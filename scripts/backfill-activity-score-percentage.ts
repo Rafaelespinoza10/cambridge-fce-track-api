@@ -130,7 +130,9 @@ async function main(): Promise<void> {
 
   console.log(`Stage      : ${STAGE}`);
   console.log(`DB target  : ${maskUrl(databaseUrl)}`);
-  console.log(`Mode       : ${APPLY ? 'APPLY (will write changes)' : 'DRY RUN (no writes — pass --apply to write)'}`);
+  console.log(
+    `Mode       : ${APPLY ? 'APPLY (will write changes)' : 'DRY RUN (no writes — pass --apply to write)'}`,
+  );
   console.log('');
 
   // Reuses AppDataSource's full entity list instead of a local subset —
@@ -185,7 +187,9 @@ async function main(): Promise<void> {
     console.log('');
     console.log('---');
     console.log(`${derivable} row(s) ${APPLY ? 'updated' : 'would be updated'}.`);
-    console.log(`${notDerivable} row(s) have no raw_score/max_score (or rubric details) to derive a percentage from — left as-is.`);
+    console.log(
+      `${notDerivable} row(s) have no raw_score/max_score (or rubric details) to derive a percentage from — left as-is.`,
+    );
     if (!APPLY && derivable > 0) {
       console.log('\nRe-run with --apply to write these changes.');
     }
