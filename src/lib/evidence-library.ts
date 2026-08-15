@@ -1,6 +1,11 @@
 import { StorageProvider } from '@models/enums';
 import { EvidenceFile } from '@models/EvidenceFile';
-import type { FileCategory, LinkedTo, SafeEvidence } from '../interfaces/evidence/evidence.interface';
+import type {
+  EvidenceContext,
+  FileCategory,
+  LinkedTo,
+  SafeEvidence,
+} from '../interfaces/evidence/evidence.interface';
 
 export function createError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -37,6 +42,26 @@ export function getCategoryFromMimeType(mimeType: string): FileCategory | null {
   return null;
 }
 
+/**
+ * Only resolvable when findMany's joins were used (planned_activity /
+ * activity_score / mock_test relations loaded) — a plain repo.create()/save()
+ * result (e.g. right after createEvidence) won't have these populated, and
+ * that's fine: this just returns null rather than throwing.
+ */
+function resolveContext(e: EvidenceFile): EvidenceContext | null {
+  if (e.mock_test) return { label: e.mock_test.name, skillName: null };
+  if (e.activity_score?.planned_activity) {
+    return {
+      label: e.activity_score.planned_activity.title,
+      skillName: e.activity_score.skill?.name ?? null,
+    };
+  }
+  if (e.planned_activity) {
+    return { label: e.planned_activity.title, skillName: e.planned_activity.skill?.name ?? null };
+  }
+  return null;
+}
+
 export function toSafeEvidence(e: EvidenceFile): SafeEvidence {
   let linkedTo: LinkedTo | null = null;
   let linkedId: string | null = null;
@@ -69,6 +94,7 @@ export function toSafeEvidence(e: EvidenceFile): SafeEvidence {
     category,
     linkedTo,
     linkedId,
+    context: resolveContext(e),
     uploadedAt: e.uploaded_at,
     createdAt: e.created_at,
   };

@@ -63,6 +63,11 @@ class EvidenceRepository {
   async findMany(options: EvidenceListOptions): Promise<[EvidenceFile[], number]> {
     const qb = this.repo
       .createQueryBuilder('ef')
+      .leftJoinAndSelect('ef.planned_activity', 'planned_activity')
+      .leftJoinAndSelect('ef.activity_score', 'activity_score')
+      .leftJoinAndSelect('activity_score.planned_activity', 'score_planned_activity')
+      .leftJoinAndSelect('activity_score.skill', 'score_skill')
+      .leftJoinAndSelect('ef.mock_test', 'mock_test')
       .where('ef.user_id = :userId', { userId: options.userId })
       .andWhere('ef.deleted_at IS NULL');
 
