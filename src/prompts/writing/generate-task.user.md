@@ -1,0 +1,6 @@
+Generate a new Cambridge B2 First (FCE) Writing Part 1 essay task for:
+
+Target CEFR level: {{targetLevel}}
+Word count range: {{minWords}}-{{maxWords}} words
+
+Return a short title, and instructions written exactly as they would appear on a real Cambridge exam paper (context/input notes + the content points to address).
