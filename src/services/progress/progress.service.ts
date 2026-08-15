@@ -10,9 +10,9 @@ import {
 } from '@lib/progress-library';
 import type {
   ExamGoalMetric,
+  ExamPartMetricsResponse,
   LastMockMetric,
   MetricsResponse,
-  PracticePartMetricsResponse,
   RecentActivityMetric,
   ScoreEvolutionResponse,
   SkillMetric,
@@ -148,16 +148,17 @@ class ProgressService {
     };
   }
 
-  async getPracticePartMetrics(userId: string): Promise<PracticePartMetricsResponse> {
+  async getExamPartMetrics(userId: string): Promise<ExamPartMetricsResponse> {
     const ds = await getDatabaseConnection();
     const repo = new ProgressRepository(ds);
-    const rows = await repo.getPracticePartMetrics(userId);
+    const rows = await repo.getExamPartMetrics(userId);
 
     return {
       parts: rows.map((row) => ({
-        examCode: row.examCode,
-        paperCode: row.paperCode,
-        partCode: row.partCode,
+        sectionSlug: row.sectionSlug,
+        sectionName: row.sectionName,
+        skillSlug: row.skillSlug,
+        skillName: row.skillName,
         completedAttempts: row.completedAttempts,
         correctCount: row.correctCount,
         totalCount: row.totalCount,

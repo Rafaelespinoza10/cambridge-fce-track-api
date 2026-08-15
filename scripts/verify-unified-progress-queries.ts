@@ -79,7 +79,11 @@ async function main(): Promise<void> {
 
   try {
     const [{ id: userId }] = await dataSource.query<{ id: string }[]>(
-      `SELECT id FROM users ORDER BY created_at ASC LIMIT 1`,
+      `SELECT sc.user_id AS id FROM activity_scores sc
+       WHERE sc.deleted_at IS NULL AND sc.percentage IS NOT NULL
+       GROUP BY sc.user_id
+       ORDER BY COUNT(*) DESC
+       LIMIT 1`,
     );
     if (!userId) {
       console.log('No users found in this database — nothing to verify against.');
@@ -101,6 +105,7 @@ async function main(): Promise<void> {
       overallWeekly,
       writingMetrics,
       scoreEvolution,
+      examPartMetrics,
     ] = await Promise.all([
       repo.getWeeklyScoreStats(userId, weekStart, weekEnd),
       repo.getSkillAverages(userId, since),
@@ -110,6 +115,7 @@ async function main(): Promise<void> {
       repo.getOverallWeeklyScores(userId, since),
       repo.getWritingMetrics(userId),
       repo.getScoreEvolution(userId, since, weekEnd),
+      repo.getExamPartMetrics(userId),
     ]);
 
     console.log('getWeeklyScoreStats (wide range):', weeklyScoreStats);
@@ -124,6 +130,7 @@ async function main(): Promise<void> {
       scoreEvolution.slice(0, 5),
       scoreEvolution.length > 5 ? '...' : '',
     );
+    console.log(`getExamPartMetrics: ${examPartMetrics.length} row(s)`, examPartMetrics);
 
     console.log('\nAll queries executed without error.');
   } finally {
