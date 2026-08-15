@@ -57,6 +57,10 @@ interface FindDueOptions {
   offset?: number;
 }
 
+interface CountDueOptions {
+  deckId?: string;
+}
+
 class FlashcardsRepository {
   private readonly flashcardRepo: Repository<Flashcard>;
 
@@ -190,8 +194,12 @@ class FlashcardsRepository {
     return qb.getMany();
   }
 
-  async countDueByUser(userId: string, asOf: Date): Promise<number> {
-    return this.flashcardRepo
+  async countDueByUser(
+    userId: string,
+    asOf: Date,
+    options: CountDueOptions = {},
+  ): Promise<number> {
+    const qb = this.flashcardRepo
       .createQueryBuilder('flashcard')
       .innerJoin('flashcard.deck', 'deck')
       .where('flashcard.user_id = :userId', { userId })
@@ -199,8 +207,12 @@ class FlashcardsRepository {
       .andWhere('flashcard.status <> :suspended', { suspended: FlashcardStatus.SUSPENDED })
       .andWhere('flashcard.next_review_at <= :asOf', { asOf })
       .andWhere('deck.deleted_at IS NULL')
-      .andWhere('deck.is_archived = false')
-      .getCount();
+      .andWhere('deck.is_archived = false');
+
+    if (options.deckId !== undefined)
+      qb.andWhere('flashcard.deck_id = :deckId', { deckId: options.deckId });
+
+    return qb.getCount();
   }
 
   async updateContent(
@@ -265,6 +277,7 @@ export type {
   UpdateFlashcardContentData,
   UpdateSchedulingStateData,
   FindDueOptions,
+  CountDueOptions,
   FindByDeckFilters,
   FlashcardListStatusFilter,
 };

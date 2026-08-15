@@ -7,7 +7,7 @@ import { DailyReviewStatsRepository } from '../../repositories/daily-review-stat
 import type { CreateDailyReviewStatData } from '../../repositories/daily-review-stats.repository';
 import { DecksRepository } from '../../repositories/decks.repository';
 import { FlashcardsRepository } from '../../repositories/flashcards.repository';
-import type { FindDueOptions } from '../../repositories/flashcards.repository';
+import type { FindDueOptions, CountDueOptions } from '../../repositories/flashcards.repository';
 
 import { resolveLocalDay, isValidTimeZone } from '../../lib/timezone';
 
@@ -66,7 +66,7 @@ interface DecksRepositoryPort {
 
 interface FlashcardsRepositoryPort {
   findDueByUser(userId: string, asOf: Date, options?: FindDueOptions): Promise<Flashcard[]>;
-  countDueByUser(userId: string, asOf: Date): Promise<number>;
+  countDueByUser(userId: string, asOf: Date, options?: CountDueOptions): Promise<number>;
 }
 
 type RepositorySource = DataSource | EntityManager;
@@ -258,14 +258,19 @@ class StartFlashcardReviewSessionService {
     }
 
     // 5. DailyReviewStat del día local — get-or-create con snapshots inmutables.
-    // cardsDueAtFirstSession/requiredReviews se calculan SOLO al crear la fila;
-    // usan el conteo global (sin filtrar por deckId), porque la meta diaria es
-    // a nivel de cuenta, no de mazo — aunque la cola devuelta sí respete deckId.
+    // cardsDueAtFirstSession/requiredReviews se calculan SOLO al crear la fila,
+    // con el mismo alcance de deckId que la cola de esta sesión — si la primera
+    // sesión del día es dentro de un mazo, la meta nunca exige más tarjetas de
+    // las que ese mazo puede llegar a ofrecer. Sin deckId, sigue siendo la
+    // cuenta completa.
     let dailyStat = await statsRepo.findByUserAndDate(input.userId, localDay.localDate);
     if (dailyStat === null) {
+      const dueCountOptions: CountDueOptions = {};
+      if (input.deckId !== undefined) dueCountOptions.deckId = input.deckId;
       const cardsDueAtFirstSession = await flashcardsRepo.countDueByUser(
         input.userId,
         input.requestedAt,
+        dueCountOptions,
       );
       const requiredReviews = Math.min(preferences.daily_goal, cardsDueAtFirstSession);
       await statsRepo.createDailyStat({
