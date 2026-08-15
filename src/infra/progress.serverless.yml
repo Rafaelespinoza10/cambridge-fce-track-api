@@ -41,6 +41,13 @@ functions:
           path: /metrics/writing
           method: GET
 
+  progressScoreEvolution:
+    handler: src/controllers/progressController.getScoreEvolution
+    events:
+      - httpApi:
+          path: /metrics/score-evolution
+          method: GET
+
 package:
   individually: true
 

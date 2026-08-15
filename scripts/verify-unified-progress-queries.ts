@@ -92,16 +92,25 @@ async function main(): Promise<void> {
     const weekStart = '2000-01-01';
     const weekEnd = '2100-01-01';
 
-    const [weeklyScoreStats, skillAverages, studyDates, monthlyProgress, recentActivities, overallWeekly, writingMetrics] =
-      await Promise.all([
-        repo.getWeeklyScoreStats(userId, weekStart, weekEnd),
-        repo.getSkillAverages(userId, since),
-        repo.getStudyDates(userId),
-        repo.getMonthlySkillProgress(userId, since),
-        repo.getRecentActivities(userId, 10),
-        repo.getOverallWeeklyScores(userId, since),
-        repo.getWritingMetrics(userId),
-      ]);
+    const [
+      weeklyScoreStats,
+      skillAverages,
+      studyDates,
+      monthlyProgress,
+      recentActivities,
+      overallWeekly,
+      writingMetrics,
+      scoreEvolution,
+    ] = await Promise.all([
+      repo.getWeeklyScoreStats(userId, weekStart, weekEnd),
+      repo.getSkillAverages(userId, since),
+      repo.getStudyDates(userId),
+      repo.getMonthlySkillProgress(userId, since),
+      repo.getRecentActivities(userId, 10),
+      repo.getOverallWeeklyScores(userId, since),
+      repo.getWritingMetrics(userId),
+      repo.getScoreEvolution(userId, since, weekEnd),
+    ]);
 
     console.log('getWeeklyScoreStats (wide range):', weeklyScoreStats);
     console.log('getSkillAverages:', skillAverages);
@@ -110,6 +119,11 @@ async function main(): Promise<void> {
     console.log(`getRecentActivities: ${recentActivities.length} row(s)`, recentActivities);
     console.log(`getOverallWeeklyScores: ${overallWeekly.length} row(s)`, overallWeekly.slice(0, 5));
     console.log('getWritingMetrics:', writingMetrics);
+    console.log(
+      `getScoreEvolution: ${scoreEvolution.length} row(s)`,
+      scoreEvolution.slice(0, 5),
+      scoreEvolution.length > 5 ? '...' : '',
+    );
 
     console.log('\nAll queries executed without error.');
   } finally {
