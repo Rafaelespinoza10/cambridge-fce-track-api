@@ -154,7 +154,9 @@ async function main(): Promise<void> {
        ORDER BY pa.created_at ASC`,
     );
 
-    console.log(`Found ${candidates.length} freeform activity row(s) with no resolvable exam section.\n`);
+    console.log(
+      `Found ${candidates.length} freeform activity row(s) with no resolvable exam section.\n`,
+    );
 
     let matched = 0;
     let unmatched = 0;
@@ -176,7 +178,9 @@ async function main(): Promise<void> {
 
       if (resolvedSection === null) {
         unmatched++;
-        console.log(`  skip   ${row.id}  skill=${skillName ?? '—'}  title="${row.title}"  (no parseable part)`);
+        console.log(
+          `  skip   ${row.id}  skill=${skillName ?? '—'}  title="${row.title}"  (no parseable part)`,
+        );
         continue;
       }
 
@@ -196,7 +200,9 @@ async function main(): Promise<void> {
     console.log('');
     console.log('---');
     console.log(`${matched} row(s) ${APPLY ? 'updated' : 'would be updated'}.`);
-    console.log(`${unmatched} row(s) had a title that didn't parse into a known skill + part — left as-is.`);
+    console.log(
+      `${unmatched} row(s) had a title that didn't parse into a known skill + part — left as-is.`,
+    );
     if (!APPLY && matched > 0) {
       console.log('\nRe-run with --apply to write these changes.');
     }

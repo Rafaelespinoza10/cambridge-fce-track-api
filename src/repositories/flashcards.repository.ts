@@ -194,11 +194,7 @@ class FlashcardsRepository {
     return qb.getMany();
   }
 
-  async countDueByUser(
-    userId: string,
-    asOf: Date,
-    options: CountDueOptions = {},
-  ): Promise<number> {
+  async countDueByUser(userId: string, asOf: Date, options: CountDueOptions = {}): Promise<number> {
     const qb = this.flashcardRepo
       .createQueryBuilder('flashcard')
       .innerJoin('flashcard.deck', 'deck')

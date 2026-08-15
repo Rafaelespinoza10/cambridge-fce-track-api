@@ -71,9 +71,8 @@ export interface GenerateWritingTaskServiceDeps {
   writingTasks?: (source: RepositorySource) => WritingTasksRepositoryPort;
 }
 
-const DEFAULT_WRITING_TASKS_FACTORY = (
-  source: RepositorySource,
-): WritingTasksRepositoryPort => new WritingTasksRepository(source);
+const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
+  new WritingTasksRepository(source);
 
 const REQUEST_TIMEOUT_MS = 25_000;
 const RESPONSE_TEMPERATURE = 0.7;
@@ -234,10 +233,7 @@ export class GenerateWritingTaskService {
     private readonly deps: GenerateWritingTaskServiceDeps,
   ) {}
 
-  async execute(
-    userId: string,
-    input: GenerateWritingTaskRequest,
-  ): Promise<WritingTaskSafeDto> {
+  async execute(userId: string, input: GenerateWritingTaskRequest): Promise<WritingTaskSafeDto> {
     if (typeof userId !== 'string' || userId.trim() === '') {
       invalidInput('userId is required');
     }
@@ -280,7 +276,14 @@ export class GenerateWritingTaskService {
 
     try {
       return await this.dataSource.transaction((manager) =>
-        this.persist(manager, userId, input.idempotencyKey, normalized, generated, generationMetadata),
+        this.persist(
+          manager,
+          userId,
+          input.idempotencyKey,
+          normalized,
+          generated,
+          generationMetadata,
+        ),
       );
     } catch (err: unknown) {
       if (isIdempotencyConstraintViolation(err)) {

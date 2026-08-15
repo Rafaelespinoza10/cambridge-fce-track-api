@@ -158,9 +158,7 @@ function buildFakeDailyReviewStatsRepo(world: World): DailyReviewStatsRepository
       return OK_RESULT;
     },
     markGoalCompleted: async (userId, localDate) => {
-      const stat = world.dailyStats.find(
-        (s) => s.user_id === userId && s.local_date === localDate,
-      );
+      const stat = world.dailyStats.find((s) => s.user_id === userId && s.local_date === localDate);
       if (stat === undefined) return NO_MATCH_RESULT;
       stat.goal_completed = true;
       return OK_RESULT;

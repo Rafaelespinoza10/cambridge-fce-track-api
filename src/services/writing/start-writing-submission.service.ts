@@ -42,9 +42,8 @@ export interface StartWritingSubmissionServiceDeps {
   writingSubmissions?: (source: RepositorySource) => WritingSubmissionsRepositoryPort;
 }
 
-const DEFAULT_WRITING_TASKS_FACTORY = (
-  source: RepositorySource,
-): WritingTasksRepositoryPort => new WritingTasksRepository(source);
+const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
+  new WritingTasksRepository(source);
 const DEFAULT_WRITING_SUBMISSIONS_FACTORY = (
   source: RepositorySource,
 ): WritingSubmissionsRepositoryPort => new WritingSubmissionsRepository(source);

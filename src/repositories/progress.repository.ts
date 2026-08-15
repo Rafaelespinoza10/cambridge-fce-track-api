@@ -283,11 +283,7 @@ class ProgressRepository {
    * doesn't map to a single skill and is left NULL, same as any other
    * unmapped row.
    */
-  async getScoreEvolution(
-    userId: string,
-    from: string,
-    to: string,
-  ): Promise<ScoreEvolutionRow[]> {
+  async getScoreEvolution(userId: string, from: string, to: string): Promise<ScoreEvolutionRow[]> {
     const rows = await this.ds.query<
       { occurredAt: Date; skillSlug: string | null; skillName: string | null; percentage: string }[]
     >(

@@ -15,7 +15,11 @@ import type { WritingCorrectionFlashcardDraftResponse } from '../interfaces/writ
 type NowProvider = () => Date;
 
 interface StartSubmissionPort {
-  execute(userId: string, taskId: string, startedAt: Date): Promise<WritingSubmissionStartResultDto>;
+  execute(
+    userId: string,
+    taskId: string,
+    startedAt: Date,
+  ): Promise<WritingSubmissionStartResultDto>;
 }
 
 interface GetActiveSubmissionPort {

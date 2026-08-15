@@ -121,9 +121,15 @@ async function main(): Promise<void> {
     console.log('getWeeklyScoreStats (wide range):', weeklyScoreStats);
     console.log('getSkillAverages:', skillAverages);
     console.log(`getStudyDates: ${studyDates.length} distinct day(s)`, studyDates.slice(0, 5));
-    console.log(`getMonthlySkillProgress: ${monthlyProgress.length} row(s)`, monthlyProgress.slice(0, 5));
+    console.log(
+      `getMonthlySkillProgress: ${monthlyProgress.length} row(s)`,
+      monthlyProgress.slice(0, 5),
+    );
     console.log(`getRecentActivities: ${recentActivities.length} row(s)`, recentActivities);
-    console.log(`getOverallWeeklyScores: ${overallWeekly.length} row(s)`, overallWeekly.slice(0, 5));
+    console.log(
+      `getOverallWeeklyScores: ${overallWeekly.length} row(s)`,
+      overallWeekly.slice(0, 5),
+    );
     console.log('getWritingMetrics:', writingMetrics);
     console.log(
       `getScoreEvolution: ${scoreEvolution.length} row(s)`,

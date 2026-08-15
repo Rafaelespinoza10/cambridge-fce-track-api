@@ -292,7 +292,8 @@ const WRITING_CONTEXT: WritingCorrectionDraftContext = {
   targetLevel: EnglishLevel.B2,
   originalExcerpt: 'I am agree with this opinion',
   correctedExcerpt: 'I agree with this opinion',
-  explanation: '"Agree" is a verb in English, not an adjective — never precede it with "am/is/are".',
+  explanation:
+    '"Agree" is a verb in English, not an adjective — never precede it with "am/is/are".',
   category: 'grammar',
 };
 

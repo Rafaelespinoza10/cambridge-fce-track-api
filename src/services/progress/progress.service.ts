@@ -187,7 +187,11 @@ class ProgressService {
     };
   }
 
-  async getScoreEvolution(userId: string, from: string, to: string): Promise<ScoreEvolutionResponse> {
+  async getScoreEvolution(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<ScoreEvolutionResponse> {
     const fromDate = new Date(from);
     if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
     const toDate = new Date(to);

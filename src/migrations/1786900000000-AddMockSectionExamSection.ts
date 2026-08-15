@@ -4,9 +4,7 @@ export class AddMockSectionExamSection1786900000000 implements MigrationInterfac
   name = 'AddMockSectionExamSection1786900000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE "mock_section_scores" ADD COLUMN "exam_section_id" UUID`,
-    );
+    await queryRunner.query(`ALTER TABLE "mock_section_scores" ADD COLUMN "exam_section_id" UUID`);
     await queryRunner.query(
       `ALTER TABLE "mock_section_scores" ADD CONSTRAINT "fk_mock_section_scores_exam_section" FOREIGN KEY ("exam_section_id")
         REFERENCES "exam_sections" ("id") ON DELETE SET NULL`,

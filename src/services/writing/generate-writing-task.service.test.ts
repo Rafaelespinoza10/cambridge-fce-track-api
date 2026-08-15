@@ -149,7 +149,11 @@ describe('GenerateWritingTaskService.execute — input validation', () => {
   it('rejects a non-essay taskType', async () => {
     const { service } = makeService(async () => validResponse());
     await assert.rejects(
-      () => service.execute(USER_ID, { ...essayRequest(), taskType: 'situational_writing' as WritingTaskType }),
+      () =>
+        service.execute(USER_ID, {
+          ...essayRequest(),
+          taskType: 'situational_writing' as WritingTaskType,
+        }),
       (err: unknown) => assertGenErr(err, GenerateWritingTaskErrorCode.INVALID_INPUT),
     );
   });

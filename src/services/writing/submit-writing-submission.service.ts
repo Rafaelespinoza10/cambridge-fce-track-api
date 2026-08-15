@@ -80,9 +80,8 @@ export interface SubmitWritingSubmissionServiceDeps {
   writingSubmissions?: (source: RepositorySource) => WritingSubmissionsRepositoryPort;
 }
 
-const DEFAULT_WRITING_TASKS_FACTORY = (
-  source: RepositorySource,
-): WritingTasksRepositoryPort => new WritingTasksRepository(source);
+const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
+  new WritingTasksRepository(source);
 const DEFAULT_WRITING_SUBMISSIONS_FACTORY = (
   source: RepositorySource,
 ): WritingSubmissionsRepositoryPort => new WritingSubmissionsRepository(source);
@@ -101,7 +100,12 @@ const REWRITTEN_TEXT_MAX_LENGTH = 4000;
 const MAX_CORRECTIONS = 15;
 const MAX_RAW_CORRECTIONS = 30;
 
-const REQUIRED_CRITERIA = ['content', 'communicative_achievement', 'organization', 'language'] as const;
+const REQUIRED_CRITERIA = [
+  'content',
+  'communicative_achievement',
+  'organization',
+  'language',
+] as const;
 const VALID_CORRECTION_CATEGORIES = new Set<string>([
   'grammar',
   'vocabulary',
@@ -123,7 +127,11 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function buildMessages(task: WritingTask, submittedText: string, wordCount: number): LLMChatMessage[] {
+function buildMessages(
+  task: WritingTask,
+  submittedText: string,
+  wordCount: number,
+): LLMChatMessage[] {
   const userPrompt = renderPromptTemplate(USER_PROMPT_TEMPLATE, {
     taskTitle: task.title,
     taskInstructions: task.instructions,
@@ -229,10 +237,16 @@ function validateCriteria(value: unknown, submittedText: string): WritingCriteri
     if (!isPlainObject(raw)) invalidResponse(`criteria[${index}] must be an object`);
 
     const criterion = raw.criterion;
-    if (typeof criterion !== 'string' || !REQUIRED_CRITERIA.includes(criterion as (typeof REQUIRED_CRITERIA)[number])) {
-      invalidResponse(`criteria[${index}].criterion must be one of ${REQUIRED_CRITERIA.join(', ')}`);
+    if (
+      typeof criterion !== 'string' ||
+      !REQUIRED_CRITERIA.includes(criterion as (typeof REQUIRED_CRITERIA)[number])
+    ) {
+      invalidResponse(
+        `criteria[${index}].criterion must be one of ${REQUIRED_CRITERIA.join(', ')}`,
+      );
     }
-    if (seen.has(criterion)) invalidResponse(`criterion "${criterion}" was returned more than once`);
+    if (seen.has(criterion))
+      invalidResponse(`criterion "${criterion}" was returned more than once`);
     seen.add(criterion);
 
     const band = raw.band;
@@ -297,7 +311,9 @@ function validateCorrections(value: unknown, submittedText: string): WritingCorr
     if (!verifiesAgainst(originalExcerpt, submittedText)) continue;
 
     const explanation =
-      typeof raw.explanation === 'string' ? raw.explanation.trim().slice(0, EXPLANATION_MAX_LENGTH) : '';
+      typeof raw.explanation === 'string'
+        ? raw.explanation.trim().slice(0, EXPLANATION_MAX_LENGTH)
+        : '';
     if (explanation === '') continue;
 
     const category: WritingCorrectionCategory = VALID_CORRECTION_CATEGORIES.has(
@@ -318,7 +334,11 @@ function validateGradingResponse(value: unknown, submittedText: string): Writing
 
   const criteria = validateCriteria(value.criteria, submittedText);
   const corrections = validateCorrections(value.corrections, submittedText);
-  const rewrittenText = validateText(value.rewrittenText, 'rewrittenText', REWRITTEN_TEXT_MAX_LENGTH);
+  const rewrittenText = validateText(
+    value.rewrittenText,
+    'rewrittenText',
+    REWRITTEN_TEXT_MAX_LENGTH,
+  );
   const summary = validateText(value.summary, 'summary', SUMMARY_MAX_LENGTH);
 
   // Never trusted from the model's own arithmetic — computed here, always

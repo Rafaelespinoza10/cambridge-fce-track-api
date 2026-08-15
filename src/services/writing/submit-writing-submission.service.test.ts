@@ -101,8 +101,7 @@ function validGradingResponse() {
 }
 
 const FAKE_DATA_SOURCE = {
-  transaction: async <T>(work: (manager: EntityManager) => Promise<T>) =>
-    work({} as EntityManager),
+  transaction: async <T>(work: (manager: EntityManager) => Promise<T>) => work({} as EntityManager),
 } as unknown as DataSource;
 
 interface MakeServiceOverrides {

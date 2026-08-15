@@ -99,9 +99,7 @@ async function getWritingTaskHandler(
   }
 }
 
-export async function getWritingTask(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function getWritingTask(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   return getWritingTaskHandler(event, DEFAULT_DEPS);
 }
 
