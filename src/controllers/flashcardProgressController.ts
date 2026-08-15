@@ -17,6 +17,7 @@ interface FlashcardProgressServicePort {
   updatePreferences(
     userId: string,
     input: UpdateFlashcardPreferencesRequest,
+    now: Date,
   ): Promise<FlashcardPreferencesDto>;
   getReviewSummary(userId: string, now: Date): Promise<FlashcardReviewSummaryDto>;
 }
@@ -76,7 +77,7 @@ async function updateFlashcardPreferencesHandler(
 
   try {
     const { progress } = await deps.services();
-    const preferences = await progress.updatePreferences(payload.sub, body);
+    const preferences = await progress.updatePreferences(payload.sub, body, deps.now());
     return successResponse({ success: true, data: preferences }, 200);
   } catch (err: unknown) {
     return handleError(mapFlashcardProgressError(err));
