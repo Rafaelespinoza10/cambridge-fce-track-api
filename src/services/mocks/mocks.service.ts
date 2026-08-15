@@ -86,7 +86,14 @@ class MocksService {
       notes: body.notes ?? null,
     });
 
-    await repo.createSections(sections.map((s) => buildSectionData(mock.id, examType, s)));
+    const built = sections.map((s) => buildSectionData(mock.id, examType, s));
+    const examSectionIds = await repo.resolveExamSectionIds(
+      examType,
+      built.map((s) => s.sectionCode),
+    );
+    await repo.createSections(
+      built.map((s) => ({ ...s, examSectionId: examSectionIds.get(s.sectionCode) ?? null })),
+    );
 
     const full = await repo.findMockWithSections(mock.id);
     if (full === null) throw createError('Mock not found after creation', 500);
@@ -258,9 +265,14 @@ class MocksService {
 
     if (body.sections !== undefined && body.sections !== null) {
       validateSections(nextExamType, nextMockType, body.sections);
+      const built = body.sections.map((s) => buildSectionData(mockId, nextExamType, s));
+      const examSectionIds = await repo.resolveExamSectionIds(
+        nextExamType,
+        built.map((s) => s.sectionCode),
+      );
       await repo.replaceSections(
         mockId,
-        body.sections.map((s) => buildSectionData(mockId, nextExamType, s)),
+        built.map((s) => ({ ...s, examSectionId: examSectionIds.get(s.sectionCode) ?? null })),
       );
     }
 
@@ -430,7 +442,14 @@ class MocksService {
           notes,
         });
 
-        await repo.createSections(sections.map((s) => buildSectionData(mock.id, examType, s)));
+        const built = sections.map((s) => buildSectionData(mock.id, examType, s));
+        const examSectionIds = await repo.resolveExamSectionIds(
+          examType,
+          built.map((s) => s.sectionCode),
+        );
+        await repo.createSections(
+          built.map((s) => ({ ...s, examSectionId: examSectionIds.get(s.sectionCode) ?? null })),
+        );
 
         result.imported++;
       } catch (err) {
