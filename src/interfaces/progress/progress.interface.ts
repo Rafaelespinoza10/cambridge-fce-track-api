@@ -35,20 +35,27 @@ export interface ExamGoalMetric {
   daysUntilExam: number;
 }
 
-/** Aggregate performance for one concrete Cambridge exam part (for example UOE_PART_1). */
-export interface PracticePartMetric {
-  examCode: string;
-  paperCode: string;
-  partCode: string;
+/**
+ * Aggregate performance for one concrete Cambridge exam-section part (for
+ * example "Part 1 - Multiple Choice Cloze"), unified across Practice
+ * attempts, Writing submissions, and manually-logged activities.
+ * correctCount/totalCount are null when no Practice attempt contributed to
+ * this part (Writing/activities have no accuracy concept).
+ */
+export interface ExamPartMetric {
+  sectionSlug: string;
+  sectionName: string;
+  skillSlug: string;
+  skillName: string;
   completedAttempts: number;
-  correctCount: number;
-  totalCount: number;
+  correctCount: number | null;
+  totalCount: number | null;
   averageScore: number;
   lastAttemptAt: string;
 }
 
-export interface PracticePartMetricsResponse {
-  parts: PracticePartMetric[];
+export interface ExamPartMetricsResponse {
+  parts: ExamPartMetric[];
 }
 
 /** Average band for one of the 4 official Cambridge Writing criteria, across all graded submissions. */

@@ -4,9 +4,6 @@ import { PlanDay } from '../models/PlanDay';
 import { WeeklyPlan } from '../models/WeeklyPlan';
 import { MockTest } from '../models/MockTest';
 import { UserGoal } from '../models/UserGoal';
-import { PracticeAttempt } from '../models/PracticeAttempt';
-import { PracticeExercise } from '../models/PracticeExercise';
-import { PracticeAttemptStatus } from '../models/enums';
 
 interface WeeklyActivityStats {
   total: number;
@@ -42,13 +39,14 @@ interface OverallWeekRow {
   avgScore: number;
 }
 
-interface PracticePartMetricRow {
-  examCode: string;
-  paperCode: string;
-  partCode: string;
+interface ExamPartMetricRow {
+  sectionSlug: string;
+  sectionName: string;
+  skillSlug: string;
+  skillName: string;
   completedAttempts: number;
-  correctCount: number;
-  totalCount: number;
+  correctCount: number | null;
+  totalCount: number | null;
   averageScore: number;
   lastAttemptAt: Date;
 }
@@ -273,6 +271,17 @@ class ProgressRepository {
    * ActivityScore — Practice/Writing rows have no "edit" affordance, so
    * they never belong in that list. This is a separate, read-only
    * analytics view over the same unified_scores CTE.
+   *
+   * Mock exam sections are unioned in here only — not into
+   * UNIFIED_SCORES_CTE itself — because mocks are paper-level only
+   * (READING, USE_OF_ENGLISH, WRITING, LISTENING, SPEAKING; see
+   * MOCK_EXAM_CATALOG), so they can resolve to a Skill but never to the
+   * per-Cambridge-part granularity the Home dashboard methods sharing that
+   * CTE would otherwise imply. Keeping them scoped to this method means a
+   * logged mock only moves "Evolución por skill", not the Home weekly
+   * average/streak. C1's combined READING_AND_USE_OF_ENGLISH section
+   * doesn't map to a single skill and is left NULL, same as any other
+   * unmapped row.
    */
   async getScoreEvolution(
     userId: string,
@@ -282,12 +291,43 @@ class ProgressRepository {
     const rows = await this.ds.query<
       { occurredAt: Date; skillSlug: string | null; skillName: string | null; percentage: string }[]
     >(
-      `${UNIFIED_SCORES_CTE}
+      `${UNIFIED_SCORES_CTE},
+       mock_scores AS (
+         SELECT CAST(mss.percentage AS FLOAT) AS percentage,
+                COALESCE(mt.taken_at, mt.created_at) AS occurred_at,
+                CASE mss.section_code
+                  WHEN 'READING' THEN 'reading'
+                  WHEN 'USE_OF_ENGLISH' THEN 'use-of-english'
+                  WHEN 'WRITING' THEN 'writing'
+                  WHEN 'LISTENING' THEN 'listening'
+                  WHEN 'SPEAKING' THEN 'speaking'
+                  ELSE NULL
+                END AS skill_slug,
+                CASE mss.section_code
+                  WHEN 'READING' THEN 'Reading'
+                  WHEN 'USE_OF_ENGLISH' THEN 'Use of English'
+                  WHEN 'WRITING' THEN 'Writing'
+                  WHEN 'LISTENING' THEN 'Listening'
+                  WHEN 'SPEAKING' THEN 'Speaking'
+                  ELSE NULL
+                END AS skill_name
+         FROM mock_section_scores mss
+         INNER JOIN mock_tests mt ON mt.id = mss.mock_test_id AND mt.deleted_at IS NULL
+         WHERE mt.user_id = $1 AND mss.percentage IS NOT NULL
+       )
        SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
        FROM unified_scores
        WHERE user_id = $1 AND skill_slug IS NOT NULL AND percentage IS NOT NULL
          AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')
-       ORDER BY occurred_at ASC`,
+
+       UNION ALL
+
+       SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
+       FROM mock_scores
+       WHERE skill_slug IS NOT NULL
+         AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')
+
+       ORDER BY "occurredAt" ASC`,
       [userId, from, to],
     );
 
@@ -332,53 +372,90 @@ class ProgressRepository {
   }
 
   /**
-   * Completed practice attempts grouped by the exact exam paper part. This
-   * intentionally does not use ActivityScore: Practice attempts have their
-   * own reliable counts and percentage, and are not categorised as Skills.
+   * Completed attempts grouped by the exact Cambridge exam-section part,
+   * unified across Practice attempts, graded Writing submissions, and
+   * manually-logged activities that resolve to a real exam part. Mocks are
+   * deliberately excluded — they only report at paper level (READING,
+   * USE_OF_ENGLISH, ...), never at the per-part granularity this method
+   * needs (see getScoreEvolution for where mocks do count).
+   *
+   * Raw SQL (not QueryBuilder) for the same reason as UNIFIED_SCORES_CTE:
+   * no clean way to UNION three structurally different tables otherwise.
+   *
+   * Practice's part_code is SCREAMING_SNAKE (e.g. UOE_PART_1);
+   * exam_sections.slug is kebab-case (e.g. uoe-part-1) —
+   * LOWER(REPLACE(part_code, '_', '-')) converts one to the other exactly.
+   * Writing v1 is essay-only, which is exam_sections' 'writing-part-1'.
+   * Activities resolve their exam section via
+   * COALESCE(planned_activity, activity_template, custom_activity) —
+   * whichever of those three has exam_section_id set first.
+   *
+   * correctCount/totalCount are Practice-only (SUM of columns that are NULL
+   * for Writing/activity rows); a part with zero Practice attempts sums to
+   * NULL, meaning no accuracy line — Writing has no accuracy concept either.
    */
-  async getPracticePartMetrics(userId: string): Promise<PracticePartMetricRow[]> {
-    const rows = await this.ds
-      .createQueryBuilder(PracticeAttempt, 'attempt')
-      .innerJoin(
-        PracticeExercise,
-        'exercise',
-        'exercise.id = attempt.exercise_id AND exercise.deleted_at IS NULL',
-      )
-      .select('exercise.exam_code', 'examCode')
-      .addSelect('exercise.paper_code', 'paperCode')
-      .addSelect('exercise.part_code', 'partCode')
-      .addSelect('COUNT(attempt.id)', 'completedAttempts')
-      .addSelect('COALESCE(SUM(attempt.correct_count), 0)', 'correctCount')
-      .addSelect('COALESCE(SUM(attempt.total_count), 0)', 'totalCount')
-      .addSelect('AVG(CAST(attempt.percentage AS FLOAT))', 'averageScore')
-      .addSelect('MAX(attempt.submitted_at)', 'lastAttemptAt')
-      .where('attempt.user_id = :userId', { userId })
-      .andWhere('attempt.deleted_at IS NULL')
-      .andWhere('attempt.status = :status', { status: PracticeAttemptStatus.COMPLETED })
-      .groupBy('exercise.exam_code')
-      .addGroupBy('exercise.paper_code')
-      .addGroupBy('exercise.part_code')
-      .orderBy('exercise.exam_code', 'ASC')
-      .addOrderBy('exercise.paper_code', 'ASC')
-      .addOrderBy('exercise.part_code', 'ASC')
-      .getRawMany<{
-        examCode: string;
-        paperCode: string;
-        partCode: string;
+  async getExamPartMetrics(userId: string): Promise<ExamPartMetricRow[]> {
+    const rows = await this.ds.query<
+      {
+        sectionSlug: string;
+        sectionName: string;
+        skillSlug: string;
+        skillName: string;
         completedAttempts: string;
-        correctCount: string;
-        totalCount: string;
+        correctCount: string | null;
+        totalCount: string | null;
         averageScore: string;
         lastAttemptAt: Date;
-      }>();
+      }[]
+    >(
+      `WITH exam_part_rows AS (
+         SELECT LOWER(REPLACE(ex.part_code, '_', '-')) AS section_slug,
+                CAST(att.percentage AS FLOAT) AS percentage,
+                att.correct_count, att.total_count, att.submitted_at AS occurred_at
+         FROM practice_attempts att
+         INNER JOIN practice_exercises ex ON ex.id = att.exercise_id
+         WHERE att.user_id = $1 AND att.deleted_at IS NULL AND att.status = 'completed'
+
+         UNION ALL
+
+         SELECT 'writing-part-1' AS section_slug,
+                (CAST(ws.feedback->>'overallBand' AS FLOAT) / CAST(ws.feedback->>'maxBand' AS FLOAT)) * 100,
+                NULL, NULL, ws.submitted_at
+         FROM writing_submissions ws
+         WHERE ws.user_id = $1 AND ws.deleted_at IS NULL AND ws.status = 'graded'
+
+         UNION ALL
+
+         SELECT es.slug AS section_slug, CAST(sc.percentage AS FLOAT), NULL, NULL, sc.attempted_at
+         FROM activity_scores sc
+         INNER JOIN planned_activities pa ON pa.id = sc.planned_activity_id AND pa.deleted_at IS NULL
+         LEFT JOIN activity_templates atpl ON atpl.id = pa.activity_template_id
+         LEFT JOIN custom_activities ca ON ca.id = pa.custom_activity_id
+         INNER JOIN exam_sections es
+           ON es.id = COALESCE(pa.exam_section_id, atpl.exam_section_id, ca.exam_section_id)
+         WHERE sc.user_id = $1 AND sc.deleted_at IS NULL AND sc.percentage IS NOT NULL
+       )
+       SELECT es.slug AS "sectionSlug", es.name AS "sectionName",
+              sk.slug AS "skillSlug", sk.name AS "skillName",
+              COUNT(*) AS "completedAttempts",
+              SUM(epr.correct_count) AS "correctCount", SUM(epr.total_count) AS "totalCount",
+              AVG(epr.percentage) AS "averageScore", MAX(epr.occurred_at) AS "lastAttemptAt"
+       FROM exam_part_rows epr
+       INNER JOIN exam_sections es ON es.slug = epr.section_slug
+       INNER JOIN skills sk ON sk.id = es.skill_id
+       GROUP BY es.slug, es.name, sk.slug, sk.name
+       ORDER BY sk.slug ASC, es.slug ASC`,
+      [userId],
+    );
 
     return rows.map((row) => ({
-      examCode: row.examCode,
-      paperCode: row.paperCode,
-      partCode: row.partCode,
+      sectionSlug: row.sectionSlug,
+      sectionName: row.sectionName,
+      skillSlug: row.skillSlug,
+      skillName: row.skillName,
       completedAttempts: parseInt(row.completedAttempts, 10),
-      correctCount: parseInt(row.correctCount, 10),
-      totalCount: parseInt(row.totalCount, 10),
+      correctCount: row.correctCount !== null ? parseInt(row.correctCount, 10) : null,
+      totalCount: row.totalCount !== null ? parseInt(row.totalCount, 10) : null,
       averageScore: parseFloat(row.averageScore),
       lastAttemptAt: row.lastAttemptAt,
     }));
@@ -386,7 +463,7 @@ class ProgressRepository {
 
   /**
    * Average band per Cambridge Writing criterion across all graded
-   * submissions, plus a summary row — mirrors getPracticePartMetrics'
+   * submissions, plus a summary row — mirrors getExamPartMetrics'
    * shape/intent, just grouping by criterion (from the feedback JSONB)
    * instead of by exam part. Two small parameterized queries in parallel
    * rather than one combined query with window functions, for readability.
@@ -442,7 +519,7 @@ export type {
   RecentActivityRow,
   OverallWeekRow,
   ScoreEvolutionRow,
-  PracticePartMetricRow,
+  ExamPartMetricRow,
   WritingCriterionMetricRow,
   WritingMetricsSummaryRow,
 };

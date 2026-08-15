@@ -27,11 +27,11 @@ functions:
           path: /metrics
           method: GET
 
-  progressPracticePartMetrics:
-    handler: src/controllers/progressController.getPracticePartMetrics
+  progressExamPartMetrics:
+    handler: src/controllers/progressController.getExamPartMetrics
     events:
       - httpApi:
-          path: /metrics/practice/parts
+          path: /metrics/exam-parts
           method: GET
 
   progressWritingMetrics:
