@@ -11,13 +11,22 @@ import {
 // intencionalmente reemplazable por FSRS/SM-2 real implementando SchedulingStrategy.
 
 const MIN_EASE_FACTOR = 1.3;
-const MAX_EASE_FACTOR = 3.0;
+// Techo del ease bajado de 3.0 a 2.5: acota el crecimiento máximo por repaso
+// exitoso a 2.5x (antes hasta 3x), para que las tarjetas no se vayan a
+// intervalos larguísimos tan rápido. Solo aplica a valores NUEVOS calculados
+// por clampEase — la validación de entrada sigue aceptando hasta 3.0 (el
+// límite histórico, igual al CHECK de la base de datos) para no romper el
+// repaso de tarjetas que ya alcanzaron un ease mayor a 2.5 antes de este
+// cambio; su ease se recorta a 2.5 la próxima vez que baje (AGAIN/HARD) o
+// suba (EASY) de valor.
+const MAX_EASE_FACTOR = 2.5;
+const EASE_FACTOR_INPUT_MAX = 3.0;
 
 const MINUTES_PER_DAY = 24 * 60;
 const AGAIN_INTERVAL_MINUTES = 10;
 const FIRST_HARD_INTERVAL_MINUTES = 1 * MINUTES_PER_DAY;
-const FIRST_GOOD_INTERVAL_MINUTES = 3 * MINUTES_PER_DAY;
-const FIRST_EASY_INTERVAL_MINUTES = 7 * MINUTES_PER_DAY;
+const FIRST_GOOD_INTERVAL_MINUTES = 2 * MINUTES_PER_DAY;
+const FIRST_EASY_INTERVAL_MINUTES = 4 * MINUTES_PER_DAY;
 const MAX_INTERVAL_MINUTES = 10 * 365 * MINUTES_PER_DAY;
 
 const AGAIN_EASE_DELTA = 0.2;
@@ -25,7 +34,7 @@ const HARD_EASE_DELTA = 0.05;
 const EASY_EASE_DELTA = 0.15;
 
 const HARD_INTERVAL_MULTIPLIER = 1.2;
-const EASY_INTERVAL_MULTIPLIER = 1.3;
+const EASY_INTERVAL_MULTIPLIER = 1.15;
 
 const VALID_STATUSES = new Set<string>(Object.values(FlashcardStatus));
 const VALID_RATINGS = new Set<string>(Object.values(ReviewRating));
@@ -60,10 +69,10 @@ function validateState(state: FlashcardSchedulingState): void {
     typeof state.easeFactor !== 'number' ||
     Number.isNaN(state.easeFactor) ||
     state.easeFactor < MIN_EASE_FACTOR ||
-    state.easeFactor > MAX_EASE_FACTOR
+    state.easeFactor > EASE_FACTOR_INPUT_MAX
   ) {
     throw new SchedulingError(
-      `easeFactor must be a number between ${MIN_EASE_FACTOR} and ${MAX_EASE_FACTOR}`,
+      `easeFactor must be a number between ${MIN_EASE_FACTOR} and ${EASE_FACTOR_INPUT_MAX}`,
     );
   }
   if (!Number.isInteger(state.repetitions) || state.repetitions < 0) {

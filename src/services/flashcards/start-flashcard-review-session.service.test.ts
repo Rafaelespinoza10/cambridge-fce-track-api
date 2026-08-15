@@ -331,8 +331,12 @@ function buildDeps(
               f.user_id === userId &&
               (options.deckId === undefined || f.deck_id === options.deckId),
           ),
-        countDueByUser: async (userId) =>
-          world.dueFlashcards.filter((f) => f.user_id === userId).length,
+        countDueByUser: async (userId, _asOf, options = {}) =>
+          world.dueFlashcards.filter(
+            (f) =>
+              f.user_id === userId &&
+              (options.deckId === undefined || f.deck_id === options.deckId),
+          ).length,
       };
       return {
         ...port,
@@ -600,7 +604,7 @@ describe('StartFlashcardReviewSessionService — DailyReviewStat handling', () =
     assert.equal(world.dailyStat, existingStat);
   });
 
-  it('cardsDueAtFirstSession ignores the deckId filter (account-wide snapshot)', async () => {
+  it('cardsDueAtFirstSession is scoped to deckId when the first session of the day studies a deck', async () => {
     const { service } = setup({
       preference: makePreference({ daily_goal: 10 }),
       dueFlashcards: [
@@ -611,9 +615,26 @@ describe('StartFlashcardReviewSessionService — DailyReviewStat handling', () =
 
     const result = await service.execute(makeInput({ deckId: DECK_ID }));
 
-    // Global due count is 2, even though the queue below is filtered to 1.
-    assert.equal(result.dailyProgress.cardsDueAtFirstSession, 2);
+    // Scoped to DECK_ID: only 1 of the 2 account-wide due cards counts, so the
+    // goal is never higher than what this deck can actually offer today.
+    assert.equal(result.dailyProgress.cardsDueAtFirstSession, 1);
+    assert.equal(result.dailyProgress.requiredReviews, 1);
     assert.equal(result.queue.cardsDue, 1);
+  });
+
+  it('cardsDueAtFirstSession stays account-wide when no deckId is given', async () => {
+    const { service } = setup({
+      preference: makePreference({ daily_goal: 10 }),
+      dueFlashcards: [
+        makeFlashcard({ id: 'card-1', deck_id: DECK_ID }),
+        makeFlashcard({ id: 'card-2', deck_id: 'other-deck' }),
+      ],
+    });
+
+    const result = await service.execute(makeInput());
+
+    assert.equal(result.dailyProgress.cardsDueAtFirstSession, 2);
+    assert.equal(result.queue.cardsDue, 2);
   });
 });
 

@@ -63,6 +63,8 @@ interface FlashcardPreferencesRepositoryPort {
 interface DailyReviewStatsRepositoryPort {
   findByUserAndDate(userId: string, localDate: string): Promise<DailyReviewStat | null>;
   findCompletedDates(userId: string): Promise<string[]>;
+  resyncDailyGoal(userId: string, localDate: string, dailyGoal: number): Promise<UpdateResult>;
+  markGoalCompleted(userId: string, localDate: string): Promise<UpdateResult>;
 }
 
 interface FlashcardsRepositoryPort {
@@ -180,6 +182,7 @@ class FlashcardProgressService {
   async updatePreferences(
     userId: string,
     input: UpdateFlashcardPreferencesRequest,
+    now: Date = new Date(),
   ): Promise<FlashcardPreferencesDto> {
     const dailyGoal = normalizeDailyGoal(input.dailyGoal);
 
@@ -200,7 +203,36 @@ class FlashcardProgressService {
         FlashcardProgressErrorCode.PERSISTENCE_INCONSISTENCY,
       );
     }
+
+    await this.resyncTodayGoal(userId, dailyGoal, now);
+
     return toPreferencesDto(updated);
+  }
+
+  /**
+   * Un cambio de meta debe reflejarse en el día en curso, no solo desde
+   * mañana — si no, el usuario puede completar el nuevo objetivo y el día
+   * nunca se marca como cumplido (bug reportado: bajar la meta manualmente
+   * era el único workaround). Solo toca la fila si el día ya existe y aún
+   * no está completado; un día ya cumplido se preserva como logro histórico.
+   */
+  private async resyncTodayGoal(userId: string, dailyGoal: number, now: Date): Promise<void> {
+    const timezone = await this.resolveUserTimezone(userId);
+    const { localDate } = resolveLocalDay(now, timezone);
+
+    const existing = await this.dailyReviewStatsRepo().findByUserAndDate(userId, localDate);
+    if (existing === null || existing.goal_completed) return;
+
+    await this.dailyReviewStatsRepo().resyncDailyGoal(userId, localDate, dailyGoal);
+
+    const resynced = await this.dailyReviewStatsRepo().findByUserAndDate(userId, localDate);
+    if (
+      resynced !== null &&
+      !resynced.goal_completed &&
+      resynced.unique_cards_reviewed >= Math.max(resynced.required_reviews, 1)
+    ) {
+      await this.dailyReviewStatsRepo().markGoalCompleted(userId, localDate);
+    }
   }
 
   async getReviewSummary(userId: string, now: Date): Promise<FlashcardReviewSummaryDto> {

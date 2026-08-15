@@ -476,8 +476,8 @@ describe('FlashcardReviewService.answerCard — success path', () => {
     assert.equal(review.previous_status, FlashcardStatus.REVIEW);
     assert.equal(review.new_status, FlashcardStatus.REVIEW);
     assert.equal(review.previous_interval_minutes, 1440);
-    // GOOD desde review: max(piso de 3 días = 4320, round(1440*2.5)=3600) = 4320
-    assert.equal(review.new_interval_minutes, 4320);
+    // GOOD desde review: max(piso de 2 días = 2880, round(1440*2.5)=3600) = 3600
+    assert.equal(review.new_interval_minutes, 3600);
     assert.equal(review.previous_ease_factor, '2.5');
     assert.equal(review.new_ease_factor, '2.5');
     assert.equal(review.previous_repetitions, 3);
