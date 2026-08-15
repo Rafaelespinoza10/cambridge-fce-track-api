@@ -1,0 +1,89 @@
+service: cambridge-tracker-writing
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+    OPEN_AI_API_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPEN_AI_API_KEY}
+    OPENAI_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_MODEL, ''}
+
+functions:
+  writingGenerateTask:
+    handler: src/controllers/writingTaskController.generateWritingTask
+    timeout: 29
+    events:
+      - httpApi:
+          path: /writing/tasks
+          method: POST
+
+  writingGetTask:
+    handler: src/controllers/writingTaskController.getWritingTask
+    events:
+      - httpApi:
+          path: /writing/tasks/{taskId}
+          method: GET
+
+  writingStartSubmission:
+    handler: src/controllers/writingSubmissionController.startWritingSubmission
+    events:
+      - httpApi:
+          path: /writing/tasks/{taskId}/submissions
+          method: POST
+
+  writingGetActiveSubmission:
+    handler: src/controllers/writingSubmissionController.getActiveWritingSubmission
+    events:
+      - httpApi:
+          path: /writing/submissions/active
+          method: GET
+
+  writingGetSubmission:
+    handler: src/controllers/writingSubmissionController.getWritingSubmission
+    events:
+      - httpApi:
+          path: /writing/submissions/{submissionId}
+          method: GET
+
+  writingSubmitSubmission:
+    handler: src/controllers/writingSubmissionController.submitWritingSubmission
+    timeout: 35
+    events:
+      - httpApi:
+          path: /writing/submissions/{submissionId}/submit
+          method: POST
+
+  writingAbandonSubmission:
+    handler: src/controllers/writingSubmissionController.abandonWritingSubmission
+    events:
+      - httpApi:
+          path: /writing/submissions/{submissionId}/abandon
+          method: POST
+
+  # Short key: AWS Lambda names are {service}-{stage}-{key} and must be ≤ 64 chars.
+  writingCorrectionFcDraft:
+    handler: src/controllers/writingSubmissionController.generateWritingCorrectionFlashcardDraft
+    timeout: 25
+    events:
+      - httpApi:
+          path: /writing/submissions/{submissionId}/corrections/{correctionId}/flashcard-draft
+          method: POST
+
+package:
+  individually: true
+
+custom:
+  esbuild: ${file(main.serverless.yml):custom.esbuild}

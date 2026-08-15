@@ -182,3 +182,13 @@ export enum PracticeAttemptStatus {
   COMPLETED = 'completed',
   ABANDONED = 'abandoned',
 }
+
+export enum WritingTaskType {
+  ESSAY = 'essay',
+}
+
+export enum WritingSubmissionStatus {
+  IN_PROGRESS = 'in_progress',
+  GRADED = 'graded',
+  ABANDONED = 'abandoned',
+}

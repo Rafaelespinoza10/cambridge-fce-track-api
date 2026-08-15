@@ -6,7 +6,11 @@ import {
   FlashcardDraftGenerationError,
   FlashcardDraftGenerationErrorCode,
 } from './flashcard-draft-generator';
-import type { LLMServicePort, PracticeErrorDraftContext } from './flashcard-draft-generator';
+import type {
+  LLMServicePort,
+  PracticeErrorDraftContext,
+  WritingCorrectionDraftContext,
+} from './flashcard-draft-generator';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.types';
 import { FlashcardType, EnglishLevel } from '../../models/enums';
@@ -278,6 +282,93 @@ describe('FlashcardDraftGenerator.generateFromPracticeError — provider failure
       assert.ok(err instanceof FlashcardDraftGenerationError);
       assert.doesNotMatch(err.message, /invoice|billing|org-abc/);
     }
+  });
+});
+
+// ── generateFromWritingCorrection ────────────────────────────────────────────────
+
+const WRITING_CONTEXT: WritingCorrectionDraftContext = {
+  taskTitle: 'Technology in education',
+  targetLevel: EnglishLevel.B2,
+  originalExcerpt: 'I am agree with this opinion',
+  correctedExcerpt: 'I agree with this opinion',
+  explanation: '"Agree" is a verb in English, not an adjective — never precede it with "am/is/are".',
+  category: 'grammar',
+};
+
+describe('FlashcardDraftGenerator.generateFromWritingCorrection — happy path', () => {
+  it('returns a fully-shaped draft from a well-formed model response', async () => {
+    const generator = makeGenerator(async () => VALID_RAW_DRAFT);
+    const result = await generator.generateFromWritingCorrection(WRITING_CONTEXT);
+    assert.deepEqual(result, VALID_RAW_DRAFT);
+  });
+
+  it('sends a system prompt and the same JSON Schema Structured Outputs request as the other flows', async () => {
+    let capturedMessages: LLMChatMessage[] | undefined;
+    let capturedOptions: LLMStructuredCompletionOptions | undefined;
+    const generator = makeGenerator(async (messages, options) => {
+      capturedMessages = messages;
+      capturedOptions = options;
+      return VALID_RAW_DRAFT;
+    });
+
+    await generator.generateFromWritingCorrection(WRITING_CONTEXT);
+
+    assert.equal(capturedMessages?.[0]?.role, 'system');
+    assert.equal(capturedMessages?.[1]?.role, 'user');
+    assert.equal(capturedOptions?.responseSchema.name, 'flashcard_draft');
+    assert.equal(capturedOptions?.responseSchema.strict, true);
+  });
+
+  it('the user prompt includes the writing-correction context fields', async () => {
+    let capturedMessages: LLMChatMessage[] | undefined;
+    const generator = makeGenerator(async (messages) => {
+      capturedMessages = messages;
+      return VALID_RAW_DRAFT;
+    });
+
+    await generator.generateFromWritingCorrection(WRITING_CONTEXT);
+
+    const userContent = capturedMessages?.[1]?.content ?? '';
+    assert.match(userContent, /Technology in education/);
+    assert.match(userContent, /I am agree with this opinion/);
+    assert.match(userContent, /I agree with this opinion/);
+    assert.match(userContent, /never precede it with/);
+    assert.match(userContent, /grammar/);
+    assert.match(userContent, /B2/);
+  });
+
+  it('renders sensible fallback text for a null targetLevel', async () => {
+    let capturedMessages: LLMChatMessage[] | undefined;
+    const generator = makeGenerator(async (messages) => {
+      capturedMessages = messages;
+      return VALID_RAW_DRAFT;
+    });
+
+    await generator.generateFromWritingCorrection({ ...WRITING_CONTEXT, targetLevel: null });
+
+    const userContent = capturedMessages?.[1]?.content ?? '';
+    assert.match(userContent, /\(not applicable\)/);
+  });
+
+  it('rejects a response missing required fields, same shared validation as the other flows', async () => {
+    const generator = makeGenerator(async () => ({ type: 'grammar', front: 'agree' }));
+    await assert.rejects(
+      () => generator.generateFromWritingCorrection(WRITING_CONTEXT),
+      (err: unknown) =>
+        assertGenerationError(err, FlashcardDraftGenerationErrorCode.AI_INVALID_RESPONSE),
+    );
+  });
+
+  it('maps provider failures the same way as the other flows', async () => {
+    const generator = makeGenerator(async () => {
+      throw new LLMServiceError('OpenAI rate limit exceeded', LLMErrorCode.RATE_LIMITED);
+    });
+    await assert.rejects(
+      () => generator.generateFromWritingCorrection(WRITING_CONTEXT),
+      (err: unknown) =>
+        assertGenerationError(err, FlashcardDraftGenerationErrorCode.AI_RATE_LIMITED),
+    );
   });
 });
 

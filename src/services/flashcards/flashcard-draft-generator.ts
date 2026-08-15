@@ -12,6 +12,8 @@ import TERM_SYSTEM_PROMPT from '../../prompts/flashcards/generate-draft.system.m
 import TERM_USER_PROMPT_TEMPLATE from '../../prompts/flashcards/generate-draft.user.md';
 import PRACTICE_ERROR_SYSTEM_PROMPT from '../../prompts/flashcards/generate-draft-from-practice-error.system.md';
 import PRACTICE_ERROR_USER_PROMPT_TEMPLATE from '../../prompts/flashcards/generate-draft-from-practice-error.user.md';
+import WRITING_CORRECTION_SYSTEM_PROMPT from '../../prompts/flashcards/generate-draft-from-writing-correction.system.md';
+import WRITING_CORRECTION_USER_PROMPT_TEMPLATE from '../../prompts/flashcards/generate-draft-from-writing-correction.user.md';
 
 /**
  * Shared flashcard-draft generation: JSON Schema, field-limit validation,
@@ -97,10 +99,29 @@ export interface PracticeErrorDraftContext {
   targetLevel: EnglishLevel | null;
 }
 
+/**
+ * Context for `generateFromWritingCorrection` — already flattened into
+ * safe, human-readable strings by the caller
+ * (GenerateWritingCorrectionFlashcardDraftService). This generator never
+ * touches WritingTask/WritingSubmission entities directly, and never
+ * receives userId, JWT, or any other PII.
+ */
+export interface WritingCorrectionDraftContext {
+  taskTitle: string;
+  targetLevel: EnglishLevel | null;
+  originalExcerpt: string;
+  correctedExcerpt: string;
+  explanation: string;
+  category: string;
+}
+
 export interface FlashcardDraftGeneratorPort {
   generateFromTerm(term: string, type: FlashcardType): Promise<GeneratedFlashcardDraftDto>;
   generateFromPracticeError(
     context: PracticeErrorDraftContext,
+  ): Promise<GeneratedFlashcardDraftDto>;
+  generateFromWritingCorrection(
+    context: WritingCorrectionDraftContext,
   ): Promise<GeneratedFlashcardDraftDto>;
 }
 
@@ -129,6 +150,17 @@ function buildPracticeErrorUserPrompt(context: PracticeErrorDraftContext): strin
     correctAnswer: context.correctAnswer,
     explanation: context.explanation ?? NONE_PROVIDED,
     skillTags: context.skillTags.length > 0 ? context.skillTags.join(', ') : NONE_PROVIDED,
+  });
+}
+
+function buildWritingCorrectionUserPrompt(context: WritingCorrectionDraftContext): string {
+  return renderPromptTemplate(WRITING_CORRECTION_USER_PROMPT_TEMPLATE, {
+    taskTitle: context.taskTitle,
+    targetLevel: context.targetLevel ?? NOT_APPLICABLE,
+    originalExcerpt: context.originalExcerpt,
+    correctedExcerpt: context.correctedExcerpt,
+    explanation: context.explanation,
+    category: context.category,
   });
 }
 
@@ -383,6 +415,18 @@ export class FlashcardDraftGenerator implements FlashcardDraftGeneratorPort {
     const messages: LLMChatMessage[] = [
       { role: 'system', content: PRACTICE_ERROR_SYSTEM_PROMPT.trim() },
       { role: 'user', content: buildPracticeErrorUserPrompt(context) },
+    ];
+    const raw = await this.callLLM(messages);
+    return validateDraftShape(raw);
+  }
+
+  /** No `expectedType` — same reasoning as generateFromPracticeError. */
+  async generateFromWritingCorrection(
+    context: WritingCorrectionDraftContext,
+  ): Promise<GeneratedFlashcardDraftDto> {
+    const messages: LLMChatMessage[] = [
+      { role: 'system', content: WRITING_CORRECTION_SYSTEM_PROMPT.trim() },
+      { role: 'user', content: buildWritingCorrectionUserPrompt(context) },
     ];
     const raw = await this.callLLM(messages);
     return validateDraftShape(raw);
