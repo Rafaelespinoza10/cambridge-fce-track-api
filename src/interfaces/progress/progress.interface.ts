@@ -35,20 +35,65 @@ export interface ExamGoalMetric {
   daysUntilExam: number;
 }
 
-/** Aggregate performance for one concrete Cambridge exam part (for example UOE_PART_1). */
-export interface PracticePartMetric {
-  examCode: string;
-  paperCode: string;
-  partCode: string;
+/**
+ * Aggregate performance for one concrete Cambridge exam-section part (for
+ * example "Part 1 - Multiple Choice Cloze"), unified across Practice
+ * attempts, Writing submissions, and manually-logged activities.
+ * correctCount/totalCount are null when no Practice attempt contributed to
+ * this part (Writing/activities have no accuracy concept).
+ */
+export interface ExamPartMetric {
+  sectionSlug: string;
+  sectionName: string;
+  skillSlug: string;
+  skillName: string;
   completedAttempts: number;
-  correctCount: number;
-  totalCount: number;
+  correctCount: number | null;
+  totalCount: number | null;
   averageScore: number;
   lastAttemptAt: string;
 }
 
-export interface PracticePartMetricsResponse {
-  parts: PracticePartMetric[];
+export interface ExamPartMetricsResponse {
+  parts: ExamPartMetric[];
+}
+
+/** Average band for one of the 4 official Cambridge Writing criteria, across all graded submissions. */
+export interface WritingCriterionMetric {
+  criterion: string;
+  averageBand: number;
+  maxBand: 5;
+}
+
+export interface WritingMetricsResponse {
+  criteria: WritingCriterionMetric[];
+  overallAverageBand: number | null;
+  maxBand: 20;
+  completedCount: number;
+  lastAttemptAt: string | null;
+}
+
+/**
+ * One raw, per-attempt data point — not pre-aggregated — powering the
+ * Progress screen's skill evolution chart and ranking. Deliberately not
+ * SafeScore: those rows are editable (id, scoreType, correctAnswers, ...);
+ * these are read-only analytics points that can come from a manually-
+ * logged activity, a Practice attempt, or a Writing submission alike.
+ */
+export interface ScoreEvolutionEntrySkill {
+  slug: string;
+  name: string;
+  accentColor: string;
+}
+
+export interface ScoreEvolutionEntry {
+  attemptedAt: string;
+  skill: ScoreEvolutionEntrySkill;
+  percentage: number;
+}
+
+export interface ScoreEvolutionResponse {
+  scores: ScoreEvolutionEntry[];
 }
 
 export interface MetricsResponse {

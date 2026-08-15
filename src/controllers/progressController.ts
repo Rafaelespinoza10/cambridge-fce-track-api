@@ -20,14 +20,47 @@ export async function getMetrics(event: APIGatewayProxyEvent): Promise<APIGatewa
   }
 }
 
-export async function getPracticePartMetrics(
+export async function getExamPartMetrics(
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> {
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
   try {
-    const result = await service.getPracticePartMetrics(payload.sub);
+    const result = await service.getExamPartMetrics(payload.sub);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+export async function getWritingMetrics(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const result = await service.getWritingMetrics(payload.sub);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+export async function getScoreEvolution(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const params = event.queryStringParameters ?? {};
+  if (!params.from || !params.to) {
+    return errorResponse('from and to query params are required', 400);
+  }
+
+  try {
+    const result = await service.getScoreEvolution(payload.sub, params.from, params.to);
     return successResponse({ success: true, data: result }, 200);
   } catch (err: unknown) {
     return handleError(err);

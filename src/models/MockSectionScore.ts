@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import type { MockTest } from './MockTest';
 import type { Skill } from './Skill';
+import type { ExamSection } from './ExamSection';
 
 @Entity('mock_section_scores')
 export class MockSectionScore {
@@ -23,6 +24,13 @@ export class MockSectionScore {
 
   @Column({ type: 'varchar', length: 100 })
   section_code: string;
+
+  // Set only when section_code resolves to a real Cambridge exam-section
+  // slug (currently B2_FIRST parts other than Speaking, which stays a
+  // holistic entry — see mock-exam-catalog.ts). Historical paper-level
+  // rows, and non-B2_FIRST exam types, keep this null.
+  @Column({ type: 'uuid', nullable: true })
+  exam_section_id: string | null;
 
   @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
   raw_score: string | null;
@@ -54,4 +62,8 @@ export class MockSectionScore {
   @ManyToOne('Skill', { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'skill_id' })
   skill: Skill | null;
+
+  @ManyToOne('ExamSection', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'exam_section_id' })
+  exam_section: ExamSection | null;
 }

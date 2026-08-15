@@ -19,15 +19,34 @@ export interface MockExamCatalogEntry {
 /**
  * The only source of truth for mock sections. These are high-level reporting
  * components, deliberately separate from the task-level Practice catalogue.
+ *
+ * B2_FIRST is the one exam type with real per-part granularity: its 13
+ * codes below are deliberately kept string-equal to `exam_sections.slug`
+ * (src/config/seed/data/exam-sections.ts) — resolveExamSectionIds
+ * (mocks.repository.ts) matches them by plain equality, so if that seed
+ * data ever changes, this list must be updated too. Speaking stays one
+ * holistic entry (code 'SPEAKING', not a real exam_sections slug) because
+ * Cambridge Speaking is graded via analytic criteria across the whole
+ * test, not additive per-part points — exam_sections has no max_score for
+ * any Speaking part, only this app's own synthetic 40-point paper total.
  */
 export const MOCK_EXAM_CATALOG: Readonly<Record<ExamType, MockExamCatalogEntry>> = {
   [ExamType.B2_FIRST]: {
     scoreScale: 'CAMBRIDGE_ENGLISH_SCALE',
     sections: [
-      { code: 'READING', name: 'Reading', defaultMaxScore: 30 },
-      { code: 'USE_OF_ENGLISH', name: 'Use of English', defaultMaxScore: 28 },
-      { code: 'WRITING', name: 'Writing', defaultMaxScore: 40 },
-      { code: 'LISTENING', name: 'Listening', defaultMaxScore: 30 },
+      { code: 'uoe-part-1', name: 'Part 1 - Multiple Choice Cloze', defaultMaxScore: 8 },
+      { code: 'uoe-part-2', name: 'Part 2 - Open Cloze', defaultMaxScore: 8 },
+      { code: 'uoe-part-3', name: 'Part 3 - Word Formation', defaultMaxScore: 8 },
+      { code: 'uoe-part-4', name: 'Part 4 - Key Word Transformation', defaultMaxScore: 12 },
+      { code: 'reading-part-5', name: 'Part 5 - Multiple Choice', defaultMaxScore: 6 },
+      { code: 'reading-part-6', name: 'Part 6 - Gapped Text', defaultMaxScore: 6 },
+      { code: 'reading-part-7', name: 'Part 7 - Multiple Matching', defaultMaxScore: 10 },
+      { code: 'writing-part-1', name: 'Part 1 - Essay', defaultMaxScore: 20 },
+      { code: 'writing-part-2', name: 'Part 2 - Situational Writing', defaultMaxScore: 20 },
+      { code: 'listening-part-1', name: 'Part 1 - Multiple Choice', defaultMaxScore: 8 },
+      { code: 'listening-part-2', name: 'Part 2 - Sentence Completion', defaultMaxScore: 10 },
+      { code: 'listening-part-3', name: 'Part 3 - Multiple Matching', defaultMaxScore: 5 },
+      { code: 'listening-part-4', name: 'Part 4 - Multiple Choice Interview', defaultMaxScore: 7 },
       { code: 'SPEAKING', name: 'Speaking', defaultMaxScore: 40 },
     ],
   },

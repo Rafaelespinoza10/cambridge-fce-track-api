@@ -148,6 +148,21 @@ function buildFakeDailyReviewStatsRepo(world: World): DailyReviewStatsRepository
       return found ?? null;
     },
     findCompletedDates: async (userId) => (userId === USER_ID ? world.completedDates : []),
+    resyncDailyGoal: async (userId, localDate, dailyGoal) => {
+      const stat = world.dailyStats.find(
+        (s) => s.user_id === userId && s.local_date === localDate && !s.goal_completed,
+      );
+      if (stat === undefined) return NO_MATCH_RESULT;
+      stat.daily_goal = dailyGoal;
+      stat.required_reviews = Math.min(dailyGoal, stat.cards_due_at_first_session);
+      return OK_RESULT;
+    },
+    markGoalCompleted: async (userId, localDate) => {
+      const stat = world.dailyStats.find((s) => s.user_id === userId && s.local_date === localDate);
+      if (stat === undefined) return NO_MATCH_RESULT;
+      stat.goal_completed = true;
+      return OK_RESULT;
+    },
   };
 }
 
@@ -283,10 +298,46 @@ describe('FlashcardProgressService.updatePreferences', () => {
     assert.equal(world.preferences?.daily_goal, 42);
   });
 
-  it("does not modify today's DailyReviewStat", async () => {
+  it("resyncs today's DailyReviewStat so a mid-day goal change takes effect immediately", async () => {
+    // cards_due_at_first_session: 8, unique_cards_reviewed: 3 (see makeDailyStat defaults).
     const todayStat = makeDailyStat({ local_date: '2026-01-15', daily_goal: 10 });
     const { world, service } = setup({ dailyStats: [todayStat] });
-    await service.updatePreferences(USER_ID, { dailyGoal: 20 });
+    await service.updatePreferences(USER_ID, { dailyGoal: 3 }, NOW);
+    assert.equal(world.dailyStats[0]!.daily_goal, 3);
+    assert.equal(world.dailyStats[0]!.required_reviews, 3);
+  });
+
+  it('marks the day completed immediately if lowering the goal now satisfies it', async () => {
+    const todayStat = makeDailyStat({ local_date: '2026-01-15', daily_goal: 10 });
+    const { world, service } = setup({ dailyStats: [todayStat] });
+    await service.updatePreferences(USER_ID, { dailyGoal: 3 }, NOW);
+    assert.equal(world.dailyStats[0]!.goal_completed, true);
+  });
+
+  it('caps required_reviews at cards_due_at_first_session, not the raw new goal', async () => {
+    const todayStat = makeDailyStat({ local_date: '2026-01-15', daily_goal: 10 });
+    const { world, service } = setup({ dailyStats: [todayStat] });
+    await service.updatePreferences(USER_ID, { dailyGoal: 50 }, NOW);
+    assert.equal(world.dailyStats[0]!.required_reviews, 8);
+    assert.equal(world.dailyStats[0]!.goal_completed, false);
+  });
+
+  it('does not reopen a day already marked as completed', async () => {
+    const todayStat = makeDailyStat({
+      local_date: '2026-01-15',
+      daily_goal: 10,
+      goal_completed: true,
+    });
+    const { world, service } = setup({ dailyStats: [todayStat] });
+    await service.updatePreferences(USER_ID, { dailyGoal: 3 }, NOW);
+    assert.equal(world.dailyStats[0]!.daily_goal, 10);
+    assert.equal(world.dailyStats[0]!.goal_completed, true);
+  });
+
+  it('leaves other days untouched', async () => {
+    const yesterdayStat = makeDailyStat({ local_date: '2026-01-14', daily_goal: 10 });
+    const { world, service } = setup({ dailyStats: [yesterdayStat] });
+    await service.updatePreferences(USER_ID, { dailyGoal: 3 }, NOW);
     assert.equal(world.dailyStats[0]!.daily_goal, 10);
   });
 

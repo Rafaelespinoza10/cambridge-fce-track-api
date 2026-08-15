@@ -129,11 +129,11 @@ describe('SimpleSchedulingStrategy — HARD', () => {
 });
 
 describe('SimpleSchedulingStrategy — GOOD', () => {
-  it('first review gives 3 days', () => {
+  it('first review gives 2 days', () => {
     const state = baseState({ status: FlashcardStatus.NEW });
     const result = strategy.calculate(state, ReviewRating.GOOD, FIXED_DATE);
     assert.equal(result.status, FlashcardStatus.REVIEW);
-    assert.equal(result.intervalMinutes, MINUTES_PER_DAY * 3);
+    assert.equal(result.intervalMinutes, MINUTES_PER_DAY * 2);
     assert.equal(result.repetitions, 1);
   });
 
@@ -141,7 +141,7 @@ describe('SimpleSchedulingStrategy — GOOD', () => {
     const state = baseState({ status: FlashcardStatus.LEARNING });
     const result = strategy.calculate(state, ReviewRating.GOOD, FIXED_DATE);
     assert.equal(result.status, FlashcardStatus.REVIEW);
-    assert.equal(result.intervalMinutes, MINUTES_PER_DAY * 3);
+    assert.equal(result.intervalMinutes, MINUTES_PER_DAY * 2);
   });
 
   it('from review multiplies the interval by the ease factor', () => {
@@ -177,14 +177,14 @@ describe('SimpleSchedulingStrategy — GOOD', () => {
 });
 
 describe('SimpleSchedulingStrategy — EASY', () => {
-  it('first review gives 7 days', () => {
+  it('first review gives 4 days', () => {
     const state = baseState({ status: FlashcardStatus.NEW, easeFactor: 2.5 });
     const result = strategy.calculate(state, ReviewRating.EASY, FIXED_DATE);
     assert.equal(result.status, FlashcardStatus.REVIEW);
-    assert.equal(result.intervalMinutes, MINUTES_PER_DAY * 7);
+    assert.equal(result.intervalMinutes, MINUTES_PER_DAY * 4);
   });
 
-  it('from review multiplies by ease factor and 1.30', () => {
+  it('from review multiplies by ease factor and 1.15', () => {
     const state = baseState({
       status: FlashcardStatus.REVIEW,
       intervalMinutes: MINUTES_PER_DAY * 10,
@@ -192,7 +192,7 @@ describe('SimpleSchedulingStrategy — EASY', () => {
       repetitions: 4,
     });
     const result = strategy.calculate(state, ReviewRating.EASY, FIXED_DATE);
-    assert.equal(result.intervalMinutes, Math.round(MINUTES_PER_DAY * 10 * 2.0 * 1.3));
+    assert.equal(result.intervalMinutes, Math.round(MINUTES_PER_DAY * 10 * 2.0 * 1.15));
     assert.equal(result.repetitions, 5);
   });
 
@@ -206,14 +206,24 @@ describe('SimpleSchedulingStrategy — EASY', () => {
     assert.equal(result.easeFactor, 2.15);
   });
 
-  it('never exceeds the maximum ease of 3.00', () => {
+  it('never exceeds the maximum ease of 2.50', () => {
     const state = baseState({
       status: FlashcardStatus.REVIEW,
       intervalMinutes: MINUTES_PER_DAY,
-      easeFactor: 2.95,
+      easeFactor: 2.45,
     });
     const result = strategy.calculate(state, ReviewRating.EASY, FIXED_DATE);
-    assert.equal(result.easeFactor, 3.0);
+    assert.equal(result.easeFactor, 2.5);
+  });
+
+  it('accepts a legacy ease factor above the new 2.50 ceiling and clamps it down', () => {
+    const state = baseState({
+      status: FlashcardStatus.REVIEW,
+      intervalMinutes: MINUTES_PER_DAY,
+      easeFactor: 2.9,
+    });
+    const result = strategy.calculate(state, ReviewRating.EASY, FIXED_DATE);
+    assert.equal(result.easeFactor, 2.5);
   });
 
   it('increments repetitions', () => {

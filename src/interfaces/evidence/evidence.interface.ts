@@ -27,6 +27,11 @@ export interface EvidenceListFilters {
   offset?: number;
 }
 
+export interface EvidenceContext {
+  label: string;
+  skillName: string | null;
+}
+
 export interface SafeEvidence {
   id: string;
   fileName: string;
@@ -39,6 +44,7 @@ export interface SafeEvidence {
   category: FileCategory | null;
   linkedTo: LinkedTo | null;
   linkedId: string | null;
+  context: EvidenceContext | null;
   uploadedAt: Date;
   createdAt: Date;
 }

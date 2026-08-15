@@ -85,6 +85,32 @@ class DailyReviewStatsRepository {
       .execute();
   }
 
+  /**
+   * Aplica un cambio de meta diaria al día en curso, sin exceder las tarjetas
+   * que ya estaban vencidas cuando se creó la fila (cards_due_at_first_session
+   * sigue siendo el techo real de lo que se puede llegar a repasar hoy). No
+   * toca días ya marcados como completados, para preservar ese logro histórico
+   * aunque luego el usuario suba la meta.
+   */
+  async resyncDailyGoal(
+    userId: string,
+    localDate: string,
+    dailyGoal: number,
+  ): Promise<UpdateResult> {
+    return this.statRepo
+      .createQueryBuilder()
+      .update(DailyReviewStat)
+      .set({
+        daily_goal: dailyGoal,
+        required_reviews: () => 'LEAST(:dailyGoal, "cards_due_at_first_session")',
+      })
+      .where('user_id = :userId', { userId })
+      .andWhere('local_date = :localDate', { localDate })
+      .andWhere('goal_completed = false')
+      .setParameter('dailyGoal', dailyGoal)
+      .execute();
+  }
+
   async markGoalCompleted(userId: string, localDate: string): Promise<UpdateResult> {
     return this.statRepo.update(
       { user_id: userId, local_date: localDate },

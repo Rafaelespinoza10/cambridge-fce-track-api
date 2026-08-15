@@ -1,19 +1,23 @@
 import { getDatabaseConnection } from '../../lib/database';
+import { getSkillAccentColor } from '../../lib/skill-display';
 import { ProgressRepository } from '../../repositories/progress.repository';
 import {
   calculateStreak,
+  createError,
   getCurrentWeekBounds,
   getLastNWeekStarts,
   roundTwo,
 } from '@lib/progress-library';
 import type {
   ExamGoalMetric,
+  ExamPartMetricsResponse,
   LastMockMetric,
   MetricsResponse,
-  PracticePartMetricsResponse,
   RecentActivityMetric,
+  ScoreEvolutionResponse,
   SkillMetric,
   SkillProgressMetric,
+  WritingMetricsResponse,
 } from '../../interfaces/progress/progress.interface';
 
 const SKILL_LOOKBACK_DAYS = 30;
@@ -144,21 +148,68 @@ class ProgressService {
     };
   }
 
-  async getPracticePartMetrics(userId: string): Promise<PracticePartMetricsResponse> {
+  async getExamPartMetrics(userId: string): Promise<ExamPartMetricsResponse> {
     const ds = await getDatabaseConnection();
     const repo = new ProgressRepository(ds);
-    const rows = await repo.getPracticePartMetrics(userId);
+    const rows = await repo.getExamPartMetrics(userId);
 
     return {
       parts: rows.map((row) => ({
-        examCode: row.examCode,
-        paperCode: row.paperCode,
-        partCode: row.partCode,
+        sectionSlug: row.sectionSlug,
+        sectionName: row.sectionName,
+        skillSlug: row.skillSlug,
+        skillName: row.skillName,
         completedAttempts: row.completedAttempts,
         correctCount: row.correctCount,
         totalCount: row.totalCount,
         averageScore: roundTwo(row.averageScore),
         lastAttemptAt: row.lastAttemptAt.toISOString(),
+      })),
+    };
+  }
+
+  async getWritingMetrics(userId: string): Promise<WritingMetricsResponse> {
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const { criteria, summary } = await repo.getWritingMetrics(userId);
+
+    return {
+      criteria: criteria.map((row) => ({
+        criterion: row.criterion,
+        averageBand: roundTwo(row.averageBand),
+        maxBand: 5,
+      })),
+      overallAverageBand:
+        summary.overallAverageBand !== null ? roundTwo(summary.overallAverageBand) : null,
+      maxBand: 20,
+      completedCount: summary.completedCount,
+      lastAttemptAt: summary.lastAttemptAt !== null ? summary.lastAttemptAt.toISOString() : null,
+    };
+  }
+
+  async getScoreEvolution(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<ScoreEvolutionResponse> {
+    const fromDate = new Date(from);
+    if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    const toDate = new Date(to);
+    if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const rows = await repo.getScoreEvolution(userId, from, to);
+
+    return {
+      scores: rows.map((row) => ({
+        attemptedAt: row.occurredAt.toISOString(),
+        skill: {
+          slug: row.skillSlug,
+          name: row.skillName,
+          accentColor: getSkillAccentColor(row.skillSlug),
+        },
+        percentage: roundTwo(row.percentage),
       })),
     };
   }

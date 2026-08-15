@@ -146,6 +146,7 @@ function makeService(overrides: Overrides = {}): {
         capturedContext.value = context;
         return VALID_DRAFT;
       }),
+    generateFromWritingCorrection: async () => VALID_DRAFT,
   };
 
   const deps: GeneratePracticeErrorFlashcardDraftServiceDeps = {

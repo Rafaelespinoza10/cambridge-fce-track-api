@@ -1,7 +1,8 @@
 import type { DataSource, Repository } from 'typeorm';
 import { MockTest } from '../models/MockTest';
 import { MockSectionScore } from '../models/MockSectionScore';
-import type { ExamType, MockType, EnglishLevel } from '../models/enums';
+import { ExamType } from '../models/enums';
+import type { MockType, EnglishLevel } from '../models/enums';
 
 interface CreateMockData {
   userId: string;
@@ -18,6 +19,7 @@ interface CreateMockData {
 interface CreateSectionData {
   mockTestId: string;
   sectionCode: string;
+  examSectionId?: string | null;
   rawScore: number | null;
   maxScore: number | null;
   percentage: number | null;
@@ -85,6 +87,7 @@ class MocksRepository {
       this.sectionRepo.create({
         mock_test_id: s.mockTestId,
         section_code: s.sectionCode,
+        exam_section_id: s.examSectionId ?? null,
         raw_score: s.rawScore !== null ? String(s.rawScore) : null,
         max_score: s.maxScore !== null ? String(s.maxScore) : null,
         percentage: s.percentage !== null ? String(s.percentage) : null,
@@ -93,6 +96,26 @@ class MocksRepository {
       }),
     );
     return this.sectionRepo.save(built);
+  }
+
+  /**
+   * Resolves each B2_FIRST sectionCode to a real exam_sections.id — codes
+   * are deliberately kept string-equal to exam_sections.slug (see
+   * mock-exam-catalog.ts) so this is a plain equality lookup. Other exam
+   * types have no per-part exam_sections data, so they resolve to an empty
+   * map (every section stays exam_section_id: null, same as today).
+   */
+  async resolveExamSectionIds(
+    examType: ExamType,
+    sectionCodes: string[],
+  ): Promise<Map<string, string>> {
+    if (examType !== ExamType.B2_FIRST || sectionCodes.length === 0) return new Map();
+
+    const rows = await this.dataSource.query<{ id: string; slug: string }[]>(
+      `SELECT id, slug FROM exam_sections WHERE slug = ANY($1)`,
+      [sectionCodes],
+    );
+    return new Map(rows.map((row) => [row.slug, row.id]));
   }
 
   async findMockWithSections(mockId: string): Promise<MockTest | null> {
@@ -206,6 +229,7 @@ class MocksRepository {
         manager.create(MockSectionScore, {
           mock_test_id: s.mockTestId,
           section_code: s.sectionCode,
+          exam_section_id: s.examSectionId ?? null,
           raw_score: s.rawScore !== null ? String(s.rawScore) : null,
           max_score: s.maxScore !== null ? String(s.maxScore) : null,
           percentage: s.percentage !== null ? String(s.percentage) : null,
