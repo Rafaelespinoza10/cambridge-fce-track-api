@@ -293,26 +293,33 @@ class ProgressRepository {
     >(
       `${UNIFIED_SCORES_CTE},
        mock_scores AS (
+         -- Prefers the real skill resolved via exam_section_id (part-level
+         -- B2_FIRST mocks, every skill except Speaking) and falls back to
+         -- the paper-code CASE for historical/non-B2_FIRST rows and
+         -- Speaking, which never gets an exam_section_id (see
+         -- mock-exam-catalog.ts).
          SELECT CAST(mss.percentage AS FLOAT) AS percentage,
                 COALESCE(mt.taken_at, mt.created_at) AS occurred_at,
-                CASE mss.section_code
+                COALESCE(sk_part.slug, CASE mss.section_code
                   WHEN 'READING' THEN 'reading'
                   WHEN 'USE_OF_ENGLISH' THEN 'use-of-english'
                   WHEN 'WRITING' THEN 'writing'
                   WHEN 'LISTENING' THEN 'listening'
                   WHEN 'SPEAKING' THEN 'speaking'
                   ELSE NULL
-                END AS skill_slug,
-                CASE mss.section_code
+                END) AS skill_slug,
+                COALESCE(sk_part.name, CASE mss.section_code
                   WHEN 'READING' THEN 'Reading'
                   WHEN 'USE_OF_ENGLISH' THEN 'Use of English'
                   WHEN 'WRITING' THEN 'Writing'
                   WHEN 'LISTENING' THEN 'Listening'
                   WHEN 'SPEAKING' THEN 'Speaking'
                   ELSE NULL
-                END AS skill_name
+                END) AS skill_name
          FROM mock_section_scores mss
          INNER JOIN mock_tests mt ON mt.id = mss.mock_test_id AND mt.deleted_at IS NULL
+         LEFT JOIN exam_sections es_part ON es_part.id = mss.exam_section_id
+         LEFT JOIN skills sk_part ON sk_part.id = es_part.skill_id
          WHERE mt.user_id = $1 AND mss.percentage IS NOT NULL
        )
        SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
@@ -375,9 +382,12 @@ class ProgressRepository {
    * Completed attempts grouped by the exact Cambridge exam-section part,
    * unified across Practice attempts, graded Writing submissions, and
    * manually-logged activities that resolve to a real exam part. Mocks are
-   * deliberately excluded — they only report at paper level (READING,
-   * USE_OF_ENGLISH, ...), never at the per-part granularity this method
-   * needs (see getScoreEvolution for where mocks do count).
+   * Mocks contribute only where they resolved a real exam_section_id —
+   * B2_FIRST mocks logged after part-level registration shipped (see
+   * mock-exam-catalog.ts), for every skill except Speaking, which stays a
+   * holistic paper-level entry with no exam_section_id (see
+   * getScoreEvolution for where paper-level mocks, and Speaking, still
+   * count instead).
    *
    * Raw SQL (not QueryBuilder) for the same reason as UNIFIED_SCORES_CTE:
    * no clean way to UNION three structurally different tables otherwise.
@@ -434,6 +444,15 @@ class ProgressRepository {
          INNER JOIN exam_sections es
            ON es.id = COALESCE(pa.exam_section_id, atpl.exam_section_id, ca.exam_section_id)
          WHERE sc.user_id = $1 AND sc.deleted_at IS NULL AND sc.percentage IS NOT NULL
+
+         UNION ALL
+
+         SELECT es.slug AS section_slug, CAST(mss.percentage AS FLOAT), NULL, NULL,
+                COALESCE(mt.taken_at, mt.created_at)
+         FROM mock_section_scores mss
+         INNER JOIN mock_tests mt ON mt.id = mss.mock_test_id AND mt.deleted_at IS NULL
+         INNER JOIN exam_sections es ON es.id = mss.exam_section_id
+         WHERE mt.user_id = $1 AND mss.percentage IS NOT NULL
        )
        SELECT es.slug AS "sectionSlug", es.name AS "sectionName",
               sk.slug AS "skillSlug", sk.name AS "skillName",
