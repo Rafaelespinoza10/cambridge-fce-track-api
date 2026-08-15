@@ -53,6 +53,13 @@ interface PracticePartMetricRow {
   lastAttemptAt: Date;
 }
 
+interface ScoreEvolutionRow {
+  occurredAt: Date;
+  skillSlug: string;
+  skillName: string;
+  percentage: number;
+}
+
 interface WritingCriterionMetricRow {
   criterion: string;
   averageBand: number;
@@ -90,7 +97,7 @@ interface WritingMetricsSummaryRow {
 const UNIFIED_SCORES_CTE = `
   WITH unified_scores AS (
     SELECT sc.id, sc.user_id, sc.attempted_at AS occurred_at,
-           CAST(sc.percentage AS FLOAT) AS percentage, sk.name AS skill_name,
+           CAST(sc.percentage AS FLOAT) AS percentage, sk.name AS skill_name, sk.slug AS skill_slug,
            COALESCE(sc.time_spent_minutes, 0) AS duration_minutes,
            COALESCE(pa.title, 'Activity') AS title
     FROM activity_scores sc
@@ -103,6 +110,7 @@ const UNIFIED_SCORES_CTE = `
     SELECT att.id, att.user_id, att.submitted_at AS occurred_at,
            CAST(att.percentage AS FLOAT) AS percentage,
            CASE WHEN ex.part_code LIKE 'UOE_PART_%' THEN 'Use of English' ELSE 'Use of English' END AS skill_name,
+           CASE WHEN ex.part_code LIKE 'UOE_PART_%' THEN 'use-of-english' ELSE 'use-of-english' END AS skill_slug,
            COALESCE(att.duration_seconds, 0) / 60.0 AS duration_minutes,
            ex.title AS title
     FROM practice_attempts att
@@ -114,6 +122,7 @@ const UNIFIED_SCORES_CTE = `
     SELECT ws.id, ws.user_id, ws.submitted_at AS occurred_at,
            (CAST(ws.feedback->>'overallBand' AS FLOAT) / CAST(ws.feedback->>'maxBand' AS FLOAT)) * 100 AS percentage,
            'Writing' AS skill_name,
+           'writing' AS skill_slug,
            COALESCE(ws.duration_seconds, 0) / 60.0 AS duration_minutes,
            wt.title AS title
     FROM writing_submissions ws
@@ -252,6 +261,44 @@ class ProgressRepository {
       score: r.score !== null ? parseFloat(r.score) || null : null,
       date: r.date,
     }));
+  }
+
+  /**
+   * Raw, per-attempt rows (not pre-aggregated) for the Progress screen's
+   * skill evolution chart and ranking — those need individual data points
+   * to sample/downsample per selected period, unlike the weekly-averaged
+   * methods above. Deliberately NOT the same data GET /scores (ScoringService.
+   * getScoreHistory) returns: that endpoint backs the editable score list
+   * (edit/delete a manually-logged ActivityScore) and only ever reads
+   * ActivityScore — Practice/Writing rows have no "edit" affordance, so
+   * they never belong in that list. This is a separate, read-only
+   * analytics view over the same unified_scores CTE.
+   */
+  async getScoreEvolution(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<ScoreEvolutionRow[]> {
+    const rows = await this.ds.query<
+      { occurredAt: Date; skillSlug: string | null; skillName: string | null; percentage: string }[]
+    >(
+      `${UNIFIED_SCORES_CTE}
+       SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
+       FROM unified_scores
+       WHERE user_id = $1 AND skill_slug IS NOT NULL AND percentage IS NOT NULL
+         AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')
+       ORDER BY occurred_at ASC`,
+      [userId, from, to],
+    );
+
+    return rows
+      .filter((r): r is typeof r & { skillSlug: string; skillName: string } => r.skillSlug !== null)
+      .map((r) => ({
+        occurredAt: r.occurredAt,
+        skillSlug: r.skillSlug,
+        skillName: r.skillName,
+        percentage: parseFloat(r.percentage) || 0,
+      }));
   }
 
   async getActiveGoal(userId: string): Promise<UserGoal | null> {
@@ -394,6 +441,7 @@ export type {
   SkillWeekRow,
   RecentActivityRow,
   OverallWeekRow,
+  ScoreEvolutionRow,
   PracticePartMetricRow,
   WritingCriterionMetricRow,
   WritingMetricsSummaryRow,

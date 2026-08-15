@@ -66,6 +66,29 @@ export interface WritingMetricsResponse {
   lastAttemptAt: string | null;
 }
 
+/**
+ * One raw, per-attempt data point — not pre-aggregated — powering the
+ * Progress screen's skill evolution chart and ranking. Deliberately not
+ * SafeScore: those rows are editable (id, scoreType, correctAnswers, ...);
+ * these are read-only analytics points that can come from a manually-
+ * logged activity, a Practice attempt, or a Writing submission alike.
+ */
+export interface ScoreEvolutionEntrySkill {
+  slug: string;
+  name: string;
+  accentColor: string;
+}
+
+export interface ScoreEvolutionEntry {
+  attemptedAt: string;
+  skill: ScoreEvolutionEntrySkill;
+  percentage: number;
+}
+
+export interface ScoreEvolutionResponse {
+  scores: ScoreEvolutionEntry[];
+}
+
 export interface MetricsResponse {
   weeklyActivities: WeeklyActivitiesMetric;
   studyMinutes: number;

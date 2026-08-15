@@ -1,7 +1,9 @@
 import { getDatabaseConnection } from '../../lib/database';
+import { getSkillAccentColor } from '../../lib/skill-display';
 import { ProgressRepository } from '../../repositories/progress.repository';
 import {
   calculateStreak,
+  createError,
   getCurrentWeekBounds,
   getLastNWeekStarts,
   roundTwo,
@@ -12,6 +14,7 @@ import type {
   MetricsResponse,
   PracticePartMetricsResponse,
   RecentActivityMetric,
+  ScoreEvolutionResponse,
   SkillMetric,
   SkillProgressMetric,
   WritingMetricsResponse,
@@ -180,6 +183,29 @@ class ProgressService {
       maxBand: 20,
       completedCount: summary.completedCount,
       lastAttemptAt: summary.lastAttemptAt !== null ? summary.lastAttemptAt.toISOString() : null,
+    };
+  }
+
+  async getScoreEvolution(userId: string, from: string, to: string): Promise<ScoreEvolutionResponse> {
+    const fromDate = new Date(from);
+    if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    const toDate = new Date(to);
+    if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const rows = await repo.getScoreEvolution(userId, from, to);
+
+    return {
+      scores: rows.map((row) => ({
+        attemptedAt: row.occurredAt.toISOString(),
+        skill: {
+          slug: row.skillSlug,
+          name: row.skillName,
+          accentColor: getSkillAccentColor(row.skillSlug),
+        },
+        percentage: roundTwo(row.percentage),
+      })),
     };
   }
 }
