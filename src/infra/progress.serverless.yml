@@ -34,6 +34,13 @@ functions:
           path: /metrics/practice/parts
           method: GET
 
+  progressWritingMetrics:
+    handler: src/controllers/progressController.getWritingMetrics
+    events:
+      - httpApi:
+          path: /metrics/writing
+          method: GET
+
 package:
   individually: true
 

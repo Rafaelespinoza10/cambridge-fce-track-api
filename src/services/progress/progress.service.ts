@@ -14,6 +14,7 @@ import type {
   RecentActivityMetric,
   SkillMetric,
   SkillProgressMetric,
+  WritingMetricsResponse,
 } from '../../interfaces/progress/progress.interface';
 
 const SKILL_LOOKBACK_DAYS = 30;
@@ -160,6 +161,25 @@ class ProgressService {
         averageScore: roundTwo(row.averageScore),
         lastAttemptAt: row.lastAttemptAt.toISOString(),
       })),
+    };
+  }
+
+  async getWritingMetrics(userId: string): Promise<WritingMetricsResponse> {
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const { criteria, summary } = await repo.getWritingMetrics(userId);
+
+    return {
+      criteria: criteria.map((row) => ({
+        criterion: row.criterion,
+        averageBand: roundTwo(row.averageBand),
+        maxBand: 5,
+      })),
+      overallAverageBand:
+        summary.overallAverageBand !== null ? roundTwo(summary.overallAverageBand) : null,
+      maxBand: 20,
+      completedCount: summary.completedCount,
+      lastAttemptAt: summary.lastAttemptAt !== null ? summary.lastAttemptAt.toISOString() : null,
     };
   }
 }

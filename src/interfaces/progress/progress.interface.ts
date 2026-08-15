@@ -51,6 +51,21 @@ export interface PracticePartMetricsResponse {
   parts: PracticePartMetric[];
 }
 
+/** Average band for one of the 4 official Cambridge Writing criteria, across all graded submissions. */
+export interface WritingCriterionMetric {
+  criterion: string;
+  averageBand: number;
+  maxBand: 5;
+}
+
+export interface WritingMetricsResponse {
+  criteria: WritingCriterionMetric[];
+  overallAverageBand: number | null;
+  maxBand: 20;
+  completedCount: number;
+  lastAttemptAt: string | null;
+}
+
 export interface MetricsResponse {
   weeklyActivities: WeeklyActivitiesMetric;
   studyMinutes: number;

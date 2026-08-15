@@ -2,10 +2,8 @@ import type { DataSource } from 'typeorm';
 import { PlannedActivity } from '../models/PlannedActivity';
 import { PlanDay } from '../models/PlanDay';
 import { WeeklyPlan } from '../models/WeeklyPlan';
-import { ActivityScore } from '../models/ActivityScore';
 import { MockTest } from '../models/MockTest';
 import { UserGoal } from '../models/UserGoal';
-import { Skill } from '../models/Skill';
 import { PracticeAttempt } from '../models/PracticeAttempt';
 import { PracticeExercise } from '../models/PracticeExercise';
 import { PracticeAttemptStatus } from '../models/enums';
@@ -55,6 +53,75 @@ interface PracticePartMetricRow {
   lastAttemptAt: Date;
 }
 
+interface WritingCriterionMetricRow {
+  criterion: string;
+  averageBand: number;
+}
+
+interface WritingMetricsSummaryRow {
+  completedCount: number;
+  overallAverageBand: number | null;
+  lastAttemptAt: Date | null;
+}
+
+/**
+ * One row per graded score, regardless of source — a manually-logged
+ * ActivityScore, a completed Practice attempt, or a graded Writing
+ * submission. Built with a raw parameterized CTE (not QueryBuilder)
+ * because TypeORM's QueryBuilder has no clean way to UNION three
+ * structurally different tables and then GROUP BY/AVG over the result —
+ * every value substituted here is a `$n` placeholder, never string-
+ * interpolated, same injection discipline as the rest of this codebase.
+ *
+ * Deliberately does NOT filter `percentage IS NOT NULL` here — some
+ * callers (getStudyDates, getRecentActivities) need every row regardless
+ * of whether a percentage was ever computed (matches the original
+ * ActivityScore-only behavior); callers that aggregate scores add that
+ * filter themselves.
+ *
+ * Practice/Writing rows resolve a `skill_name` from their catalog codes
+ * instead of a Skill FK (neither table has one) — Skill is seeded with
+ * rows named exactly 'Use of English' and 'Writing'
+ * (src/config/seed/data/skills.ts), so these land in the same bucket a
+ * manually-logged activity for that skill would. The CASE for Practice is
+ * intentionally not a bare hardcode: only UOE_PART_% is generatable today,
+ * but this leaves room for READING_PART_% later without another migration.
+ */
+const UNIFIED_SCORES_CTE = `
+  WITH unified_scores AS (
+    SELECT sc.id, sc.user_id, sc.attempted_at AS occurred_at,
+           CAST(sc.percentage AS FLOAT) AS percentage, sk.name AS skill_name,
+           COALESCE(sc.time_spent_minutes, 0) AS duration_minutes,
+           COALESCE(pa.title, 'Activity') AS title
+    FROM activity_scores sc
+    LEFT JOIN skills sk ON sk.id = sc.skill_id
+    LEFT JOIN planned_activities pa ON pa.id = sc.planned_activity_id AND pa.deleted_at IS NULL
+    WHERE sc.deleted_at IS NULL
+
+    UNION ALL
+
+    SELECT att.id, att.user_id, att.submitted_at AS occurred_at,
+           CAST(att.percentage AS FLOAT) AS percentage,
+           CASE WHEN ex.part_code LIKE 'UOE_PART_%' THEN 'Use of English' ELSE 'Use of English' END AS skill_name,
+           COALESCE(att.duration_seconds, 0) / 60.0 AS duration_minutes,
+           ex.title AS title
+    FROM practice_attempts att
+    INNER JOIN practice_exercises ex ON ex.id = att.exercise_id
+    WHERE att.deleted_at IS NULL AND att.status = 'completed'
+
+    UNION ALL
+
+    SELECT ws.id, ws.user_id, ws.submitted_at AS occurred_at,
+           (CAST(ws.feedback->>'overallBand' AS FLOAT) / CAST(ws.feedback->>'maxBand' AS FLOAT)) * 100 AS percentage,
+           'Writing' AS skill_name,
+           COALESCE(ws.duration_seconds, 0) / 60.0 AS duration_minutes,
+           wt.title AS title
+    FROM writing_submissions ws
+    INNER JOIN writing_tasks wt ON wt.id = ws.task_id
+    WHERE ws.deleted_at IS NULL AND ws.status = 'graded'
+  )
+`;
+
 class ProgressRepository {
   constructor(private readonly ds: DataSource) {}
 
@@ -87,38 +154,33 @@ class ProgressRepository {
     weekStart: string,
     weekEnd: string,
   ): Promise<WeeklyScoreStats> {
-    const row = await this.ds
-      .createQueryBuilder(ActivityScore, 'sc')
-      .select('AVG(CAST(sc.percentage AS FLOAT))', 'avg_score')
-      .addSelect('COALESCE(SUM(sc.time_spent_minutes), 0)', 'study_minutes')
-      .where('sc.user_id = :userId', { userId })
-      .andWhere('sc.deleted_at IS NULL')
-      .andWhere(`sc.attempted_at >= :weekStart::date`, { weekStart })
-      .andWhere(`sc.attempted_at < (:weekEnd::date + INTERVAL '1 day')`, { weekEnd })
-      .getRawOne<{ avg_score: string | null; study_minutes: string }>();
+    const rows = await this.ds.query<{ avg_score: string | null; study_minutes: string }[]>(
+      `${UNIFIED_SCORES_CTE}
+       SELECT AVG(percentage) AS avg_score, COALESCE(SUM(duration_minutes), 0) AS study_minutes
+       FROM unified_scores
+       WHERE user_id = $1 AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')`,
+      [userId, weekStart, weekEnd],
+    );
+    const row = rows[0];
 
     const avg = row?.avg_score != null ? parseFloat(row.avg_score) : null;
 
     return {
       avgScore: avg !== null && !isNaN(avg) ? avg : null,
-      studyMinutes: parseInt(row?.study_minutes ?? '0', 10),
+      studyMinutes: Math.round(parseFloat(row?.study_minutes ?? '0')),
     };
   }
 
   async getSkillAverages(userId: string, since: string): Promise<SkillAverage[]> {
-    const rows = await this.ds
-      .createQueryBuilder(ActivityScore, 'sc')
-      .innerJoin('sc.skill', 'sk')
-      .select('sk.name', 'skillName')
-      .addSelect('AVG(CAST(sc.percentage AS FLOAT))', 'avgScore')
-      .where('sc.user_id = :userId', { userId })
-      .andWhere('sc.deleted_at IS NULL')
-      .andWhere('sc.percentage IS NOT NULL')
-      .andWhere(`sc.attempted_at >= :since::date`, { since })
-      .groupBy('sk.id')
-      .addGroupBy('sk.name')
-      .orderBy('sk.name', 'ASC')
-      .getRawMany<{ skillName: string; avgScore: string }>();
+    const rows = await this.ds.query<{ skillName: string; avgScore: string }[]>(
+      `${UNIFIED_SCORES_CTE}
+       SELECT skill_name AS "skillName", AVG(percentage) AS "avgScore"
+       FROM unified_scores
+       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL AND occurred_at >= $2::date
+       GROUP BY skill_name
+       ORDER BY skill_name ASC`,
+      [userId, since],
+    );
 
     return rows.map((r) => ({
       skillName: r.skillName,
@@ -127,14 +189,15 @@ class ProgressRepository {
   }
 
   async getStudyDates(userId: string): Promise<string[]> {
-    const rows = await this.ds
-      .createQueryBuilder(ActivityScore, 'sc')
-      .select(`TO_CHAR(sc.attempted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`, 'study_date')
-      .where('sc.user_id = :userId', { userId })
-      .andWhere('sc.deleted_at IS NULL')
-      .groupBy(`TO_CHAR(sc.attempted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`)
-      .orderBy('study_date', 'DESC')
-      .getRawMany<{ study_date: string }>();
+    const rows = await this.ds.query<{ study_date: string }[]>(
+      `${UNIFIED_SCORES_CTE}
+       SELECT TO_CHAR(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS study_date
+       FROM unified_scores
+       WHERE user_id = $1
+       GROUP BY study_date
+       ORDER BY study_date DESC`,
+      [userId],
+    );
 
     return rows.map((r) => r.study_date);
   }
@@ -150,22 +213,16 @@ class ProgressRepository {
   }
 
   async getMonthlySkillProgress(userId: string, since: string): Promise<SkillWeekRow[]> {
-    const rows = await this.ds
-      .createQueryBuilder(ActivityScore, 'sc')
-      .innerJoin('sc.skill', 'sk')
-      .select('sk.name', 'skillName')
-      .addSelect(`TO_CHAR(DATE_TRUNC('week', sc.attempted_at), 'YYYY-MM-DD')`, 'weekStart')
-      .addSelect('AVG(CAST(sc.percentage AS FLOAT))', 'avgScore')
-      .where('sc.user_id = :userId', { userId })
-      .andWhere('sc.deleted_at IS NULL')
-      .andWhere('sc.percentage IS NOT NULL')
-      .andWhere(`sc.attempted_at >= :since::date`, { since })
-      .groupBy('sk.id')
-      .addGroupBy('sk.name')
-      .addGroupBy(`DATE_TRUNC('week', sc.attempted_at)`)
-      .orderBy('sk.name', 'ASC')
-      .addOrderBy(`DATE_TRUNC('week', sc.attempted_at)`, 'ASC')
-      .getRawMany<{ skillName: string; weekStart: string; avgScore: string }>();
+    const rows = await this.ds.query<{ skillName: string; weekStart: string; avgScore: string }[]>(
+      `${UNIFIED_SCORES_CTE}
+       SELECT skill_name AS "skillName", TO_CHAR(DATE_TRUNC('week', occurred_at), 'YYYY-MM-DD') AS "weekStart",
+              AVG(percentage) AS "avgScore"
+       FROM unified_scores
+       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL AND occurred_at >= $2::date
+       GROUP BY skill_name, DATE_TRUNC('week', occurred_at)
+       ORDER BY skill_name ASC, DATE_TRUNC('week', occurred_at) ASC`,
+      [userId, since],
+    );
 
     return rows.map((r) => ({
       skillName: r.skillName,
@@ -175,26 +232,18 @@ class ProgressRepository {
   }
 
   async getRecentActivities(userId: string, limit: number): Promise<RecentActivityRow[]> {
-    const rows = await this.ds
-      .createQueryBuilder(ActivityScore, 'sc')
-      .leftJoin(PlannedActivity, 'pa', 'pa.id = sc.planned_activity_id AND pa.deleted_at IS NULL')
-      .leftJoin(Skill, 'sk', 'sk.id = sc.skill_id')
-      .select('sc.id', 'id')
-      .addSelect(`COALESCE(pa.title, 'Activity')`, 'title')
-      .addSelect('sk.name', 'skillName')
-      .addSelect('CAST(sc.percentage AS FLOAT)', 'score')
-      .addSelect(`TO_CHAR(sc.attempted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`, 'date')
-      .where('sc.user_id = :userId', { userId })
-      .andWhere('sc.deleted_at IS NULL')
-      .orderBy('sc.attempted_at', 'DESC')
-      .limit(limit)
-      .getRawMany<{
-        id: string;
-        title: string;
-        skillName: string | null;
-        score: string | null;
-        date: string;
-      }>();
+    const rows = await this.ds.query<
+      { id: string; title: string; skillName: string | null; score: string | null; date: string }[]
+    >(
+      `${UNIFIED_SCORES_CTE}
+       SELECT id, title, skill_name AS "skillName", percentage AS score,
+              TO_CHAR(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date
+       FROM unified_scores
+       WHERE user_id = $1
+       ORDER BY occurred_at DESC
+       LIMIT $2`,
+      [userId, limit],
+    );
 
     return rows.map((r) => ({
       id: r.id,
@@ -218,17 +267,16 @@ class ProgressRepository {
   }
 
   async getOverallWeeklyScores(userId: string, since: string): Promise<OverallWeekRow[]> {
-    const rows = await this.ds
-      .createQueryBuilder(ActivityScore, 'sc')
-      .select(`TO_CHAR(DATE_TRUNC('week', sc.attempted_at), 'YYYY-MM-DD')`, 'weekStart')
-      .addSelect('AVG(CAST(sc.percentage AS FLOAT))', 'avgScore')
-      .where('sc.user_id = :userId', { userId })
-      .andWhere('sc.deleted_at IS NULL')
-      .andWhere('sc.percentage IS NOT NULL')
-      .andWhere(`sc.attempted_at >= :since::date`, { since })
-      .groupBy(`DATE_TRUNC('week', sc.attempted_at)`)
-      .orderBy(`DATE_TRUNC('week', sc.attempted_at)`, 'ASC')
-      .getRawMany<{ weekStart: string; avgScore: string }>();
+    const rows = await this.ds.query<{ weekStart: string; avgScore: string }[]>(
+      `${UNIFIED_SCORES_CTE}
+       SELECT TO_CHAR(DATE_TRUNC('week', occurred_at), 'YYYY-MM-DD') AS "weekStart",
+              AVG(percentage) AS "avgScore"
+       FROM unified_scores
+       WHERE user_id = $1 AND percentage IS NOT NULL AND occurred_at >= $2::date
+       GROUP BY DATE_TRUNC('week', occurred_at)
+       ORDER BY DATE_TRUNC('week', occurred_at) ASC`,
+      [userId, since],
+    );
 
     return rows.map((r) => ({
       weekStart: r.weekStart,
@@ -288,6 +336,54 @@ class ProgressRepository {
       lastAttemptAt: row.lastAttemptAt,
     }));
   }
+
+  /**
+   * Average band per Cambridge Writing criterion across all graded
+   * submissions, plus a summary row — mirrors getPracticePartMetrics'
+   * shape/intent, just grouping by criterion (from the feedback JSONB)
+   * instead of by exam part. Two small parameterized queries in parallel
+   * rather than one combined query with window functions, for readability.
+   */
+  async getWritingMetrics(
+    userId: string,
+  ): Promise<{ criteria: WritingCriterionMetricRow[]; summary: WritingMetricsSummaryRow }> {
+    const [criteriaRows, summaryRows] = await Promise.all([
+      this.ds.query<{ criterion: string; averageBand: string }[]>(
+        `SELECT c->>'criterion' AS criterion, AVG((c->>'band')::float) AS "averageBand"
+         FROM writing_submissions ws
+         CROSS JOIN LATERAL jsonb_array_elements(ws.feedback->'criteria') AS c
+         WHERE ws.user_id = $1 AND ws.deleted_at IS NULL AND ws.status = 'graded'
+         GROUP BY c->>'criterion'
+         ORDER BY c->>'criterion' ASC`,
+        [userId],
+      ),
+      this.ds.query<
+        { completedCount: string; overallAverageBand: string | null; lastAttemptAt: Date | null }[]
+      >(
+        `SELECT COUNT(*) AS "completedCount",
+                AVG(CAST(feedback->>'overallBand' AS FLOAT)) AS "overallAverageBand",
+                MAX(submitted_at) AS "lastAttemptAt"
+         FROM writing_submissions
+         WHERE user_id = $1 AND deleted_at IS NULL AND status = 'graded'`,
+        [userId],
+      ),
+    ]);
+
+    const summaryRow = summaryRows[0];
+
+    return {
+      criteria: criteriaRows.map((row) => ({
+        criterion: row.criterion,
+        averageBand: parseFloat(row.averageBand) || 0,
+      })),
+      summary: {
+        completedCount: parseInt(summaryRow?.completedCount ?? '0', 10),
+        overallAverageBand:
+          summaryRow?.overallAverageBand != null ? parseFloat(summaryRow.overallAverageBand) : null,
+        lastAttemptAt: summaryRow?.lastAttemptAt ?? null,
+      },
+    };
+  }
 }
 
 export { ProgressRepository };
@@ -299,4 +395,6 @@ export type {
   RecentActivityRow,
   OverallWeekRow,
   PracticePartMetricRow,
+  WritingCriterionMetricRow,
+  WritingMetricsSummaryRow,
 };

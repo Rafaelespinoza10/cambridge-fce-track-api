@@ -33,3 +33,17 @@ export async function getPracticePartMetrics(
     return handleError(err);
   }
 }
+
+export async function getWritingMetrics(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const result = await service.getWritingMetrics(payload.sub);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
