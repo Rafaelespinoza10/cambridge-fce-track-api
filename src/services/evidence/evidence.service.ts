@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getDatabaseConnection } from '../../lib/database';
 import { EvidenceRepository } from '../../repositories/evidence.repository';
@@ -15,11 +20,26 @@ import { ALL_VALID_MIME_TYPES, createError, toSafeEvidence } from '@lib/evidence
 const S3_BUCKET = process.env['S3_EVIDENCE_BUCKET'] ?? '';
 const S3_REGION = process.env['S3_REGION'] ?? 'us-east-1';
 const UPLOAD_URL_EXPIRES_IN = 300; // 5 minutes
+const DOWNLOAD_URL_EXPIRES_IN = 3600; // 1 hour — S3 evidence has no permanent public_url, so reads sign one on the fly
 const MAX_FILE_SIZE = 52_428_800; // 50 MB
 
 const s3 = new S3Client({ region: S3_REGION });
 
 const VALID_LINKED_TO = new Set(['activity', 'score', 'mock']);
+
+/**
+ * S3 evidence has no permanent public_url (the bucket is private, PutObject
+ * uploads go through a short-lived presigned URL) — so every read signs a
+ * fresh GetObject URL from storageKey instead. External-link evidence already
+ * has a real publicUrl and passes through untouched.
+ */
+async function withReadableUrl(evidence: SafeEvidence): Promise<SafeEvidence> {
+  if (evidence.storageProvider !== StorageProvider.S3) return evidence;
+
+  const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: evidence.storageKey });
+  const publicUrl = await getSignedUrl(s3, command, { expiresIn: DOWNLOAD_URL_EXPIRES_IN });
+  return { ...evidence, publicUrl };
+}
 
 class EvidenceService {
   async generateUploadUrl(
@@ -113,7 +133,7 @@ class EvidenceService {
       activityScoreId: body.linkedTo === 'score' ? (body.linkedId ?? null) : null,
       mockTestId: body.linkedTo === 'mock' ? (body.linkedId ?? null) : null,
     });
-    return toSafeEvidence(record);
+    return withReadableUrl(toSafeEvidence(record));
   }
 
   async getEvidence(userId: string, evidenceId: string): Promise<SafeEvidence> {
@@ -121,7 +141,7 @@ class EvidenceService {
     const repo = new EvidenceRepository(ds);
     const record = await repo.findByIdAndOwner(evidenceId, userId);
     if (record === null) throw createError('Evidence not found', 404);
-    return toSafeEvidence(record);
+    return withReadableUrl(toSafeEvidence(record));
   }
 
   async listEvidence(
@@ -147,7 +167,8 @@ class EvidenceService {
       ...(filters.linkedTo === 'mock' ? { mockTestId: filters.linkedId } : {}),
     });
 
-    return { data: records.map(toSafeEvidence), total, limit, offset };
+    const data = await Promise.all(records.map(toSafeEvidence).map(withReadableUrl));
+    return { data, total, limit, offset };
   }
 
   async deleteEvidence(userId: string, evidenceId: string): Promise<void> {
