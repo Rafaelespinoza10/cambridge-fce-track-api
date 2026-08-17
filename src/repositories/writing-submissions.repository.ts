@@ -147,11 +147,7 @@ class WritingSubmissionsRepository {
   async listHistoryByUser(filters: ListHistoryFilters): Promise<ListHistoryResult> {
     const qb = this.submissionRepo
       .createQueryBuilder('submission')
-      .innerJoin(
-        WritingTask,
-        'task',
-        'task.id = submission.task_id AND task.deleted_at IS NULL',
-      )
+      .innerJoin(WritingTask, 'task', 'task.id = submission.task_id AND task.deleted_at IS NULL')
       .where('submission.user_id = :userId', { userId: filters.userId })
       .andWhere('submission.deleted_at IS NULL')
       .andWhere('submission.status IN (:...statuses)', { statuses: filters.statuses });

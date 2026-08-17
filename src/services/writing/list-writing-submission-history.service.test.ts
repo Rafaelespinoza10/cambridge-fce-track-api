@@ -18,7 +18,9 @@ import { WritingSubmissionStatus, WritingTaskType } from '../../models/enums';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 
-function makeRow(overrides: Partial<WritingSubmissionHistoryRow> = {}): WritingSubmissionHistoryRow {
+function makeRow(
+  overrides: Partial<WritingSubmissionHistoryRow> = {},
+): WritingSubmissionHistoryRow {
   return {
     submissionId: 'submission-1',
     taskId: 'task-1',
@@ -219,7 +221,10 @@ describe('ListWritingSubmissionHistoryService.execute — safety', () => {
     const { service } = makeService();
     const result = await execute(service);
     const serialized = JSON.stringify(result.items[0]);
-    assert.doesNotMatch(serialized, /submittedText|feedback|criteria|corrections|userId|deletedAt/i);
+    assert.doesNotMatch(
+      serialized,
+      /submittedText|feedback|criteria|corrections|userId|deletedAt/i,
+    );
   });
 
   it('scopes the query to the given userId', async () => {

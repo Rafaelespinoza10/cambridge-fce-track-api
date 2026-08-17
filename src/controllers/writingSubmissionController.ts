@@ -11,9 +11,7 @@ import type {
 } from '../interfaces/writing/writing-submission.interface';
 import type { WritingSubmissionSafeDto } from '../interfaces/writing/writing-submission.interface';
 import type { WritingCorrectionFlashcardDraftResponse } from '../interfaces/writing/writing-correction-flashcard-draft.interface';
-import type {
-  WritingSubmissionHistoryResponseDto,
-} from '../interfaces/writing/writing-submission-history.interface';
+import type { WritingSubmissionHistoryResponseDto } from '../interfaces/writing/writing-submission-history.interface';
 import type { ListWritingSubmissionHistoryRawQuery } from '../services/writing/list-writing-submission-history.service';
 
 type NowProvider = () => Date;
