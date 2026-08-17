@@ -11,6 +11,8 @@ import type {
 } from '../interfaces/writing/writing-submission.interface';
 import type { WritingSubmissionSafeDto } from '../interfaces/writing/writing-submission.interface';
 import type { WritingCorrectionFlashcardDraftResponse } from '../interfaces/writing/writing-correction-flashcard-draft.interface';
+import type { WritingSubmissionHistoryResponseDto } from '../interfaces/writing/writing-submission-history.interface';
+import type { ListWritingSubmissionHistoryRawQuery } from '../services/writing/list-writing-submission-history.service';
 
 type NowProvider = () => Date;
 
@@ -54,6 +56,13 @@ interface GenerateCorrectionFlashcardDraftPort {
   ): Promise<WritingCorrectionFlashcardDraftResponse>;
 }
 
+interface ListSubmissionHistoryPort {
+  execute(
+    userId: string,
+    rawQuery: ListWritingSubmissionHistoryRawQuery,
+  ): Promise<WritingSubmissionHistoryResponseDto>;
+}
+
 interface WritingSubmissionControllerDeps {
   now: NowProvider;
   services: () => Promise<{
@@ -63,6 +72,7 @@ interface WritingSubmissionControllerDeps {
     submitSubmission: SubmitSubmissionPort;
     abandonSubmission: AbandonSubmissionPort;
     generateCorrectionFlashcardDraft: GenerateCorrectionFlashcardDraftPort;
+    listSubmissionHistory: ListSubmissionHistoryPort;
   }>;
 }
 
@@ -279,6 +289,36 @@ export async function generateWritingCorrectionFlashcardDraft(
   return generateWritingCorrectionFlashcardDraftHandler(event, DEFAULT_DEPS);
 }
 
+// ── GET /writing/submissions ──────────────────────────────────────────────────
+
+async function listWritingSubmissionHistoryHandler(
+  event: APIGatewayProxyEvent,
+  deps: WritingSubmissionControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const params = event.queryStringParameters ?? {};
+
+  try {
+    const { listSubmissionHistory } = await deps.services();
+    const result = await listSubmissionHistory.execute(payload.sub, {
+      status: params.status,
+      page: params.page,
+      pageSize: params.pageSize,
+    });
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapWritingSubmissionError(err));
+  }
+}
+
+export async function listWritingSubmissionHistory(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return listWritingSubmissionHistoryHandler(event, DEFAULT_DEPS);
+}
+
 export {
   startWritingSubmissionHandler,
   getActiveWritingSubmissionHandler,
@@ -286,6 +326,7 @@ export {
   submitWritingSubmissionHandler,
   abandonWritingSubmissionHandler,
   generateWritingCorrectionFlashcardDraftHandler,
+  listWritingSubmissionHistoryHandler,
 };
 export type {
   WritingSubmissionControllerDeps,
@@ -296,4 +337,5 @@ export type {
   SubmitSubmissionPort,
   AbandonSubmissionPort,
   GenerateCorrectionFlashcardDraftPort,
+  ListSubmissionHistoryPort,
 };

@@ -185,6 +185,10 @@ export enum PracticeAttemptStatus {
 
 export enum WritingTaskType {
   ESSAY = 'essay',
+  ARTICLE = 'article',
+  EMAIL = 'email',
+  REPORT = 'report',
+  REVIEW = 'review',
 }
 
 export enum WritingSubmissionStatus {

@@ -18,6 +18,7 @@ import type {
 import type { WritingSubmissionSubmitResultDto } from '../../interfaces/writing/writing-submission.interface';
 import { renderPromptTemplate } from '../../lib/prompt-template';
 import { buildWritingSubmissionResultDto } from '../../lib/writing-submission-result-dto';
+import { getWritingTaskFormat } from '../../lib/writing-task-catalog';
 import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
 import { WritingSubmissionsRepository } from '../../repositories/writing-submissions.repository';
 import type { GradeSubmissionData } from '../../repositories/writing-submissions.repository';
@@ -133,6 +134,7 @@ function buildMessages(
   wordCount: number,
 ): LLMChatMessage[] {
   const userPrompt = renderPromptTemplate(USER_PROMPT_TEMPLATE, {
+    part: `Part ${getWritingTaskFormat(task.task_type).part}`,
     taskTitle: task.title,
     taskInstructions: task.instructions,
     targetLevel: task.target_level ?? '(not specified)',

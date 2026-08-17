@@ -51,6 +51,13 @@ functions:
           path: /writing/submissions/active
           method: GET
 
+  writingListSubmissionHistory:
+    handler: src/controllers/writingSubmissionController.listWritingSubmissionHistory
+    events:
+      - httpApi:
+          path: /writing/submissions
+          method: GET
+
   writingGetSubmission:
     handler: src/controllers/writingSubmissionController.getWritingSubmission
     events:
