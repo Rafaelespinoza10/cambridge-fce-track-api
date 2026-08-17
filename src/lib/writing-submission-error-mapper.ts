@@ -18,6 +18,10 @@ import {
   GenerateWritingCorrectionFlashcardDraftError,
   GenerateWritingCorrectionFlashcardDraftErrorCode,
 } from '../services/writing/generate-writing-correction-flashcard-draft.service';
+import {
+  ListWritingSubmissionHistoryError,
+  ListWritingSubmissionHistoryErrorCode,
+} from '../services/writing/list-writing-submission-history.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -51,6 +55,10 @@ const ABANDON_STATUS_BY_CODE: Record<AbandonWritingSubmissionErrorCode, number> 
   [AbandonWritingSubmissionErrorCode.SUBMISSION_GRADED]: 409,
 };
 
+const LIST_HISTORY_STATUS_BY_CODE: Record<ListWritingSubmissionHistoryErrorCode, number> = {
+  [ListWritingSubmissionHistoryErrorCode.INVALID_INPUT]: 400,
+};
+
 const GENERATE_CORRECTION_FLASHCARD_DRAFT_STATUS_BY_CODE: Record<
   GenerateWritingCorrectionFlashcardDraftErrorCode,
   number
@@ -69,7 +77,7 @@ const GENERATE_CORRECTION_FLASHCARD_DRAFT_STATUS_BY_CODE: Record<
 
 /**
  * Translates every Writing submission-domain error (start/get/submit/abandon/
- * flashcard-draft) into an Error with `statusCode`, consumable by
+ * flashcard-draft/list-history) into an Error with `statusCode`, consumable by
  * @lib/response's handleError. An unrecognized error passes through
  * untouched — handleError treats it as 500 and masks the message, never
  * leaking SQL/constraint names/stack traces. Mirrors mapPracticeAttemptError.
@@ -92,6 +100,9 @@ function mapWritingSubmissionError(error: unknown): unknown {
       error.message,
       GENERATE_CORRECTION_FLASHCARD_DRAFT_STATUS_BY_CODE[error.code],
     );
+  }
+  if (error instanceof ListWritingSubmissionHistoryError) {
+    return httpError(error.message, LIST_HISTORY_STATUS_BY_CODE[error.code]);
   }
   return error;
 }

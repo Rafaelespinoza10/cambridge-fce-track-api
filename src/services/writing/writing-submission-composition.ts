@@ -15,6 +15,7 @@ import { GetWritingSubmissionService } from './get-writing-submission.service';
 import { SubmitWritingSubmissionService } from './submit-writing-submission.service';
 import { AbandonWritingSubmissionService } from './abandon-writing-submission.service';
 import { GenerateWritingCorrectionFlashcardDraftService } from './generate-writing-correction-flashcard-draft.service';
+import { ListWritingSubmissionHistoryService } from './list-writing-submission-history.service';
 
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
@@ -74,6 +75,7 @@ interface WritingSubmissionServices {
   submitSubmission: SubmitWritingSubmissionService;
   abandonSubmission: AbandonWritingSubmissionService;
   generateCorrectionFlashcardDraft: GenerateWritingCorrectionFlashcardDraftService;
+  listSubmissionHistory: ListWritingSubmissionHistoryService;
 }
 
 async function buildWritingSubmissionServices(): Promise<WritingSubmissionServices> {
@@ -99,6 +101,9 @@ async function buildWritingSubmissionServices(): Promise<WritingSubmissionServic
       submissions: new WritingSubmissionsRepository(dataSource),
       tasks: new WritingTasksRepository(dataSource),
       generator: new FlashcardDraftGenerator({ llm: getLazyLLMService() }),
+    }),
+    listSubmissionHistory: new ListWritingSubmissionHistoryService({
+      repository: new WritingSubmissionsRepository(dataSource),
     }),
   };
 }

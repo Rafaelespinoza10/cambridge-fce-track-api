@@ -1,4 +1,4 @@
-Grade the following Cambridge B2 First (FCE) Writing Part 1 submission.
+Grade the following Cambridge B2 First (FCE) Writing {{part}} submission.
 
 Task title: {{taskTitle}}
 Task instructions: {{taskInstructions}}

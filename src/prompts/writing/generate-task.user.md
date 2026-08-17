@@ -1,4 +1,4 @@
-Generate a new Cambridge B2 First (FCE) Writing Part 1 essay task for:
+Generate a new Cambridge B2 First (FCE) Writing {{part}} {{taskTypeLabel}} task for:
 
 Target CEFR level: {{targetLevel}}
 Word count range: {{minWords}}-{{maxWords}} words

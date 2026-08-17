@@ -14,7 +14,7 @@ import type {
 } from './submit-writing-submission.service';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.types';
-import { WritingSubmissionStatus, EnglishLevel } from '../../models/enums';
+import { WritingSubmissionStatus, EnglishLevel, WritingTaskType } from '../../models/enums';
 import type { WritingTask } from '../../models/WritingTask';
 import type { WritingSubmission } from '../../models/WritingSubmission';
 import type { GradeSubmissionData } from '../../repositories/writing-submissions.repository';
@@ -32,6 +32,7 @@ function makeTask(overrides: Partial<WritingTask> = {}): WritingTask {
   return {
     id: TASK_ID,
     user_id: USER_ID,
+    task_type: WritingTaskType.ESSAY,
     title: 'Technology in education',
     instructions: 'Write an essay about technology in education.',
     target_level: EnglishLevel.B2,

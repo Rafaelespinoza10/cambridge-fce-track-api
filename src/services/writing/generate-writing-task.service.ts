@@ -14,19 +14,13 @@ import type {
 import type { WritingTaskGenerationMetadata } from '../../models/writing-json-types';
 import type { WritingTask } from '../../models/WritingTask';
 import { renderPromptTemplate } from '../../lib/prompt-template';
+import { getWritingTaskFormat } from '../../lib/writing-task-catalog';
 import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
 import type { CreateTaskData } from '../../repositories/writing-tasks.repository';
-import SYSTEM_PROMPT from '../../prompts/writing/generate-task.system.md';
+import SYSTEM_PROMPT_TEMPLATE from '../../prompts/writing/generate-task.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/writing/generate-task.user.md';
 
-const PROMPT_VERSION = 'writing-task-v1';
-
-// Real FCE Writing Part 1 constraints — not requested from the model, fixed
-// the same way GeneratePracticeExerciseService fixes itemCount from the
-// catalog rather than asking the LLM for it.
-const ESSAY_MIN_WORDS = 140;
-const ESSAY_MAX_WORDS = 190;
-const ESSAY_TIME_LIMIT_SECONDS = 2400;
+const PROMPT_VERSION = 'writing-task-v2';
 
 export enum GenerateWritingTaskErrorCode {
   INVALID_INPUT = 'invalid_input',
@@ -92,9 +86,11 @@ function invalidInput(message: string): never {
   throw new GenerateWritingTaskError(message, GenerateWritingTaskErrorCode.INVALID_INPUT);
 }
 
+const VALID_TASK_TYPES = new Set<string>(Object.values(WritingTaskType));
+
 function normalizeRequest(input: GenerateWritingTaskRequest): NormalizedRequest {
-  if (input.taskType !== WritingTaskType.ESSAY) {
-    invalidInput('taskType must be "essay" — no other Writing task type is generatable yet');
+  if (typeof input.taskType !== 'string' || !VALID_TASK_TYPES.has(input.taskType)) {
+    invalidInput(`taskType must be one of: ${Object.values(WritingTaskType).join(', ')}`);
   }
 
   let targetLevel = EnglishLevel.B2;
@@ -109,13 +105,23 @@ function normalizeRequest(input: GenerateWritingTaskRequest): NormalizedRequest 
 }
 
 function buildMessages(normalized: NormalizedRequest): LLMChatMessage[] {
+  const format = getWritingTaskFormat(normalized.taskType);
+  const part = `Part ${format.part}`;
+
+  const systemPrompt = renderPromptTemplate(SYSTEM_PROMPT_TEMPLATE, {
+    part,
+    taskTypeLabel: format.label,
+    formatBrief: format.formatBrief,
+  });
   const userPrompt = renderPromptTemplate(USER_PROMPT_TEMPLATE, {
+    part,
+    taskTypeLabel: format.label,
     targetLevel: normalized.targetLevel,
-    minWords: String(ESSAY_MIN_WORDS),
-    maxWords: String(ESSAY_MAX_WORDS),
+    minWords: String(format.minWords),
+    maxWords: String(format.maxWords),
   });
   return [
-    { role: 'system', content: SYSTEM_PROMPT.trim() },
+    { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
   ];
 }
@@ -128,7 +134,7 @@ const RESPONSE_SCHEMA: LLMJsonSchema = {
     additionalProperties: false,
     required: ['title', 'instructions'],
     properties: {
-      title: { type: 'string', description: 'Short title for the essay task.' },
+      title: { type: 'string', description: 'Short title for the writing task.' },
       instructions: {
         type: 'string',
         description:
@@ -221,7 +227,8 @@ function mapLLMError(error: unknown): GenerateWritingTaskError {
 }
 
 /**
- * Generates a Cambridge B2 First Writing Part 1 essay task via the LLM,
+ * Generates a Cambridge B2 First Writing task (Part 1 essay, or a Part 2
+ * article/email/report/review — see writing-task-catalog.ts) via the LLM,
  * validates the response, and persists it — mirrors
  * GeneratePracticeExerciseService's shape exactly (idempotency pre-check,
  * LLM call before any DB transaction opens, transactional persist, replay
@@ -329,6 +336,7 @@ export class GenerateWritingTaskService {
   ): Promise<WritingTaskSafeDto> {
     const factory = this.deps.writingTasks ?? DEFAULT_WRITING_TASKS_FACTORY;
     const repo = factory(manager);
+    const format = getWritingTaskFormat(normalized.taskType);
 
     const taskData: CreateTaskData = {
       userId,
@@ -337,9 +345,9 @@ export class GenerateWritingTaskService {
       targetLevel: normalized.targetLevel,
       title: generated.title,
       instructions: generated.instructions,
-      minWords: ESSAY_MIN_WORDS,
-      maxWords: ESSAY_MAX_WORDS,
-      timeLimitSeconds: ESSAY_TIME_LIMIT_SECONDS,
+      minWords: format.minWords,
+      maxWords: format.maxWords,
+      timeLimitSeconds: format.timeLimitSeconds,
       source: PracticeExerciseSource.AI,
       model: this.deps.modelLabel,
       promptVersion: PROMPT_VERSION,
