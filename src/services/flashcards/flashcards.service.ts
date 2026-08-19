@@ -1,4 +1,4 @@
-import type { DataSource, UpdateResult } from 'typeorm';
+import type { DataSource, EntityManager, UpdateResult } from 'typeorm';
 
 import { FlashcardsRepository } from '../../repositories/flashcards.repository';
 import type {
@@ -13,8 +13,10 @@ import { FlashcardType, FlashcardStatus, EnglishLevel } from '../../models/enums
 import type {
   CreateFlashcardRequestBody,
   UpdateFlashcardRequestBody,
+  CreateWordFamilyRequestBody,
   FlashcardListStatus,
   FlashcardDto,
+  WordFamilyDto,
 } from '../../interfaces/flashcards/flashcards.interface';
 
 export enum FlashcardErrorCode {
@@ -35,6 +37,8 @@ export class FlashcardError extends Error {
     this.name = 'FlashcardError';
   }
 }
+
+type RepositorySource = DataSource | EntityManager;
 
 interface FlashcardsRepositoryPort {
   createFlashcard(data: CreateFlashcardData): Promise<Flashcard>;
@@ -70,13 +74,13 @@ interface DecksRepositoryPort {
 }
 
 interface FlashcardsServiceDeps {
-  flashcards: (dataSource: DataSource) => FlashcardsRepositoryPort;
-  decks: (dataSource: DataSource) => DecksRepositoryPort;
+  flashcards: (source: RepositorySource) => FlashcardsRepositoryPort;
+  decks: (source: RepositorySource) => DecksRepositoryPort;
 }
 
 const DEFAULT_DEPS: FlashcardsServiceDeps = {
-  flashcards: (dataSource) => new FlashcardsRepository(dataSource),
-  decks: (dataSource) => new DecksRepository(dataSource),
+  flashcards: (source) => new FlashcardsRepository(source),
+  decks: (source) => new DecksRepository(source),
 };
 
 const FRONT_MAX_LENGTH = 500;
@@ -89,6 +93,11 @@ const SOURCE_NAME_MAX_LENGTH = 255;
 const SOURCE_URL_MAX_LENGTH = 2000;
 const TAGS_MAX_COUNT = 20;
 const TAG_MAX_LENGTH = 50;
+const BASE_WORD_MAX_LENGTH = 100;
+const PART_OF_SPEECH_MAX_LENGTH = 50;
+const DERIVATIVES_MIN_COUNT = 1;
+const DERIVATIVES_MAX_COUNT = 20;
+const FAMILY_TAG_PATTERN = /^family:.+$/;
 
 const ALLOWED_SOURCE_URL_PROTOCOLS = new Set(['http:', 'https:']);
 const VALID_FLASHCARD_TYPES = new Set<string>(Object.values(FlashcardType));
@@ -211,6 +220,73 @@ function normalizeTags(value: unknown): string[] {
     }
   }
   return tags;
+}
+
+function slugifyBaseWord(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+interface NormalizedWordFamilyRow {
+  front: string;
+  back: string;
+}
+
+interface NormalizedWordFamilyInput {
+  baseWord: string;
+  familyTag: string;
+  rows: NormalizedWordFamilyRow[];
+}
+
+function normalizeWordFamilyInput(input: CreateWordFamilyRequestBody): NormalizedWordFamilyInput {
+  const baseWord = normalizeRequiredField(input.baseWord, 'baseWord', BASE_WORD_MAX_LENGTH);
+  const slug = slugifyBaseWord(baseWord);
+  if (slug === '') {
+    throw new FlashcardError(
+      'baseWord must contain at least one letter or digit',
+      FlashcardErrorCode.INVALID_INPUT,
+    );
+  }
+  const familyTag = `family:${slug}`;
+
+  if (!Array.isArray(input.derivatives)) {
+    throw new FlashcardError('derivatives must be an array', FlashcardErrorCode.INVALID_INPUT);
+  }
+  if (
+    input.derivatives.length < DERIVATIVES_MIN_COUNT ||
+    input.derivatives.length > DERIVATIVES_MAX_COUNT
+  ) {
+    throw new FlashcardError(
+      `derivatives must contain between ${DERIVATIVES_MIN_COUNT} and ${DERIVATIVES_MAX_COUNT} items`,
+      FlashcardErrorCode.INVALID_INPUT,
+    );
+  }
+
+  const seen = new Set<string>();
+  const rows = input.derivatives.map((derivative) => {
+    const form = normalizeRequiredField(derivative?.form, 'derivatives[].form', BACK_MAX_LENGTH);
+    const partOfSpeech = normalizeRequiredField(
+      derivative?.partOfSpeech,
+      'derivatives[].partOfSpeech',
+      PART_OF_SPEECH_MAX_LENGTH,
+    );
+    const front = `${baseWord} → ${partOfSpeech}`;
+    const back = form;
+    const dedupeKey = `${front.toLowerCase()}|${back.toLowerCase()}`;
+    if (seen.has(dedupeKey)) {
+      throw new FlashcardError(
+        'derivatives must not repeat the same part of speech and form',
+        FlashcardErrorCode.INVALID_INPUT,
+      );
+    }
+    seen.add(dedupeKey);
+    return { front, back };
+  });
+
+  return { baseWord, familyTag, rows };
 }
 
 function toFlashcardDto(flashcard: Flashcard): FlashcardDto {
@@ -361,6 +437,105 @@ class FlashcardsService {
       }
       throw error;
     }
+  }
+
+  async createWordFamily(
+    userId: string,
+    deckId: string,
+    now: Date,
+    input: CreateWordFamilyRequestBody,
+  ): Promise<WordFamilyDto> {
+    const { baseWord, familyTag, rows } = normalizeWordFamilyInput(input);
+
+    const deck = await this.decksRepo().findActiveByIdAndUser(deckId, userId);
+    if (deck === null) {
+      throw new FlashcardError('Deck not found', FlashcardErrorCode.DECK_NOT_FOUND);
+    }
+    if (deck.is_archived) {
+      throw new FlashcardError(
+        'Cannot create a flashcard in an archived deck',
+        FlashcardErrorCode.DECK_UNAVAILABLE,
+      );
+    }
+
+    try {
+      const created = await this.dataSource.transaction(async (manager) => {
+        const flashcardsRepo = this.deps.flashcards(manager);
+        const cards: Flashcard[] = [];
+        for (const row of rows) {
+          const duplicate = await flashcardsRepo.findDuplicate(
+            deckId,
+            FlashcardType.WORD_FORMATION,
+            row.front,
+            row.back,
+          );
+          if (duplicate !== null) {
+            throw new FlashcardError(
+              `A flashcard with front "${row.front}" already exists in this deck`,
+              FlashcardErrorCode.FLASHCARD_DUPLICATE,
+            );
+          }
+          const card = await flashcardsRepo.createFlashcard({
+            userId,
+            deckId,
+            type: FlashcardType.WORD_FORMATION,
+            front: row.front,
+            back: row.back,
+            translation: null,
+            example: null,
+            personalExample: null,
+            notes: null,
+            sourceName: null,
+            sourceUrl: null,
+            level: null,
+            tags: [familyTag],
+            nextReviewAt: now,
+          });
+          cards.push(card);
+        }
+        return cards;
+      });
+
+      return { familyTag, baseWord, derivatives: created.map(toFlashcardDto) };
+    } catch (error) {
+      if (isDedupeConstraintViolation(error)) {
+        throw new FlashcardError(
+          'A flashcard with this front/back already exists in this deck',
+          FlashcardErrorCode.FLASHCARD_DUPLICATE,
+        );
+      }
+      throw error;
+    }
+  }
+
+  async listWordFamilies(userId: string, deckId: string): Promise<WordFamilyDto[]> {
+    const deck = await this.decksRepo().findActiveByIdAndUser(deckId, userId);
+    if (deck === null) {
+      throw new FlashcardError('Deck not found', FlashcardErrorCode.DECK_NOT_FOUND);
+    }
+
+    const flashcards = await this.flashcardsRepo().findByDeckForUser(deckId, userId, {
+      status: 'all',
+      type: FlashcardType.WORD_FORMATION,
+    });
+
+    const groups = new Map<string, Flashcard[]>();
+    for (const flashcard of flashcards) {
+      const familyTag = flashcard.tags.find((tag) => FAMILY_TAG_PATTERN.test(tag));
+      if (familyTag === undefined) continue;
+      const existing = groups.get(familyTag);
+      if (existing !== undefined) {
+        existing.push(flashcard);
+      } else {
+        groups.set(familyTag, [flashcard]);
+      }
+    }
+
+    return Array.from(groups.entries()).map(([familyTag, cards]) => ({
+      familyTag,
+      baseWord: cards[0].front.split(' → ')[0].trim(),
+      derivatives: cards.map(toFlashcardDto),
+    }));
   }
 
   async listFlashcards(

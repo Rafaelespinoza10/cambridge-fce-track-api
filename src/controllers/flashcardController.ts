@@ -8,8 +8,10 @@ import { FlashcardType } from '../models/enums';
 import type {
   CreateFlashcardRequestBody,
   UpdateFlashcardRequestBody,
+  CreateWordFamilyRequestBody,
   FlashcardListStatus,
   FlashcardDto,
+  WordFamilyDto,
 } from '../interfaces/flashcards/flashcards.interface';
 
 type NowProvider = () => Date;
@@ -27,6 +29,13 @@ interface FlashcardsServicePort {
     status: FlashcardListStatus,
     type?: FlashcardType,
   ): Promise<FlashcardDto[]>;
+  createWordFamily(
+    userId: string,
+    deckId: string,
+    now: Date,
+    input: CreateWordFamilyRequestBody,
+  ): Promise<WordFamilyDto>;
+  listWordFamilies(userId: string, deckId: string): Promise<WordFamilyDto[]>;
   getFlashcard(userId: string, flashcardId: string): Promise<FlashcardDto>;
   updateFlashcard(
     userId: string,
@@ -134,6 +143,63 @@ async function listFlashcardsHandler(
 
 export async function listFlashcards(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   return listFlashcardsHandler(event, DEFAULT_DEPS);
+}
+
+async function createWordFamilyHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const deckId = getDeckIdParam(event);
+  if (deckId === null) return errorResponse('Invalid or missing deckId', 400);
+
+  let body: CreateWordFamilyRequestBody;
+  try {
+    body = JSON.parse(event.body ?? '{}') as CreateWordFamilyRequestBody;
+  } catch {
+    return errorResponse('Invalid request body', 400);
+  }
+
+  try {
+    const { flashcards } = await deps.services();
+    const family = await flashcards.createWordFamily(payload.sub, deckId, deps.now(), body);
+    return successResponse({ success: true, data: family }, 201);
+  } catch (err: unknown) {
+    return handleError(mapFlashcardError(err));
+  }
+}
+
+export async function createWordFamily(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return createWordFamilyHandler(event, DEFAULT_DEPS);
+}
+
+async function listWordFamiliesHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const deckId = getDeckIdParam(event);
+  if (deckId === null) return errorResponse('Invalid or missing deckId', 400);
+
+  try {
+    const { flashcards } = await deps.services();
+    const families = await flashcards.listWordFamilies(payload.sub, deckId);
+    return successResponse({ success: true, data: families }, 200);
+  } catch (err: unknown) {
+    return handleError(mapFlashcardError(err));
+  }
+}
+
+export async function listWordFamilies(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return listWordFamiliesHandler(event, DEFAULT_DEPS);
 }
 
 async function getFlashcardHandler(
@@ -265,6 +331,8 @@ export async function deleteFlashcard(event: APIGatewayProxyEvent): Promise<APIG
 export {
   createFlashcardHandler,
   listFlashcardsHandler,
+  createWordFamilyHandler,
+  listWordFamiliesHandler,
   getFlashcardHandler,
   updateFlashcardHandler,
   suspendFlashcardHandler,

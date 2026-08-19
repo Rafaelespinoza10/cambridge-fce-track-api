@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import type { DataSource, UpdateResult } from 'typeorm';
+import type { DataSource, EntityManager, UpdateResult } from 'typeorm';
 
 import { FlashcardsService, FlashcardError, FlashcardErrorCode } from './flashcards.service';
 import type {
@@ -240,12 +240,28 @@ function buildFakeFlashcardsRepo(world: World): FlashcardsRepositoryPort {
   };
 }
 
+/** DataSource falso: simula rollback real restaurando el snapshot del mundo si `fn` lanza. */
+function buildFakeDataSource(world: World): DataSource {
+  const managerMarker = { __marker: 'fake-entity-manager' } as unknown as EntityManager;
+  return {
+    transaction: async <T>(fn: (manager: EntityManager) => Promise<T>): Promise<T> => {
+      const snapshot = structuredClone(world);
+      try {
+        return await fn(managerMarker);
+      } catch (error) {
+        Object.assign(world, snapshot);
+        throw error;
+      }
+    },
+  } as unknown as DataSource;
+}
+
 function setup(worldOverrides: Partial<World> = {}) {
   const world = createWorld(worldOverrides);
   const flashcardsRepo = buildFakeFlashcardsRepo(world);
   const decksRepo = buildFakeDecksRepo(world);
   const deps: FlashcardsServiceDeps = { flashcards: () => flashcardsRepo, decks: () => decksRepo };
-  const service = new FlashcardsService({} as DataSource, deps);
+  const service = new FlashcardsService(buildFakeDataSource(world), deps);
   return { world, flashcardsRepo, decksRepo, service };
 }
 
@@ -497,6 +513,216 @@ describe('FlashcardsService.createFlashcard', () => {
     const card = await service.createFlashcard(USER_ID, DECK_ID, NOW, maliciousInput);
     assert.equal(card.status, FlashcardStatus.NEW);
     assert.equal(card.repetitions, 0);
+  });
+});
+
+// ── Familias de palabras ─────────────────────────────────────────────────────────
+
+describe('FlashcardsService.createWordFamily', () => {
+  it('creates one card per derivative, tagged with the shared family tag', async () => {
+    const { service } = setup();
+    const family = await service.createWordFamily(USER_ID, DECK_ID, NOW, {
+      baseWord: 'happy',
+      derivatives: [
+        { form: 'happiness', partOfSpeech: 'noun' },
+        { form: 'unhappy', partOfSpeech: 'adjective (negative)' },
+        { form: 'happily', partOfSpeech: 'adverb' },
+      ],
+    });
+    assert.equal(family.baseWord, 'happy');
+    assert.equal(family.familyTag, 'family:happy');
+    assert.equal(family.derivatives.length, 3);
+    for (const card of family.derivatives) {
+      assert.equal(card.type, FlashcardType.WORD_FORMATION);
+      assert.deepEqual(card.tags, ['family:happy']);
+    }
+    assert.equal(family.derivatives[0].front, 'happy → noun');
+    assert.equal(family.derivatives[0].back, 'happiness');
+  });
+
+  it('slugifies the base word for the family tag', async () => {
+    const { service } = setup();
+    const family = await service.createWordFamily(USER_ID, DECK_ID, NOW, {
+      baseWord: '  Well-Being  ',
+      derivatives: [{ form: 'wellbeing', partOfSpeech: 'noun' }],
+    });
+    assert.equal(family.familyTag, 'family:well-being');
+  });
+
+  it('rejects an empty baseWord', async () => {
+    const { service } = setup();
+    await assert.rejects(
+      () =>
+        service.createWordFamily(USER_ID, DECK_ID, NOW, {
+          baseWord: '   ',
+          derivatives: [{ form: 'x', partOfSpeech: 'noun' }],
+        }),
+      isInvalidInput,
+    );
+  });
+
+  it('rejects an empty derivatives array', async () => {
+    const { service } = setup();
+    await assert.rejects(
+      () => service.createWordFamily(USER_ID, DECK_ID, NOW, { baseWord: 'happy', derivatives: [] }),
+      isInvalidInput,
+    );
+  });
+
+  it('rejects more than 20 derivatives', async () => {
+    const { service } = setup();
+    await assert.rejects(
+      () =>
+        service.createWordFamily(USER_ID, DECK_ID, NOW, {
+          baseWord: 'happy',
+          derivatives: Array.from({ length: 21 }, (_, i) => ({
+            form: `form-${i}`,
+            partOfSpeech: 'noun',
+          })),
+        }),
+      isInvalidInput,
+    );
+  });
+
+  it('rejects repeated part-of-speech/form pairs within the same request', async () => {
+    const { service } = setup();
+    await assert.rejects(
+      () =>
+        service.createWordFamily(USER_ID, DECK_ID, NOW, {
+          baseWord: 'happy',
+          derivatives: [
+            { form: 'happiness', partOfSpeech: 'noun' },
+            { form: 'Happiness', partOfSpeech: 'Noun' },
+          ],
+        }),
+      isInvalidInput,
+    );
+  });
+
+  it('rejects a nonexistent deck', async () => {
+    const { service } = setup();
+    await assert.rejects(
+      () =>
+        service.createWordFamily(USER_ID, 'missing-deck', NOW, {
+          baseWord: 'happy',
+          derivatives: [{ form: 'happiness', partOfSpeech: 'noun' }],
+        }),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.DECK_NOT_FOUND,
+    );
+  });
+
+  it('rejects an archived deck', async () => {
+    const { service } = setup({ decks: [makeDeck({ is_archived: true })] });
+    await assert.rejects(
+      () =>
+        service.createWordFamily(USER_ID, DECK_ID, NOW, {
+          baseWord: 'happy',
+          derivatives: [{ form: 'happiness', partOfSpeech: 'noun' }],
+        }),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.DECK_UNAVAILABLE,
+    );
+  });
+
+  it('rejects a derivative that already exists in the deck and creates nothing', async () => {
+    const { world, service } = setup({
+      flashcards: [
+        makeFlashcard({
+          type: FlashcardType.WORD_FORMATION,
+          front: 'happy → noun',
+          back: 'happiness',
+          tags: ['family:happy'],
+        }),
+      ],
+    });
+    await assert.rejects(
+      () =>
+        service.createWordFamily(USER_ID, DECK_ID, NOW, {
+          baseWord: 'happy',
+          derivatives: [
+            { form: 'happily', partOfSpeech: 'adverb' },
+            { form: 'happiness', partOfSpeech: 'noun' },
+          ],
+        }),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.FLASHCARD_DUPLICATE,
+    );
+    assert.equal(world.flashcards.length, 1);
+  });
+});
+
+describe('FlashcardsService.listWordFamilies', () => {
+  it('groups word-formation cards by their family tag', async () => {
+    const { service } = setup({
+      flashcards: [
+        makeFlashcard({
+          id: 'a',
+          type: FlashcardType.WORD_FORMATION,
+          front: 'happy → noun',
+          back: 'happiness',
+          tags: ['family:happy'],
+        }),
+        makeFlashcard({
+          id: 'b',
+          type: FlashcardType.WORD_FORMATION,
+          front: 'happy → adverb',
+          back: 'happily',
+          tags: ['family:happy'],
+        }),
+        makeFlashcard({
+          id: 'c',
+          type: FlashcardType.WORD_FORMATION,
+          front: 'decide → noun',
+          back: 'decision',
+          tags: ['family:decide'],
+        }),
+      ],
+    });
+    const families = await service.listWordFamilies(USER_ID, DECK_ID);
+    assert.equal(families.length, 2);
+    const happy = families.find((f) => f.familyTag === 'family:happy');
+    assert.ok(happy);
+    assert.equal(happy.baseWord, 'happy');
+    assert.deepEqual(
+      happy.derivatives.map((d) => d.id).sort(),
+      ['a', 'b'],
+    );
+  });
+
+  it('ignores non-word-formation cards and word-formation cards without a family tag', async () => {
+    const { service } = setup({
+      flashcards: [
+        makeFlashcard({ id: 'a', type: FlashcardType.VOCABULARY, tags: ['family:happy'] }),
+        makeFlashcard({ id: 'b', type: FlashcardType.WORD_FORMATION, tags: [] }),
+      ],
+    });
+    const families = await service.listWordFamilies(USER_ID, DECK_ID);
+    assert.deepEqual(families, []);
+  });
+
+  it('includes suspended word-formation cards', async () => {
+    const { service } = setup({
+      flashcards: [
+        makeFlashcard({
+          id: 'a',
+          type: FlashcardType.WORD_FORMATION,
+          status: FlashcardStatus.SUSPENDED,
+          tags: ['family:happy'],
+        }),
+      ],
+    });
+    const families = await service.listWordFamilies(USER_ID, DECK_ID);
+    assert.equal(families.length, 1);
+  });
+
+  it('rejects a deleted or foreign deck', async () => {
+    const { service } = setup();
+    await assert.rejects(
+      () => service.listWordFamilies(OTHER_USER_ID, DECK_ID),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.DECK_NOT_FOUND,
+    );
   });
 });
 

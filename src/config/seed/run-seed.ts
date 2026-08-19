@@ -4,9 +4,12 @@ import { AppDataSource } from '../database';
 import { Skill } from '../../models/Skill';
 import { ExamSection } from '../../models/ExamSection';
 import { ActivityTemplate } from '../../models/ActivityTemplate';
+import { Resource } from '../../models/Resource';
+import { ResourceType } from '../../models/enums';
 import { SKILLS_SEED } from './data/skills';
 import { EXAM_SECTIONS_SEED } from './data/exam-sections';
 import { ACTIVITY_TEMPLATES_SEED } from './data/activity-templates';
+import { GLOBAL_RESOURCES_SEED } from './data/global-resources';
 
 async function seedSkills(repo: Repository<Skill>): Promise<Map<string, string>> {
   for (const row of SKILLS_SEED) {
@@ -101,6 +104,30 @@ async function seedActivityTemplates(
   }
 }
 
+async function seedGlobalResources(repo: Repository<Resource>): Promise<void> {
+  for (const row of GLOBAL_RESOURCES_SEED) {
+    const existing = await repo.findOne({
+      where: { url: row.url, is_global: true },
+    });
+
+    const payload = {
+      user_id: null,
+      title: row.title,
+      description: row.description,
+      resource_type: ResourceType.LINK,
+      url: row.url,
+      storage_key: null,
+      is_global: true,
+    };
+
+    if (existing) {
+      await repo.update(existing.id, payload);
+    } else {
+      await repo.save(repo.create(payload));
+    }
+  }
+}
+
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set');
@@ -112,6 +139,7 @@ async function main(): Promise<void> {
     const skillRepo = AppDataSource.getRepository(Skill);
     const sectionRepo = AppDataSource.getRepository(ExamSection);
     const templateRepo = AppDataSource.getRepository(ActivityTemplate);
+    const resourceRepo = AppDataSource.getRepository(Resource);
 
     console.log('[seed] Skills…');
     const skillIdsBySlug = await seedSkills(skillRepo);
@@ -124,6 +152,10 @@ async function main(): Promise<void> {
     console.log('[seed] Activity templates…');
     await seedActivityTemplates(templateRepo, skillIdsBySlug, sectionIdsBySlug);
     console.log(`[seed]   ${ACTIVITY_TEMPLATES_SEED.length} templates processed`);
+
+    console.log('[seed] Global resources…');
+    await seedGlobalResources(resourceRepo);
+    console.log(`[seed]   ${GLOBAL_RESOURCES_SEED.length} global resources processed`);
 
     console.log('[seed] Done.');
   } finally {
