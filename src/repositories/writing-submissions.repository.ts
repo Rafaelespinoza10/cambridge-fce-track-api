@@ -1,7 +1,8 @@
 import { IsNull } from 'typeorm';
 import type { DataSource, EntityManager, Repository, UpdateResult } from 'typeorm';
 import { WritingSubmission } from '../models/WritingSubmission';
-import { WritingSubmissionStatus } from '../models/enums';
+import { WritingTask } from '../models/WritingTask';
+import { WritingSubmissionStatus, WritingTaskType } from '../models/enums';
 import type { WritingFeedback } from '../models/writing-json-types';
 
 interface CreateSubmissionData {
@@ -16,6 +17,62 @@ interface GradeSubmissionData {
   submittedText: string;
   wordCount: number;
   feedback: WritingFeedback;
+}
+
+interface ListHistoryFilters {
+  userId: string;
+  statuses: WritingSubmissionStatus[];
+  page: number;
+  pageSize: number;
+}
+
+interface WritingSubmissionHistoryRow {
+  submissionId: string;
+  taskId: string;
+  taskType: WritingTaskType;
+  title: string;
+  status: WritingSubmissionStatus;
+  startedAt: Date;
+  submittedAt: Date | null;
+  durationSeconds: number | null;
+  wordCount: number | null;
+  overallBand: number | null;
+  maxBand: number | null;
+}
+
+interface ListHistoryResult {
+  rows: WritingSubmissionHistoryRow[];
+  totalItems: number;
+}
+
+interface WritingSubmissionHistoryRawRow {
+  submissionId: string;
+  taskId: string;
+  taskType: WritingTaskType;
+  title: string;
+  status: WritingSubmissionStatus;
+  startedAt: Date;
+  submittedAt: Date | null;
+  durationSeconds: number | null;
+  wordCount: number | null;
+  overallBand: string | null;
+  maxBand: string | null;
+}
+
+function toHistoryRow(raw: WritingSubmissionHistoryRawRow): WritingSubmissionHistoryRow {
+  return {
+    submissionId: raw.submissionId,
+    taskId: raw.taskId,
+    taskType: raw.taskType,
+    title: raw.title,
+    status: raw.status,
+    startedAt: raw.startedAt,
+    submittedAt: raw.submittedAt,
+    durationSeconds: raw.durationSeconds,
+    wordCount: raw.wordCount,
+    overallBand: raw.overallBand !== null ? parseFloat(raw.overallBand) : null,
+    maxBand: raw.maxBand !== null ? parseFloat(raw.maxBand) : null,
+  };
 }
 
 class WritingSubmissionsRepository {
@@ -80,6 +137,44 @@ class WritingSubmissionsRepository {
       .getOne();
   }
 
+  /**
+   * Never includes 'in_progress' submissions — those are "active", already
+   * served by findActiveByUser/GET /writing/submissions/active. Uses
+   * .offset()/.limit() rather than .skip()/.take(): TypeORM silently ignores
+   * skip/take whenever the query has a registered join (same gotcha as
+   * PracticeAttemptsRepository.listHistoryByUser).
+   */
+  async listHistoryByUser(filters: ListHistoryFilters): Promise<ListHistoryResult> {
+    const qb = this.submissionRepo
+      .createQueryBuilder('submission')
+      .innerJoin(WritingTask, 'task', 'task.id = submission.task_id AND task.deleted_at IS NULL')
+      .where('submission.user_id = :userId', { userId: filters.userId })
+      .andWhere('submission.deleted_at IS NULL')
+      .andWhere('submission.status IN (:...statuses)', { statuses: filters.statuses });
+
+    const totalItems = await qb.getCount();
+
+    const raw = await qb
+      .select('submission.id', 'submissionId')
+      .addSelect('submission.task_id', 'taskId')
+      .addSelect('task.task_type', 'taskType')
+      .addSelect('task.title', 'title')
+      .addSelect('submission.status', 'status')
+      .addSelect('submission.started_at', 'startedAt')
+      .addSelect('submission.submitted_at', 'submittedAt')
+      .addSelect('submission.duration_seconds', 'durationSeconds')
+      .addSelect('submission.word_count', 'wordCount')
+      .addSelect("submission.feedback->>'overallBand'", 'overallBand')
+      .addSelect("submission.feedback->>'maxBand'", 'maxBand')
+      .orderBy('submission.submitted_at', 'DESC', 'NULLS LAST')
+      .addOrderBy('submission.started_at', 'DESC')
+      .offset((filters.page - 1) * filters.pageSize)
+      .limit(filters.pageSize)
+      .getRawMany<WritingSubmissionHistoryRawRow>();
+
+    return { rows: raw.map(toHistoryRow), totalItems };
+  }
+
   /** Only transitions a submission that is still 'in_progress' (avoids grading twice). */
   async gradeSubmission(
     submissionId: string,
@@ -120,4 +215,10 @@ class WritingSubmissionsRepository {
 }
 
 export { WritingSubmissionsRepository };
-export type { CreateSubmissionData, GradeSubmissionData };
+export type {
+  CreateSubmissionData,
+  GradeSubmissionData,
+  ListHistoryFilters,
+  WritingSubmissionHistoryRow,
+  ListHistoryResult,
+};
