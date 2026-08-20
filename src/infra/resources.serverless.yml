@@ -9,12 +9,37 @@ provider:
   runtime: nodejs22.x
   region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
   stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
     NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
 
-# functions will be added when implementing resources handlers
-functions: {}
+functions:
+  resourcesList:
+    handler: src/controllers/resourceController.listResources
+    events:
+      - httpApi:
+          path: /resources
+          method: GET
+
+  resourcesCreate:
+    handler: src/controllers/resourceController.createResource
+    events:
+      - httpApi:
+          path: /resources
+          method: POST
+
+  resourcesDelete:
+    handler: src/controllers/resourceController.deleteResource
+    events:
+      - httpApi:
+          path: /resources/{resourceId}
+          method: DELETE
 
 package:
   individually: true

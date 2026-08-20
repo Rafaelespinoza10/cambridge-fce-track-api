@@ -106,6 +106,20 @@ functions:
           path: /flashcards/decks/{deckId}/cards
           method: GET
 
+  flashcardsCreateWordFamily:
+    handler: src/controllers/flashcardController.createWordFamily
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/word-families
+          method: POST
+
+  flashcardsListWordFamilies:
+    handler: src/controllers/flashcardController.listWordFamilies
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/word-families
+          method: GET
+
   flashcardsGetFlashcard:
     handler: src/controllers/flashcardController.getFlashcard
     events:

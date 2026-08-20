@@ -30,6 +30,22 @@ export interface UpdateFlashcardRequestBody {
 
 export type FlashcardListStatus = 'active' | 'suspended' | 'all';
 
+export interface CreateWordFamilyDerivativeInput {
+  form: string;
+  partOfSpeech: string;
+}
+
+export interface CreateWordFamilyRequestBody {
+  baseWord: string;
+  derivatives: CreateWordFamilyDerivativeInput[];
+}
+
+export interface WordFamilyDto {
+  familyTag: string;
+  baseWord: string;
+  derivatives: FlashcardDto[];
+}
+
 export interface FlashcardDto {
   id: string;
   deckId: string;

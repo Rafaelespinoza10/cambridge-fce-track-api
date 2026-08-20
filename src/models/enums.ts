@@ -150,6 +150,7 @@ export enum FlashcardType {
   VOCABULARY = 'vocabulary',
   EXPRESSION = 'expression',
   GRAMMAR = 'grammar',
+  WORD_FORMATION = 'word_formation',
   CUSTOM = 'custom',
 }
 
