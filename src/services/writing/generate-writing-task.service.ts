@@ -15,12 +15,13 @@ import type { WritingTaskGenerationMetadata } from '../../models/writing-json-ty
 import type { WritingTask } from '../../models/WritingTask';
 import { renderPromptTemplate } from '../../lib/prompt-template';
 import { getWritingTaskFormat } from '../../lib/writing-task-catalog';
+import { pickRandomExamTopic } from '../../lib/exam-topics';
 import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
 import type { CreateTaskData } from '../../repositories/writing-tasks.repository';
 import SYSTEM_PROMPT_TEMPLATE from '../../prompts/writing/generate-task.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/writing/generate-task.user.md';
 
-const PROMPT_VERSION = 'writing-task-v2';
+const PROMPT_VERSION = 'writing-task-v3';
 
 export enum GenerateWritingTaskErrorCode {
   INVALID_INPUT = 'invalid_input',
@@ -119,6 +120,7 @@ function buildMessages(normalized: NormalizedRequest): LLMChatMessage[] {
     targetLevel: normalized.targetLevel,
     minWords: String(format.minWords),
     maxWords: String(format.maxWords),
+    topicHint: pickRandomExamTopic(),
   });
   return [
     { role: 'system', content: systemPrompt },
