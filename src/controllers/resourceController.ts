@@ -71,9 +71,7 @@ async function createResourceHandler(
   }
 }
 
-export async function createResource(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function createResource(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   return createResourceHandler(event, DEFAULT_DEPS);
 }
 
@@ -96,9 +94,7 @@ async function deleteResourceHandler(
   }
 }
 
-export async function deleteResource(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function deleteResource(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   return deleteResourceHandler(event, DEFAULT_DEPS);
 }
 
