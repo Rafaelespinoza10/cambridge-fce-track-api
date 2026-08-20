@@ -30,6 +30,7 @@ function httpError(message: string, statusCode: number): Error {
 const START_STATUS_BY_CODE: Record<StartWritingSubmissionErrorCode, number> = {
   [StartWritingSubmissionErrorCode.INVALID_INPUT]: 400,
   [StartWritingSubmissionErrorCode.TASK_NOT_FOUND]: 404,
+  [StartWritingSubmissionErrorCode.PLAN_DAY_NOT_FOUND]: 404,
   [StartWritingSubmissionErrorCode.ACTIVE_SUBMISSION_ON_ANOTHER_TASK]: 409,
   [StartWritingSubmissionErrorCode.RACE_UNRESOLVED]: 409,
 };

@@ -1,6 +1,7 @@
 import type {
   ActivityPriority,
   PlannedActivityStatus,
+  PlannedActivitySource,
   WeekPlanStatus,
   DayOfWeek,
 } from '../../models/enums';
@@ -63,6 +64,9 @@ export interface SafePlannedActivity {
   status: PlannedActivityStatus;
   scheduledAt: Date | null;
   completedAt: Date | null;
+  source: PlannedActivitySource;
+  practiceAttemptId: string | null;
+  writingSubmissionId: string | null;
 }
 
 export interface SafePlanDay {

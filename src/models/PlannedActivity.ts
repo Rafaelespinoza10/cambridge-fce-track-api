@@ -9,7 +9,7 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
-import { ActivityPriority, PlannedActivityStatus } from './enums';
+import { ActivityPriority, PlannedActivityStatus, PlannedActivitySource } from './enums';
 import type { PlanDay } from './PlanDay';
 import type { ActivityTemplate } from './ActivityTemplate';
 import type { CustomActivity } from './CustomActivity';
@@ -18,6 +18,8 @@ import type { ExamSection } from './ExamSection';
 import type { ActivityScore } from './ActivityScore';
 import type { StudySession } from './StudySession';
 import type { EvidenceFile } from './EvidenceFile';
+import type { PracticeAttempt } from './PracticeAttempt';
+import type { WritingSubmission } from './WritingSubmission';
 
 @Entity('planned_activities')
 export class PlannedActivity {
@@ -73,6 +75,20 @@ export class PlannedActivity {
   @Column({ type: 'timestamp with time zone', nullable: true })
   completed_at: Date | null;
 
+  @Column({
+    type: 'enum',
+    enum: PlannedActivitySource,
+    enumName: 'planned_activity_source_enum',
+    default: PlannedActivitySource.MANUAL,
+  })
+  source: PlannedActivitySource;
+
+  @Column({ type: 'uuid', nullable: true })
+  practice_attempt_id: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  writing_submission_id: string | null;
+
   @CreateDateColumn({ type: 'timestamp with time zone' })
   created_at: Date;
 
@@ -112,4 +128,12 @@ export class PlannedActivity {
 
   @OneToMany('EvidenceFile', 'planned_activity')
   evidence_files: EvidenceFile[];
+
+  @ManyToOne('PracticeAttempt', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'practice_attempt_id' })
+  practice_attempt: PracticeAttempt | null;
+
+  @ManyToOne('WritingSubmission', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'writing_submission_id' })
+  writing_submission: WritingSubmission | null;
 }

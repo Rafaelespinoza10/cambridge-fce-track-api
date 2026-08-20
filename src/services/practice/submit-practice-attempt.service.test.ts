@@ -37,6 +37,7 @@ function makeAttempt(overrides: Partial<PracticeAttempt> = {}): PracticeAttempt 
     total_count: 2,
     percentage: null,
     feedback_summary: null,
+    plan_day_id: null,
     ...overrides,
   } as unknown as PracticeAttempt;
 }
@@ -68,6 +69,7 @@ interface RepoState {
   createAnswersCalls: CreateAnswerData[][];
   completeAttemptCalls: { attemptId: string; userId: string; data: unknown }[];
   findByIdForUpdateCalls: number;
+  createAiLinkedActivityCalls: unknown[];
 }
 
 interface Overrides {
@@ -85,6 +87,7 @@ function makeService(overrides: Overrides = {}): {
     createAnswersCalls: [],
     completeAttemptCalls: [],
     findByIdForUpdateCalls: 0,
+    createAiLinkedActivityCalls: [],
   };
 
   const dataSource = {
@@ -107,7 +110,10 @@ function makeService(overrides: Overrides = {}): {
   const exercises = (): PracticeExercisesRepositoryPort => ({
     findExerciseWithAnswerKeysForEvaluation:
       overrides.findExerciseWithAnswerKeysForEvaluation ??
-      (async () => ({ items: [ITEM_1, ITEM_2] })),
+      (async () => ({
+        items: [ITEM_1, ITEM_2],
+        exercise: { title: 'Word Formation Exercise', part_code: 'UOE_PART_3' },
+      })),
   });
 
   const answers = (): PracticeAnswersRepositoryPort => ({
@@ -122,6 +128,9 @@ function makeService(overrides: Overrides = {}): {
     practiceAttempts: attempts,
     practiceExercises: exercises,
     practiceAnswers: answers,
+    createAiLinkedActivity: async (_manager, input) => {
+      state.createAiLinkedActivityCalls.push(input);
+    },
   });
   return { service, state };
 }
@@ -322,6 +331,80 @@ describe('SubmitPracticeAttemptService.execute — grading', () => {
     const call = state.completeAttemptCalls[0]!;
     assert.equal(call.attemptId, ATTEMPT_ID);
     assert.equal(call.userId, USER_ID);
+  });
+});
+
+// ── AI-linked planned activity ──────────────────────────────────────────────
+
+describe('SubmitPracticeAttemptService.execute — AI-linked planned activity', () => {
+  const PLAN_DAY_ID = '33333333-3333-3333-3333-333333333333';
+
+  it('creates a linked planned_activity when the attempt targets a plan day', async () => {
+    const { service, state } = makeService({
+      findByIdForUpdate: async () => makeAttempt({ plan_day_id: PLAN_DAY_ID }),
+    });
+    await service.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT);
+
+    assert.equal(state.createAiLinkedActivityCalls.length, 1);
+    const input = state.createAiLinkedActivityCalls[0] as Record<string, unknown>;
+    assert.equal(input.planDayId, PLAN_DAY_ID);
+    assert.equal(input.skillSlug, 'use-of-english');
+    assert.equal(input.examSectionSlug, 'uoe-part-3');
+    assert.equal(input.practiceAttemptId, ATTEMPT_ID);
+    assert.equal(input.completedAt, SUBMITTED_AT);
+  });
+
+  it('does not create a planned_activity when the attempt has no target day', async () => {
+    const { service, state } = makeService({
+      findByIdForUpdate: async () => makeAttempt({ plan_day_id: null }),
+    });
+    await service.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT);
+    assert.equal(state.createAiLinkedActivityCalls.length, 0);
+  });
+
+  it('does not create a duplicate planned_activity on an idempotent replay', async () => {
+    const completed = makeAttempt({
+      status: PracticeAttemptStatus.COMPLETED,
+      plan_day_id: PLAN_DAY_ID,
+      submitted_at: SUBMITTED_AT,
+      duration_seconds: 300,
+      correct_count: 2,
+      total_count: 2,
+      percentage: '100.00',
+      feedback_summary: {
+        version: 'practice-attempt-feedback-v1',
+        unansweredCount: 0,
+        skillBreakdown: [],
+      },
+    });
+    const { service, state } = makeService({
+      findByIdForUpdate: async () => completed,
+      findByAttemptForUser: async () =>
+        [
+          {
+            item_id: 'item-1',
+            answer_payload: { kind: 'single_choice', optionId: 'a' },
+            normalized_answer: 'a',
+            is_correct: true,
+            response_time_ms: 100,
+          },
+          {
+            item_id: 'item-2',
+            answer_payload: { kind: 'text', value: 'been' },
+            normalized_answer: 'been',
+            is_correct: true,
+            response_time_ms: 200,
+          },
+        ] as unknown as PracticeAnswer[],
+    });
+    const { idempotentReplay } = await service.execute(
+      USER_ID,
+      ATTEMPT_ID,
+      fullAnswers(),
+      SUBMITTED_AT,
+    );
+    assert.equal(idempotentReplay, true);
+    assert.equal(state.createAiLinkedActivityCalls.length, 0);
   });
 });
 

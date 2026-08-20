@@ -2,6 +2,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
 import { WritingSubmissionsRepository } from '../../repositories/writing-submissions.repository';
 import type { CreateSubmissionData } from '../../repositories/writing-submissions.repository';
+import { PlanningRepository } from '../../repositories/planning.repository';
 import type { WritingTask } from '../../models/WritingTask';
 import type { WritingSubmission } from '../../models/WritingSubmission';
 import type { WritingTaskSafeDto } from '../../interfaces/writing/writing-task.interface';
@@ -11,6 +12,7 @@ import { toWritingSubmissionSafeDto } from '../../lib/writing-submission-dto';
 export enum StartWritingSubmissionErrorCode {
   INVALID_INPUT = 'invalid_input',
   TASK_NOT_FOUND = 'task_not_found',
+  PLAN_DAY_NOT_FOUND = 'plan_day_not_found',
   ACTIVE_SUBMISSION_ON_ANOTHER_TASK = 'active_submission_on_another_task',
   RACE_UNRESOLVED = 'race_unresolved',
 }
@@ -37,9 +39,14 @@ export interface WritingSubmissionsRepositoryPort {
   createSubmission(data: CreateSubmissionData): Promise<WritingSubmission>;
 }
 
+export interface PlanDayLookupPort {
+  findPlanDayByIdAndUser(planDayId: string, userId: string): Promise<{ id: string } | null>;
+}
+
 export interface StartWritingSubmissionServiceDeps {
   writingTasks?: (source: RepositorySource) => WritingTasksRepositoryPort;
   writingSubmissions?: (source: RepositorySource) => WritingSubmissionsRepositoryPort;
+  planDays?: (dataSource: DataSource) => PlanDayLookupPort;
 }
 
 const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
@@ -47,6 +54,8 @@ const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRe
 const DEFAULT_WRITING_SUBMISSIONS_FACTORY = (
   source: RepositorySource,
 ): WritingSubmissionsRepositoryPort => new WritingSubmissionsRepository(source);
+const DEFAULT_PLAN_DAYS_FACTORY = (dataSource: DataSource): PlanDayLookupPort =>
+  new PlanningRepository(dataSource);
 
 const MAX_RACE_RETRIES = 1;
 const ACTIVE_SUBMISSION_CONSTRAINT_NAME = 'uq_writing_submissions_one_active_per_user';
@@ -89,11 +98,15 @@ export class StartWritingSubmissionService {
     userId: string,
     taskId: string,
     startedAt: Date,
+    planDayId: string | null = null,
   ): Promise<WritingSubmissionStartResultDto> {
     if (typeof userId !== 'string' || userId.trim() === '') invalidInput('userId is required');
     if (typeof taskId !== 'string' || taskId.trim() === '') invalidInput('taskId is required');
     if (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime())) {
       invalidInput('startedAt must be a valid Date');
+    }
+    if (planDayId !== null && (typeof planDayId !== 'string' || planDayId.trim() === '')) {
+      invalidInput('planDayId must be a non-empty string when provided');
     }
 
     const tasksFactory = this.deps.writingTasks ?? DEFAULT_WRITING_TASKS_FACTORY;
@@ -105,23 +118,38 @@ export class StartWritingSubmissionService {
       );
     }
 
-    return this.executeWithRetry(userId, task, startedAt, 0);
+    if (planDayId !== null) {
+      const planDaysFactory = this.deps.planDays ?? DEFAULT_PLAN_DAYS_FACTORY;
+      const planDay = await planDaysFactory(this.dataSource).findPlanDayByIdAndUser(
+        planDayId,
+        userId,
+      );
+      if (planDay === null) {
+        throw new StartWritingSubmissionError(
+          'Plan day not found',
+          StartWritingSubmissionErrorCode.PLAN_DAY_NOT_FOUND,
+        );
+      }
+    }
+
+    return this.executeWithRetry(userId, task, startedAt, planDayId, 0);
   }
 
   private async executeWithRetry(
     userId: string,
     task: WritingTask,
     startedAt: Date,
+    planDayId: string | null,
     attempt: number,
   ): Promise<WritingSubmissionStartResultDto> {
     try {
       return await this.dataSource.transaction((manager) =>
-        this.runInTransaction(manager, userId, task, startedAt),
+        this.runInTransaction(manager, userId, task, startedAt, planDayId),
       );
     } catch (error) {
       if (isActiveSubmissionConstraintViolation(error)) {
         if (attempt < MAX_RACE_RETRIES) {
-          return this.executeWithRetry(userId, task, startedAt, attempt + 1);
+          return this.executeWithRetry(userId, task, startedAt, planDayId, attempt + 1);
         }
         throw new StartWritingSubmissionError(
           'Could not resolve the active writing submission after a race retry',
@@ -137,6 +165,7 @@ export class StartWritingSubmissionService {
     userId: string,
     task: WritingTask,
     startedAt: Date,
+    planDayId: string | null,
   ): Promise<WritingSubmissionStartResultDto> {
     const submissionsFactory = this.deps.writingSubmissions ?? DEFAULT_WRITING_SUBMISSIONS_FACTORY;
     const submissionsRepo = submissionsFactory(manager);
@@ -156,6 +185,7 @@ export class StartWritingSubmissionService {
       userId,
       taskId: task.id,
       startedAt,
+      planDayId,
     });
     return this.buildResult(manager, created, false);
   }

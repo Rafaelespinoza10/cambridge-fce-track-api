@@ -12,6 +12,7 @@ import { PracticeAttemptStatus } from './enums';
 import type { PracticeAttemptFeedbackSummary } from './practice-json-types';
 import type { User } from './User';
 import type { PracticeExercise } from './PracticeExercise';
+import type { PlanDay } from './PlanDay';
 
 @Entity('practice_attempts')
 export class PracticeAttempt {
@@ -53,6 +54,12 @@ export class PracticeAttempt {
   @Column({ type: 'jsonb', nullable: true })
   feedback_summary: PracticeAttemptFeedbackSummary | null;
 
+  // Plan day this attempt should register as a planned_activity against once
+  // it completes (see SubmitPracticeAttemptService) — captured at start time
+  // so the user picks the target day before generating, not after.
+  @Column({ type: 'uuid', nullable: true })
+  plan_day_id: string | null;
+
   @CreateDateColumn({ type: 'timestamp with time zone' })
   created_at: Date;
 
@@ -80,4 +87,8 @@ export class PracticeAttempt {
   @ManyToOne('PracticeExercise')
   @JoinColumn({ name: 'exercise_id' })
   exercise: PracticeExercise;
+
+  @ManyToOne('PlanDay', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'plan_day_id' })
+  plan_day: PlanDay | null;
 }

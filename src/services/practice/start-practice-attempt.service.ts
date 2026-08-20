@@ -2,6 +2,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
 import { PracticeAttemptsRepository } from '../../repositories/practice-attempts.repository';
 import type { CreateAttemptData } from '../../repositories/practice-attempts.repository';
+import { PlanningRepository } from '../../repositories/planning.repository';
 import type { PracticeExercise } from '../../models/PracticeExercise';
 import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeExerciseSafeWithItems } from '../../interfaces/practice/practice-exercise.interface';
@@ -11,6 +12,7 @@ import { toPracticeAttemptSafeDto } from '../../lib/practice-attempt-dto';
 export enum StartPracticeAttemptErrorCode {
   INVALID_INPUT = 'invalid_input',
   EXERCISE_NOT_FOUND = 'exercise_not_found',
+  PLAN_DAY_NOT_FOUND = 'plan_day_not_found',
   ACTIVE_ATTEMPT_ON_ANOTHER_EXERCISE = 'active_attempt_on_another_exercise',
   RACE_UNRESOLVED = 'race_unresolved',
 }
@@ -40,9 +42,14 @@ export interface PracticeAttemptsRepositoryPort {
   createAttempt(data: CreateAttemptData): Promise<PracticeAttempt>;
 }
 
+export interface PlanDayLookupPort {
+  findPlanDayByIdAndUser(planDayId: string, userId: string): Promise<{ id: string } | null>;
+}
+
 export interface StartPracticeAttemptServiceDeps {
   practiceExercises?: (source: RepositorySource) => PracticeExercisesRepositoryPort;
   practiceAttempts?: (source: RepositorySource) => PracticeAttemptsRepositoryPort;
+  planDays?: (dataSource: DataSource) => PlanDayLookupPort;
 }
 
 const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
@@ -51,6 +58,8 @@ const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
 const DEFAULT_PRACTICE_ATTEMPTS_FACTORY = (
   source: RepositorySource,
 ): PracticeAttemptsRepositoryPort => new PracticeAttemptsRepository(source);
+const DEFAULT_PLAN_DAYS_FACTORY = (dataSource: DataSource): PlanDayLookupPort =>
+  new PlanningRepository(dataSource);
 
 const MAX_RACE_RETRIES = 1;
 const ACTIVE_ATTEMPT_CONSTRAINT_NAME = 'uq_practice_attempts_one_active_per_user';
@@ -92,6 +101,7 @@ export class StartPracticeAttemptService {
     userId: string,
     exerciseId: string,
     startedAt: Date,
+    planDayId: string | null = null,
   ): Promise<PracticeAttemptStartResultDto> {
     if (typeof userId !== 'string' || userId.trim() === '') invalidInput('userId is required');
     if (typeof exerciseId !== 'string' || exerciseId.trim() === '') {
@@ -99,6 +109,9 @@ export class StartPracticeAttemptService {
     }
     if (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime())) {
       invalidInput('startedAt must be a valid Date');
+    }
+    if (planDayId !== null && (typeof planDayId !== 'string' || planDayId.trim() === '')) {
+      invalidInput('planDayId must be a non-empty string when provided');
     }
 
     const exercisesFactory = this.deps.practiceExercises ?? DEFAULT_PRACTICE_EXERCISES_FACTORY;
@@ -110,7 +123,21 @@ export class StartPracticeAttemptService {
       );
     }
 
-    return this.executeWithRetry(userId, exercise, startedAt, 0);
+    if (planDayId !== null) {
+      const planDaysFactory = this.deps.planDays ?? DEFAULT_PLAN_DAYS_FACTORY;
+      const planDay = await planDaysFactory(this.dataSource).findPlanDayByIdAndUser(
+        planDayId,
+        userId,
+      );
+      if (planDay === null) {
+        throw new StartPracticeAttemptError(
+          'Plan day not found',
+          StartPracticeAttemptErrorCode.PLAN_DAY_NOT_FOUND,
+        );
+      }
+    }
+
+    return this.executeWithRetry(userId, exercise, startedAt, planDayId, 0);
   }
 
   /**
@@ -126,16 +153,17 @@ export class StartPracticeAttemptService {
     userId: string,
     exercise: PracticeExercise,
     startedAt: Date,
+    planDayId: string | null,
     attempt: number,
   ): Promise<PracticeAttemptStartResultDto> {
     try {
       return await this.dataSource.transaction((manager) =>
-        this.runInTransaction(manager, userId, exercise, startedAt),
+        this.runInTransaction(manager, userId, exercise, startedAt, planDayId),
       );
     } catch (error) {
       if (isActiveAttemptConstraintViolation(error)) {
         if (attempt < MAX_RACE_RETRIES) {
-          return this.executeWithRetry(userId, exercise, startedAt, attempt + 1);
+          return this.executeWithRetry(userId, exercise, startedAt, planDayId, attempt + 1);
         }
         throw new StartPracticeAttemptError(
           'Could not resolve the active practice attempt after a race retry',
@@ -151,6 +179,7 @@ export class StartPracticeAttemptService {
     userId: string,
     exercise: PracticeExercise,
     startedAt: Date,
+    planDayId: string | null,
   ): Promise<PracticeAttemptStartResultDto> {
     const attemptsFactory = this.deps.practiceAttempts ?? DEFAULT_PRACTICE_ATTEMPTS_FACTORY;
     const attemptsRepo = attemptsFactory(manager);
@@ -171,6 +200,7 @@ export class StartPracticeAttemptService {
       exerciseId: exercise.id,
       startedAt,
       totalCount: exercise.item_count,
+      planDayId,
     });
     return this.buildResult(manager, created, false);
   }
