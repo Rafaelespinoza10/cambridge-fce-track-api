@@ -30,6 +30,7 @@ function httpError(message: string, statusCode: number): Error {
 const START_STATUS_BY_CODE: Record<StartPracticeAttemptErrorCode, number> = {
   [StartPracticeAttemptErrorCode.INVALID_INPUT]: 400,
   [StartPracticeAttemptErrorCode.EXERCISE_NOT_FOUND]: 404,
+  [StartPracticeAttemptErrorCode.PLAN_DAY_NOT_FOUND]: 404,
   [StartPracticeAttemptErrorCode.ACTIVE_ATTEMPT_ON_ANOTHER_EXERCISE]: 409,
   [StartPracticeAttemptErrorCode.RACE_UNRESOLVED]: 409,
 };

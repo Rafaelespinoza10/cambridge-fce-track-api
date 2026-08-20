@@ -30,32 +30,38 @@ export interface StructuredLLM {
     },
   ): Promise<unknown>;
 }
-const schema: LLMJsonSchema = {
-  name: 'practice_adaptive_recommendation',
-  strict: true,
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['summary', 'strengths', 'focusAreas', 'recommendedPractice', 'studyTips'],
-    properties: {
-      summary: { type: 'string' },
-      strengths: { type: 'array', maxItems: 3, items: { type: 'string' } },
-      focusAreas: { type: 'array', maxItems: 3, items: { type: 'string' } },
-      recommendedPractice: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['examCode', 'paperCode', 'partCode', 'reason'],
-        properties: {
-          examCode: { type: 'string' },
-          paperCode: { type: 'string' },
-          partCode: { type: 'string' },
-          reason: { type: 'string' },
+function buildSchema(knownSkillCodes: string[], candidates: PracticeCandidate[]): LLMJsonSchema {
+  const skillCodeSchema =
+    knownSkillCodes.length > 0 ? { type: 'string', enum: knownSkillCodes } : { type: 'string' };
+  return {
+    name: 'practice_adaptive_recommendation',
+    strict: true,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['summary', 'strengths', 'focusAreas', 'recommendedPractice', 'studyTips'],
+      properties: {
+        summary: { type: 'string' },
+        strengths: { type: 'array', maxItems: 3, items: skillCodeSchema },
+        focusAreas: { type: 'array', maxItems: 3, items: skillCodeSchema },
+        recommendedPractice: {
+          anyOf: candidates.map((c) => ({
+            type: 'object',
+            additionalProperties: false,
+            required: ['examCode', 'paperCode', 'partCode', 'reason'],
+            properties: {
+              examCode: { type: 'string', enum: [c.examCode] },
+              paperCode: { type: 'string', enum: [c.paperCode] },
+              partCode: { type: 'string', enum: [c.partCode] },
+              reason: { type: 'string' },
+            },
+          })),
         },
+        studyTips: { type: 'array', maxItems: 3, items: { type: 'string' } },
       },
-      studyTips: { type: 'array', maxItems: 3, items: { type: 'string' } },
     },
-  },
-};
+  };
+}
 export class PracticeRecommendationGeneratorAdapter implements PracticeRecommendationGenerator {
   constructor(private readonly llm: StructuredLLM) {}
   async generate(
@@ -74,6 +80,7 @@ export class PracticeRecommendationGeneratorAdapter implements PracticeRecommend
       candidates,
       locale,
     });
+    const knownSkillCodes = new Set(insights.bySkill.map((s) => s.code));
     const value = await this.llm.completeStructured(
       [
         { role: 'system', content: SYSTEM.trim() },
@@ -82,9 +89,13 @@ export class PracticeRecommendationGeneratorAdapter implements PracticeRecommend
           content: USER.replace('{{locale}}', locale).replace('{{context}}', context),
         },
       ],
-      { responseSchema: schema, timeoutMs: 25000, temperature: 0.2, maxOutputTokens: 700 },
+      {
+        responseSchema: buildSchema([...knownSkillCodes], candidates),
+        timeoutMs: 25000,
+        temperature: 0.2,
+        maxOutputTokens: 700,
+      },
     );
-    const knownSkillCodes = new Set(insights.bySkill.map((s) => s.code));
     if (
       !isRecommendation(value) ||
       !candidates.some(

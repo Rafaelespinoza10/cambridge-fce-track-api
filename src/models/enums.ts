@@ -65,6 +65,11 @@ export enum PlannedActivityStatus {
   SKIPPED = 'skipped',
 }
 
+export enum PlannedActivitySource {
+  MANUAL = 'manual',
+  AI_GENERATED = 'ai_generated',
+}
+
 export enum DifficultyLevel {
   EASY = 'easy',
   MEDIUM = 'medium',
@@ -145,6 +150,7 @@ export enum FlashcardType {
   VOCABULARY = 'vocabulary',
   EXPRESSION = 'expression',
   GRAMMAR = 'grammar',
+  WORD_FORMATION = 'word_formation',
   CUSTOM = 'custom',
 }
 

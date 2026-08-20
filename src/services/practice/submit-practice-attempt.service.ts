@@ -8,6 +8,8 @@ import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswer } from '../../models/PracticeAnswer';
 import { PracticeAttemptStatus } from '../../models/enums';
+import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
+import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import type { PracticeAnswerPayload } from '../../models/practice-json-types';
 import { isPracticeAnswerPayload } from '../../lib/practice-jsonb-validators';
 import {
@@ -57,7 +59,7 @@ export interface PracticeExercisesRepositoryPort {
   findExerciseWithAnswerKeysForEvaluation(
     exerciseId: string,
     userId: string,
-  ): Promise<{ items: PracticeItem[] } | null>;
+  ): Promise<{ items: PracticeItem[]; exercise: { title: string; part_code: string } } | null>;
 }
 
 export interface PracticeAnswersRepositoryPort {
@@ -69,6 +71,13 @@ export interface SubmitPracticeAttemptServiceDeps {
   practiceAttempts?: (source: RepositorySource) => PracticeAttemptsRepositoryPort;
   practiceExercises?: (source: RepositorySource) => PracticeExercisesRepositoryPort;
   practiceAnswers?: (source: RepositorySource) => PracticeAnswersRepositoryPort;
+  // Injectable seam for tests — the default is the real, transaction-scoped
+  // helper (see create-ai-linked-activity.ts), which unit tests replace with
+  // a spy instead of exercising a real EntityManager.
+  createAiLinkedActivity?: (
+    manager: EntityManager,
+    input: CreateAiLinkedPlannedActivityInput,
+  ) => Promise<unknown>;
 }
 
 const DEFAULT_PRACTICE_ATTEMPTS_FACTORY = (
@@ -267,6 +276,23 @@ export class SubmitPracticeAttemptService {
       percentage,
       feedbackSummary,
     });
+
+    // Register on the Plan/Home only once the attempt is really finished —
+    // never at start time — and only when the user picked a target day when
+    // starting it (see StartPracticeAttemptService).
+    if (attempt.plan_day_id !== null) {
+      const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
+      const examSectionSlug = withKeys.exercise.part_code.toLowerCase().replace(/_/g, '-');
+      await linker(manager, {
+        planDayId: attempt.plan_day_id,
+        title: `Use of English — ${withKeys.exercise.title}`,
+        skillSlug: 'use-of-english',
+        examSectionSlug,
+        estimatedDurationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
+        completedAt: submittedAt,
+        practiceAttemptId: attempt.id,
+      });
+    }
 
     const completedAttempt = {
       ...attempt,

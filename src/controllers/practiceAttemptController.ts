@@ -21,6 +21,7 @@ interface StartAttemptPort {
     userId: string,
     exerciseId: string,
     startedAt: Date,
+    planDayId?: string | null,
   ): Promise<PracticeAttemptStartResultDto>;
 }
 
@@ -112,9 +113,23 @@ async function startPracticeAttemptHandler(
   const exerciseId = getExerciseIdParam(event);
   if (exerciseId === null) return errorResponse('Invalid or missing exerciseId', 400);
 
+  let body: { planDayId?: string };
+  try {
+    body = JSON.parse(event.body ?? '{}') as { planDayId?: string };
+  } catch {
+    return errorResponse('Invalid request body', 400);
+  }
+  const planDayId =
+    typeof body.planDayId === 'string' && isValidUuid(body.planDayId) ? body.planDayId : null;
+
   try {
     const { startAttempt } = await deps.services();
-    const { view, resumed } = await startAttempt.execute(payload.sub, exerciseId, deps.now());
+    const { view, resumed } = await startAttempt.execute(
+      payload.sub,
+      exerciseId,
+      deps.now(),
+      planDayId,
+    );
     return successResponse({ success: true, data: { ...view, resumed } }, resumed ? 200 : 201);
   } catch (err: unknown) {
     return handleError(mapPracticeAttemptError(err));

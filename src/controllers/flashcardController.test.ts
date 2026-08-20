@@ -8,6 +8,8 @@ import {
   createFlashcard,
   createFlashcardHandler,
   listFlashcardsHandler,
+  createWordFamilyHandler,
+  listWordFamiliesHandler,
   getFlashcardHandler,
   updateFlashcardHandler,
   suspendFlashcardHandler,
@@ -17,7 +19,7 @@ import {
 import type { FlashcardControllerDeps, FlashcardsServicePort } from './flashcardController';
 import { JwtService } from '../lib/jwt';
 import { FlashcardError, FlashcardErrorCode } from '../services/flashcards/flashcards.service';
-import type { FlashcardDto } from '../interfaces/flashcards/flashcards.interface';
+import type { FlashcardDto, WordFamilyDto } from '../interfaces/flashcards/flashcards.interface';
 import { FlashcardType, FlashcardStatus } from '../models/enums';
 
 const USER_ID = 'user-1';
@@ -65,10 +67,18 @@ const FLASHCARD_DTO: FlashcardDto = {
   updatedAt: NOW,
 };
 
+const WORD_FAMILY_DTO: WordFamilyDto = {
+  familyTag: 'family:happy',
+  baseWord: 'happy',
+  derivatives: [FLASHCARD_DTO],
+};
+
 interface FakeService extends FlashcardsServicePort {
   calls: {
     createFlashcard: Parameters<FlashcardsServicePort['createFlashcard']>[];
     listFlashcards: Parameters<FlashcardsServicePort['listFlashcards']>[];
+    createWordFamily: Parameters<FlashcardsServicePort['createWordFamily']>[];
+    listWordFamilies: Parameters<FlashcardsServicePort['listWordFamilies']>[];
     getFlashcard: Parameters<FlashcardsServicePort['getFlashcard']>[];
     updateFlashcard: Parameters<FlashcardsServicePort['updateFlashcard']>[];
     suspendFlashcard: Parameters<FlashcardsServicePort['suspendFlashcard']>[];
@@ -84,6 +94,8 @@ function buildDeps(
   const calls: FakeService['calls'] = {
     createFlashcard: [],
     listFlashcards: [],
+    createWordFamily: [],
+    listWordFamilies: [],
     getFlashcard: [],
     updateFlashcard: [],
     suspendFlashcard: [],
@@ -100,6 +112,14 @@ function buildDeps(
     listFlashcards: async (...args) => {
       calls.listFlashcards.push(args);
       return overrides.listFlashcards ? overrides.listFlashcards(...args) : [FLASHCARD_DTO];
+    },
+    createWordFamily: async (...args) => {
+      calls.createWordFamily.push(args);
+      return overrides.createWordFamily ? overrides.createWordFamily(...args) : WORD_FAMILY_DTO;
+    },
+    listWordFamilies: async (...args) => {
+      calls.listWordFamilies.push(args);
+      return overrides.listWordFamilies ? overrides.listWordFamilies(...args) : [WORD_FAMILY_DTO];
     },
     getFlashcard: async (...args) => {
       calls.getFlashcard.push(args);
@@ -327,6 +347,115 @@ describe('listFlashcards', () => {
       },
     });
     const result = await listFlashcardsHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 404);
+  });
+});
+
+// ── createWordFamily ─────────────────────────────────────────────────────────────
+
+describe('createWordFamily', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await createWordFamilyHandler(
+      makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid deckId', async () => {
+    const { deps } = buildDeps();
+    const result = await createWordFamilyHandler(
+      makeEvent({ pathParameters: { deckId: 'nope' } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('rejects invalid JSON', async () => {
+    const { deps } = buildDeps();
+    const result = await createWordFamilyHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID }, body: '{not json' }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('parses the body and forwards it to the service', async () => {
+    const { deps, service } = buildDeps();
+    const body = {
+      baseWord: 'happy',
+      derivatives: [{ form: 'happiness', partOfSpeech: 'noun' }],
+    };
+    const result = await createWordFamilyHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID }, body: JSON.stringify(body) }),
+      deps,
+    );
+    assert.equal(result.statusCode, 201);
+    assert.deepEqual(service.calls.createWordFamily[0][3], body);
+  });
+
+  it('maps a domain error to its HTTP status', async () => {
+    const { deps } = buildDeps({
+      createWordFamily: async () => {
+        throw new FlashcardError('baseWord must not be empty', FlashcardErrorCode.INVALID_INPUT);
+      },
+    });
+    const result = await createWordFamilyHandler(
+      makeEvent({
+        pathParameters: { deckId: DECK_ID },
+        body: JSON.stringify({ baseWord: '', derivatives: [] }),
+      }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+});
+
+// ── listWordFamilies ─────────────────────────────────────────────────────────────
+
+describe('listWordFamilies', () => {
+  it('rejects an unauthenticated request', async () => {
+    const { deps } = buildDeps();
+    const result = await listWordFamiliesHandler(
+      makeEvent({ headers: {}, pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('rejects an invalid deckId', async () => {
+    const { deps } = buildDeps();
+    const result = await listWordFamiliesHandler(
+      makeEvent({ pathParameters: { deckId: 'nope' } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('returns the families from the service', async () => {
+    const { deps } = buildDeps();
+    const result = await listWordFamiliesHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+    const data = parseBody(result).data as WordFamilyDto[];
+    assert.equal(data.length, 1);
+    assert.equal(data[0].familyTag, WORD_FAMILY_DTO.familyTag);
+    assert.equal(data[0].baseWord, WORD_FAMILY_DTO.baseWord);
+  });
+
+  it('maps DECK_NOT_FOUND to 404', async () => {
+    const { deps } = buildDeps({
+      listWordFamilies: async () => {
+        throw new FlashcardError('not found', FlashcardErrorCode.DECK_NOT_FOUND);
+      },
+    });
+    const result = await listWordFamiliesHandler(
       makeEvent({ pathParameters: { deckId: DECK_ID } }),
       deps,
     );

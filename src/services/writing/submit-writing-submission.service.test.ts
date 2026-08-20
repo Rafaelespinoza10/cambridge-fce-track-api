@@ -55,6 +55,7 @@ function makeSubmission(overrides: Partial<WritingSubmission> = {}): WritingSubm
     submitted_text: null,
     word_count: null,
     feedback: null,
+    plan_day_id: null,
     ...overrides,
   } as WritingSubmission;
 }
@@ -126,8 +127,10 @@ function makeService(
   service: SubmitWritingSubmissionService;
   gradeCalls: { id: string; userId: string; data: GradeSubmissionData }[];
   llmCallCount: () => number;
+  createAiLinkedActivityCalls: unknown[];
 } {
   const gradeCalls: { id: string; userId: string; data: GradeSubmissionData }[] = [];
+  const createAiLinkedActivityCalls: unknown[] = [];
   let llmCalls = 0;
   const llm: LLMServicePort = {
     completeStructured: async (...args) => {
@@ -158,8 +161,11 @@ function makeService(
     llm,
     writingSubmissions,
     writingTasks,
+    createAiLinkedActivity: async (_manager, input) => {
+      createAiLinkedActivityCalls.push(input);
+    },
   });
-  return { service, gradeCalls, llmCallCount: () => llmCalls };
+  return { service, gradeCalls, llmCallCount: () => llmCalls, createAiLinkedActivityCalls };
 }
 
 function assertErr(err: unknown, code: SubmitWritingSubmissionErrorCode): true {
@@ -412,6 +418,67 @@ describe('SubmitWritingSubmissionService.execute — status handling', () => {
     assert.equal(idempotentReplay, true);
     assert.equal(result.submittedText, 'winner text');
     assert.equal(gradeCalls.length, 0);
+  });
+});
+
+describe('SubmitWritingSubmissionService.execute — AI-linked planned activity', () => {
+  const PLAN_DAY_ID = '33333333-3333-3333-3333-333333333333';
+
+  it('creates a linked planned_activity when the submission targets a plan day', async () => {
+    const { service, createAiLinkedActivityCalls } = makeService(
+      async () => validGradingResponse(),
+      { submission: makeSubmission({ plan_day_id: PLAN_DAY_ID }) },
+    );
+    await service.execute(USER_ID, SUBMISSION_ID, SUBMITTED_TEXT, SUBMITTED_AT);
+
+    assert.equal(createAiLinkedActivityCalls.length, 1);
+    const input = createAiLinkedActivityCalls[0] as Record<string, unknown>;
+    assert.equal(input.planDayId, PLAN_DAY_ID);
+    assert.equal(input.skillSlug, 'writing');
+    assert.equal(input.examSectionSlug, 'writing-part-1'); // essay
+    assert.equal(input.writingSubmissionId, SUBMISSION_ID);
+    assert.equal(input.completedAt, SUBMITTED_AT);
+  });
+
+  it('does not create a planned_activity when the submission has no target day', async () => {
+    const { service, createAiLinkedActivityCalls } = makeService(async () =>
+      validGradingResponse(),
+    );
+    await service.execute(USER_ID, SUBMISSION_ID, SUBMITTED_TEXT, SUBMITTED_AT);
+    assert.equal(createAiLinkedActivityCalls.length, 0);
+  });
+
+  it('does not create a duplicate planned_activity on an idempotent replay', async () => {
+    const feedback = {
+      version: 'writing-feedback-v1' as const,
+      criteria: [],
+      overallBand: 10,
+      maxBand: 20 as const,
+      corrections: [],
+      rewrittenText: 'already graded',
+      summary: 'already graded',
+    };
+    const graded = makeSubmission({
+      status: WritingSubmissionStatus.GRADED,
+      plan_day_id: PLAN_DAY_ID,
+      submitted_at: new Date('2026-01-01T10:30:00.000Z'),
+      duration_seconds: 1800,
+      submitted_text: 'previously submitted text',
+      word_count: 3,
+      feedback,
+    });
+    const { service, createAiLinkedActivityCalls } = makeService(
+      async () => validGradingResponse(),
+      { submission: graded },
+    );
+    const { idempotentReplay } = await service.execute(
+      USER_ID,
+      SUBMISSION_ID,
+      SUBMITTED_TEXT,
+      SUBMITTED_AT,
+    );
+    assert.equal(idempotentReplay, true);
+    assert.equal(createAiLinkedActivityCalls.length, 0);
   });
 });
 

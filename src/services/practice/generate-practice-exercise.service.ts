@@ -30,6 +30,7 @@ import {
   PRACTICE_EXAM_CATALOG,
 } from '../../lib/practice-exam-catalog';
 import { renderPromptTemplate } from '../../lib/prompt-template';
+import { pickRandomExamTopic } from '../../lib/exam-topics';
 import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
 import type {
   CreateExerciseData,
@@ -42,7 +43,7 @@ import OPEN_CLOZE_INSTRUCTIONS from '../../prompts/practice/task-types/open-cloz
 import WORD_FORMATION_INSTRUCTIONS from '../../prompts/practice/task-types/word-formation.md';
 import KEY_WORD_TRANSFORMATION_INSTRUCTIONS from '../../prompts/practice/task-types/key-word-transformation.md';
 
-const PROMPT_VERSION = 'practice-exercise-v1';
+const PROMPT_VERSION = 'practice-exercise-v2';
 
 export enum GeneratePracticeExerciseErrorCode {
   INVALID_INPUT = 'invalid_input',
@@ -238,6 +239,7 @@ function buildMessages(normalized: NormalizedRequest): LLMChatMessage[] {
     partLabel: normalized.part.partLabel,
     itemCount: String(normalized.itemCount),
     targetLevel: normalized.targetLevel,
+    topicHint: pickRandomExamTopic(),
     taskTypeInstructions: normalized.part.taskTypeInstructions,
   });
   return [

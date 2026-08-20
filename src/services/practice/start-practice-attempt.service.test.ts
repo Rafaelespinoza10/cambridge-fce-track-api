@@ -10,6 +10,7 @@ import {
 import type {
   PracticeExercisesRepositoryPort,
   PracticeAttemptsRepositoryPort,
+  PlanDayLookupPort,
 } from './start-practice-attempt.service';
 import type { PracticeExercise } from '../../models/PracticeExercise';
 import type { PracticeAttempt } from '../../models/PracticeAttempt';
@@ -62,6 +63,7 @@ interface Overrides {
   findByIdForUser?: (exerciseId: string, userId: string) => Promise<PracticeExercise | null>;
   findActiveByUser?: (userId: string) => Promise<PracticeAttempt | null>;
   createAttempt?: PracticeAttemptsRepositoryPort['createAttempt'];
+  findPlanDayByIdAndUser?: PlanDayLookupPort['findPlanDayByIdAndUser'];
 }
 
 function makeService(overrides: Overrides = {}): { service: StartPracticeAttemptService } {
@@ -81,9 +83,15 @@ function makeService(overrides: Overrides = {}): { service: StartPracticeAttempt
       (async (data) => makeAttempt({ exercise_id: data.exerciseId, total_count: data.totalCount })),
   });
 
+  const planDays = (): PlanDayLookupPort => ({
+    findPlanDayByIdAndUser:
+      overrides.findPlanDayByIdAndUser ?? (async (planDayId) => ({ id: planDayId })),
+  });
+
   const service = new StartPracticeAttemptService(dataSource, {
     practiceExercises: exercises,
     practiceAttempts: attempts,
+    planDays,
   });
   return { service };
 }
@@ -122,6 +130,50 @@ describe('StartPracticeAttemptService.execute — create', () => {
       () => service.execute(USER_ID, EXERCISE_ID, new Date('invalid')),
       (err: unknown) => assertStartErr(err, StartPracticeAttemptErrorCode.INVALID_INPUT),
     );
+  });
+});
+
+describe('StartPracticeAttemptService.execute — planDayId', () => {
+  const PLAN_DAY_ID = '33333333-3333-3333-3333-333333333333';
+
+  it('validates ownership and persists planDayId on the created attempt', async () => {
+    let seenPlanDayId: string | null | undefined;
+    let ownershipCheckedFor: string | undefined;
+    const { service } = makeService({
+      findPlanDayByIdAndUser: async (planDayId) => {
+        ownershipCheckedFor = planDayId;
+        return { id: planDayId };
+      },
+      createAttempt: async (data) => {
+        seenPlanDayId = data.planDayId;
+        return makeAttempt({ exercise_id: data.exerciseId, total_count: data.totalCount });
+      },
+    });
+
+    await service.execute(USER_ID, EXERCISE_ID, STARTED_AT, PLAN_DAY_ID);
+    assert.equal(ownershipCheckedFor, PLAN_DAY_ID);
+    assert.equal(seenPlanDayId, PLAN_DAY_ID);
+  });
+
+  it('rejects a planDayId the user does not own', async () => {
+    const { service } = makeService({ findPlanDayByIdAndUser: async () => null });
+    await assert.rejects(
+      () => service.execute(USER_ID, EXERCISE_ID, STARTED_AT, PLAN_DAY_ID),
+      (err: unknown) => assertStartErr(err, StartPracticeAttemptErrorCode.PLAN_DAY_NOT_FOUND),
+    );
+  });
+
+  it('creates an attempt with planDayId null when none is provided', async () => {
+    let seenPlanDayId: string | null | undefined = 'unset';
+    const { service } = makeService({
+      createAttempt: async (data) => {
+        seenPlanDayId = data.planDayId;
+        return makeAttempt({ exercise_id: data.exerciseId, total_count: data.totalCount });
+      },
+    });
+
+    await service.execute(USER_ID, EXERCISE_ID, STARTED_AT);
+    assert.equal(seenPlanDayId, null);
   });
 });
 
