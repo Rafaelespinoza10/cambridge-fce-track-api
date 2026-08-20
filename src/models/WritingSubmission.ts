@@ -12,6 +12,7 @@ import { WritingSubmissionStatus } from './enums';
 import type { WritingFeedback } from './writing-json-types';
 import type { User } from './User';
 import type { WritingTask } from './WritingTask';
+import type { PlanDay } from './PlanDay';
 
 @Entity('writing_submissions')
 export class WritingSubmission {
@@ -50,6 +51,12 @@ export class WritingSubmission {
   @Column({ type: 'jsonb', nullable: true })
   feedback: WritingFeedback | null;
 
+  // Plan day this submission should register as a planned_activity against
+  // once it's graded (see SubmitWritingSubmissionService) — captured at
+  // start time so the user picks the target day before generating.
+  @Column({ type: 'uuid', nullable: true })
+  plan_day_id: string | null;
+
   @CreateDateColumn({ type: 'timestamp with time zone' })
   created_at: Date;
 
@@ -73,4 +80,8 @@ export class WritingSubmission {
   @ManyToOne('WritingTask')
   @JoinColumn({ name: 'task_id' })
   task: WritingTask;
+
+  @ManyToOne('PlanDay', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'plan_day_id' })
+  plan_day: PlanDay | null;
 }

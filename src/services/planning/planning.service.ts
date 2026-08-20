@@ -100,6 +100,9 @@ function toSafePlannedActivity(pa: PlannedActivity): SafePlannedActivity {
     status: pa.status,
     scheduledAt: pa.scheduled_at,
     completedAt: pa.completed_at,
+    source: pa.source,
+    practiceAttemptId: pa.practice_attempt_id,
+    writingSubmissionId: pa.writing_submission_id,
   };
 }
 

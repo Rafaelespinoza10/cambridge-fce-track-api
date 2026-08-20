@@ -9,6 +9,7 @@ interface CreateSubmissionData {
   userId: string;
   taskId: string;
   startedAt: Date;
+  planDayId: string | null;
 }
 
 interface GradeSubmissionData {
@@ -93,6 +94,7 @@ class WritingSubmissionsRepository {
       submitted_text: null,
       word_count: null,
       feedback: null,
+      plan_day_id: data.planDayId,
     });
     return this.submissionRepo.save(submission);
   }

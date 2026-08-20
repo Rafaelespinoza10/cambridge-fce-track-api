@@ -226,6 +226,18 @@ class PlanningRepository {
       .getOne();
   }
 
+  // Used by Practice/Writing start flows, which only ever receive a
+  // planDayId (not a weekId) from the client — unlike findPlanDayByIdAndWeekPlan.
+  async findPlanDayByIdAndUser(dayId: string, userId: string): Promise<PlanDay | null> {
+    return this.planDayRepo
+      .createQueryBuilder('pd')
+      .innerJoin('pd.weekly_plan', 'wp')
+      .where('pd.id = :dayId', { dayId })
+      .andWhere('wp.user_id = :userId', { userId })
+      .andWhere('wp.deleted_at IS NULL')
+      .getOne();
+  }
+
   async findActivityTemplateById(id: string): Promise<ActivityTemplate | null> {
     return this.activityTemplateRepo.findOne({ where: { id } });
   }

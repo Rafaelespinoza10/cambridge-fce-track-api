@@ -110,6 +110,7 @@ interface CreateAttemptData {
   exerciseId: string;
   startedAt: Date;
   totalCount: number;
+  planDayId: string | null;
 }
 
 interface CompleteAttemptData {
@@ -139,6 +140,7 @@ class PracticeAttemptsRepository {
       total_count: data.totalCount,
       percentage: null,
       feedback_summary: null,
+      plan_day_id: data.planDayId,
     });
     return this.attemptRepo.save(attempt);
   }

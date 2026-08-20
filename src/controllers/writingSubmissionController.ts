@@ -21,6 +21,7 @@ interface StartSubmissionPort {
     userId: string,
     taskId: string,
     startedAt: Date,
+    planDayId?: string | null,
   ): Promise<WritingSubmissionStartResultDto>;
 }
 
@@ -118,9 +119,23 @@ async function startWritingSubmissionHandler(
   const taskId = getTaskIdParam(event);
   if (taskId === null) return errorResponse('Invalid or missing taskId', 400);
 
+  let body: { planDayId?: string };
+  try {
+    body = JSON.parse(event.body ?? '{}') as { planDayId?: string };
+  } catch {
+    return errorResponse('Invalid request body', 400);
+  }
+  const planDayId =
+    typeof body.planDayId === 'string' && isValidUuid(body.planDayId) ? body.planDayId : null;
+
   try {
     const { startSubmission } = await deps.services();
-    const { view, resumed } = await startSubmission.execute(payload.sub, taskId, deps.now());
+    const { view, resumed } = await startSubmission.execute(
+      payload.sub,
+      taskId,
+      deps.now(),
+      planDayId,
+    );
     return successResponse({ success: true, data: { ...view, resumed } }, resumed ? 200 : 201);
   } catch (err: unknown) {
     return handleError(mapWritingSubmissionError(err));

@@ -22,6 +22,8 @@ import { getWritingTaskFormat } from '../../lib/writing-task-catalog';
 import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
 import { WritingSubmissionsRepository } from '../../repositories/writing-submissions.repository';
 import type { GradeSubmissionData } from '../../repositories/writing-submissions.repository';
+import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
+import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import SYSTEM_PROMPT from '../../prompts/writing/grade-submission.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/writing/grade-submission.user.md';
 
@@ -79,6 +81,11 @@ export interface SubmitWritingSubmissionServiceDeps {
   llm: LLMServicePort;
   writingTasks?: (source: RepositorySource) => WritingTasksRepositoryPort;
   writingSubmissions?: (source: RepositorySource) => WritingSubmissionsRepositoryPort;
+  // Injectable seam for tests — see SubmitPracticeAttemptServiceDeps.createAiLinkedActivity.
+  createAiLinkedActivity?: (
+    manager: EntityManager,
+    input: CreateAiLinkedPlannedActivityInput,
+  ) => Promise<unknown>;
 }
 
 const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
@@ -531,6 +538,23 @@ export class SubmitWritingSubmissionService {
           'Failed to persist the graded writing submission',
           SubmitWritingSubmissionErrorCode.PERSISTENCE_INCONSISTENCY,
         );
+      }
+
+      // Register on the Plan/Home only once the submission is really graded
+      // — never at start time — and only when the user picked a target day
+      // when starting it (see StartWritingSubmissionService).
+      if (locked.plan_day_id !== null) {
+        const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
+        const part = getWritingTaskFormat(task.task_type).part;
+        await linker(manager, {
+          planDayId: locked.plan_day_id,
+          title: `Writing — ${task.title}`,
+          skillSlug: 'writing',
+          examSectionSlug: `writing-part-${part}`,
+          estimatedDurationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
+          completedAt: submittedAt,
+          writingSubmissionId: submissionId,
+        });
       }
 
       const gradedSubmission = {
