@@ -379,22 +379,23 @@ describe('SubmitPracticeAttemptService.execute — AI-linked planned activity', 
     });
     const { service, state } = makeService({
       findByIdForUpdate: async () => completed,
-      findByAttemptForUser: async () => [
-        {
-          item_id: 'item-1',
-          answer_payload: { kind: 'single_choice', optionId: 'a' },
-          normalized_answer: 'a',
-          is_correct: true,
-          response_time_ms: 100,
-        },
-        {
-          item_id: 'item-2',
-          answer_payload: { kind: 'text', value: 'been' },
-          normalized_answer: 'been',
-          is_correct: true,
-          response_time_ms: 200,
-        },
-      ] as unknown as PracticeAnswer[],
+      findByAttemptForUser: async () =>
+        [
+          {
+            item_id: 'item-1',
+            answer_payload: { kind: 'single_choice', optionId: 'a' },
+            normalized_answer: 'a',
+            is_correct: true,
+            response_time_ms: 100,
+          },
+          {
+            item_id: 'item-2',
+            answer_payload: { kind: 'text', value: 'been' },
+            normalized_answer: 'been',
+            is_correct: true,
+            response_time_ms: 200,
+          },
+        ] as unknown as PracticeAnswer[],
     });
     const { idempotentReplay } = await service.execute(
       USER_ID,

@@ -441,8 +441,8 @@ describe('SubmitWritingSubmissionService.execute — AI-linked planned activity'
   });
 
   it('does not create a planned_activity when the submission has no target day', async () => {
-    const { service, createAiLinkedActivityCalls } = makeService(
-      async () => validGradingResponse(),
+    const { service, createAiLinkedActivityCalls } = makeService(async () =>
+      validGradingResponse(),
     );
     await service.execute(USER_ID, SUBMISSION_ID, SUBMITTED_TEXT, SUBMITTED_AT);
     assert.equal(createAiLinkedActivityCalls.length, 0);
