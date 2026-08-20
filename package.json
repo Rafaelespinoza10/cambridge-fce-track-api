@@ -18,7 +18,8 @@
     "db:migration:run": "node scripts/db.js migration:run -d src/config/database.ts",
     "db:migration:revert": "node scripts/db.js migration:revert -d src/config/database.ts",
     "db:migration:show": "node scripts/db.js migration:show -d src/config/database.ts",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "db:backfill-ai-activities": "node scripts/backfill-ai-activities.js"
   },
   "engines": {
     "node": ">=22.0.0"

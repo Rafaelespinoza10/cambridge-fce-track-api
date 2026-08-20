@@ -10,6 +10,7 @@ import type { PracticeAnswer } from '../../models/PracticeAnswer';
 import { PracticeAttemptStatus } from '../../models/enums';
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
+import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
 import type { PracticeAnswerPayload } from '../../models/practice-json-types';
 import { isPracticeAnswerPayload } from '../../lib/practice-jsonb-validators';
 import {
@@ -78,6 +79,9 @@ export interface SubmitPracticeAttemptServiceDeps {
     manager: EntityManager,
     input: CreateAiLinkedPlannedActivityInput,
   ) => Promise<unknown>;
+  // Injectable seam for tests — the default is the real, transaction-scoped
+  // helper (see resolve-plan-day-for-date.ts).
+  resolvePlanDayId?: (manager: EntityManager, userId: string, dateKey: string) => Promise<string>;
 }
 
 const DEFAULT_PRACTICE_ATTEMPTS_FACTORY = (
@@ -278,13 +282,18 @@ export class SubmitPracticeAttemptService {
     });
 
     // Register on the Plan/Home only once the attempt is really finished —
-    // never at start time — and only when the user picked a target day when
-    // starting it (see StartPracticeAttemptService).
-    if (attempt.plan_day_id !== null) {
+    // never at start time. Every completed attempt registers: the day
+    // picked at start time (StartPracticeAttemptService) if there was one,
+    // otherwise the attempt defaults to the day it was actually completed.
+    {
       const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
+      const resolveDay = this.deps.resolvePlanDayId ?? resolvePlanDayIdForDate;
+      const planDayId =
+        attempt.plan_day_id ??
+        (await resolveDay(manager, userId, submittedAt.toISOString().slice(0, 10)));
       const examSectionSlug = withKeys.exercise.part_code.toLowerCase().replace(/_/g, '-');
       await linker(manager, {
-        planDayId: attempt.plan_day_id,
+        planDayId,
         title: `Use of English — ${withKeys.exercise.title}`,
         skillSlug: 'use-of-english',
         examSectionSlug,

@@ -70,6 +70,7 @@ interface RepoState {
   completeAttemptCalls: { attemptId: string; userId: string; data: unknown }[];
   findByIdForUpdateCalls: number;
   createAiLinkedActivityCalls: unknown[];
+  resolvePlanDayIdCalls: { userId: string; dateKey: string }[];
 }
 
 interface Overrides {
@@ -88,6 +89,7 @@ function makeService(overrides: Overrides = {}): {
     completeAttemptCalls: [],
     findByIdForUpdateCalls: 0,
     createAiLinkedActivityCalls: [],
+    resolvePlanDayIdCalls: [],
   };
 
   const dataSource = {
@@ -130,6 +132,10 @@ function makeService(overrides: Overrides = {}): {
     practiceAnswers: answers,
     createAiLinkedActivity: async (_manager, input) => {
       state.createAiLinkedActivityCalls.push(input);
+    },
+    resolvePlanDayId: async (_manager, userId, dateKey) => {
+      state.resolvePlanDayIdCalls.push({ userId, dateKey });
+      return 'default-day-id';
     },
   });
   return { service, state };
@@ -354,12 +360,26 @@ describe('SubmitPracticeAttemptService.execute — AI-linked planned activity', 
     assert.equal(input.completedAt, SUBMITTED_AT);
   });
 
-  it('does not create a planned_activity when the attempt has no target day', async () => {
+  it('defaults to the completion day when the attempt has no target day', async () => {
     const { service, state } = makeService({
       findByIdForUpdate: async () => makeAttempt({ plan_day_id: null }),
     });
     await service.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT);
-    assert.equal(state.createAiLinkedActivityCalls.length, 0);
+
+    assert.equal(state.resolvePlanDayIdCalls.length, 1);
+    assert.equal(state.resolvePlanDayIdCalls[0]!.userId, USER_ID);
+    assert.equal(state.resolvePlanDayIdCalls[0]!.dateKey, '2026-01-01');
+    assert.equal(state.createAiLinkedActivityCalls.length, 1);
+    const input = state.createAiLinkedActivityCalls[0] as Record<string, unknown>;
+    assert.equal(input.planDayId, 'default-day-id');
+  });
+
+  it('does not resolve a default day when the attempt already targets one', async () => {
+    const { service, state } = makeService({
+      findByIdForUpdate: async () => makeAttempt({ plan_day_id: PLAN_DAY_ID }),
+    });
+    await service.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT);
+    assert.equal(state.resolvePlanDayIdCalls.length, 0);
   });
 
   it('does not create a duplicate planned_activity on an idempotent replay', async () => {

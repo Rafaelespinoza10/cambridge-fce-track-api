@@ -128,9 +128,11 @@ function makeService(
   gradeCalls: { id: string; userId: string; data: GradeSubmissionData }[];
   llmCallCount: () => number;
   createAiLinkedActivityCalls: unknown[];
+  resolvePlanDayIdCalls: { userId: string; dateKey: string }[];
 } {
   const gradeCalls: { id: string; userId: string; data: GradeSubmissionData }[] = [];
   const createAiLinkedActivityCalls: unknown[] = [];
+  const resolvePlanDayIdCalls: { userId: string; dateKey: string }[] = [];
   let llmCalls = 0;
   const llm: LLMServicePort = {
     completeStructured: async (...args) => {
@@ -164,8 +166,18 @@ function makeService(
     createAiLinkedActivity: async (_manager, input) => {
       createAiLinkedActivityCalls.push(input);
     },
+    resolvePlanDayId: async (_manager, userId, dateKey) => {
+      resolvePlanDayIdCalls.push({ userId, dateKey });
+      return 'default-day-id';
+    },
   });
-  return { service, gradeCalls, llmCallCount: () => llmCalls, createAiLinkedActivityCalls };
+  return {
+    service,
+    gradeCalls,
+    llmCallCount: () => llmCalls,
+    createAiLinkedActivityCalls,
+    resolvePlanDayIdCalls,
+  };
 }
 
 function assertErr(err: unknown, code: SubmitWritingSubmissionErrorCode): true {
@@ -440,12 +452,27 @@ describe('SubmitWritingSubmissionService.execute — AI-linked planned activity'
     assert.equal(input.completedAt, SUBMITTED_AT);
   });
 
-  it('does not create a planned_activity when the submission has no target day', async () => {
-    const { service, createAiLinkedActivityCalls } = makeService(async () =>
-      validGradingResponse(),
+  it('defaults to the grading day when the submission has no target day', async () => {
+    const { service, createAiLinkedActivityCalls, resolvePlanDayIdCalls } = makeService(
+      async () => validGradingResponse(),
     );
     await service.execute(USER_ID, SUBMISSION_ID, SUBMITTED_TEXT, SUBMITTED_AT);
-    assert.equal(createAiLinkedActivityCalls.length, 0);
+
+    assert.equal(resolvePlanDayIdCalls.length, 1);
+    assert.equal(resolvePlanDayIdCalls[0]!.userId, USER_ID);
+    assert.equal(resolvePlanDayIdCalls[0]!.dateKey, '2026-01-01');
+    assert.equal(createAiLinkedActivityCalls.length, 1);
+    const input = createAiLinkedActivityCalls[0] as Record<string, unknown>;
+    assert.equal(input.planDayId, 'default-day-id');
+  });
+
+  it('does not resolve a default day when the submission already targets one', async () => {
+    const PLAN_DAY_ID = '33333333-3333-3333-3333-333333333333';
+    const { service, resolvePlanDayIdCalls } = makeService(async () => validGradingResponse(), {
+      submission: makeSubmission({ plan_day_id: PLAN_DAY_ID }),
+    });
+    await service.execute(USER_ID, SUBMISSION_ID, SUBMITTED_TEXT, SUBMITTED_AT);
+    assert.equal(resolvePlanDayIdCalls.length, 0);
   });
 
   it('does not create a duplicate planned_activity on an idempotent replay', async () => {
