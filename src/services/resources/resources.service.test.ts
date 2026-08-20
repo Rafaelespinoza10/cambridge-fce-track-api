@@ -98,17 +98,12 @@ describe('ResourcesService.listResources', () => {
       ],
     });
     const result = await service.listResources(USER_ID);
-    assert.deepEqual(
-      result.map((r) => r.id).sort(),
-      ['g1', 'p1'],
-    );
+    assert.deepEqual(result.map((r) => r.id).sort(), ['g1', 'p1']);
   });
 
   it('excludes soft-deleted resources', async () => {
     const { service } = setup({
-      resources: [
-        makeResource({ id: 'g1', user_id: null, is_global: true, deleted_at: NOW }),
-      ],
+      resources: [makeResource({ id: 'g1', user_id: null, is_global: true, deleted_at: NOW })],
     });
     const result = await service.listResources(USER_ID);
     assert.deepEqual(result, []);
@@ -181,8 +176,7 @@ describe('ResourcesService.deleteResource', () => {
     await assert.rejects(
       () => service.deleteResource(USER_ID, RESOURCE_ID),
       (error: unknown) =>
-        error instanceof ResourceError &&
-        error.code === ResourceErrorCode.RESOURCE_NOT_DELETABLE,
+        error instanceof ResourceError && error.code === ResourceErrorCode.RESOURCE_NOT_DELETABLE,
     );
   });
 
@@ -193,8 +187,7 @@ describe('ResourcesService.deleteResource', () => {
     await assert.rejects(
       () => service.deleteResource(USER_ID, RESOURCE_ID),
       (error: unknown) =>
-        error instanceof ResourceError &&
-        error.code === ResourceErrorCode.RESOURCE_NOT_DELETABLE,
+        error instanceof ResourceError && error.code === ResourceErrorCode.RESOURCE_NOT_DELETABLE,
     );
   });
 

@@ -684,10 +684,7 @@ describe('FlashcardsService.listWordFamilies', () => {
     const happy = families.find((f) => f.familyTag === 'family:happy');
     assert.ok(happy);
     assert.equal(happy.baseWord, 'happy');
-    assert.deepEqual(
-      happy.derivatives.map((d) => d.id).sort(),
-      ['a', 'b'],
-    );
+    assert.deepEqual(happy.derivatives.map((d) => d.id).sort(), ['a', 'b']);
   });
 
   it('ignores non-word-formation cards and word-formation cards without a family tag', async () => {
