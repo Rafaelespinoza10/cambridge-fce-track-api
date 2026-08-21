@@ -22,20 +22,20 @@ import {
   isPracticeItemAnswerKey,
   isPracticeItemOptionArray,
   normalizeSkillTags,
-} from '../../lib/practice-jsonb-validators';
+} from '@lib/practice/practice-jsonb-validators';
 import {
   isPracticeTaskType,
   isPracticeGenerationSupported,
   findPartInCatalog,
   PRACTICE_EXAM_CATALOG,
-} from '../../lib/practice-exam-catalog';
-import { renderPromptTemplate } from '../../lib/prompt-template';
-import { pickRandomExamTopic } from '../../lib/exam-topics';
-import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
+} from '@lib/practice/practice-exam-catalog';
+import { renderPromptTemplate } from '@lib/llm/prompt-template';
+import { pickRandomExamTopic } from '@lib/shared/exam-topics';
+import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
 import type {
   CreateExerciseData,
   CreateItemData,
-} from '../../repositories/practice-exercises.repository';
+} from '@repositories/practice/practice-exercises.repository';
 import SYSTEM_PROMPT from '../../prompts/practice/generate-exercise.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/practice/generate-exercise.user.md';
 import MULTIPLE_CHOICE_CLOZE_INSTRUCTIONS from '../../prompts/practice/task-types/multiple-choice-cloze.md';

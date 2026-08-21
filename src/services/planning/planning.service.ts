@@ -1,14 +1,14 @@
-import { getDatabaseConnection } from '../../lib/database';
-import { getSkillAccentColor } from '../../lib/skill-display';
-import { fromCsv } from '../../lib/csv';
-import { PlanningRepository } from '../../repositories/planning.repository';
-import { ScoringRepository } from '../../repositories/scoring.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { getSkillAccentColor } from '@lib/shared/skill-display';
+import { fromCsv } from '@lib/shared/csv';
+import { PlanningRepository } from '@repositories/planning/planning.repository';
+import { ScoringRepository } from '@repositories/scoring/scoring.repository';
 import { ActivityPriority, PlannedActivityStatus, ScoreType } from '../../models/enums';
 import type { WeeklyPlan } from '../../models/WeeklyPlan';
 import type { PlanDay } from '../../models/PlanDay';
 import type { PlannedActivity } from '../../models/PlannedActivity';
 import type { Skill } from '../../models/Skill';
-import type { ImportResult } from '../../lib/csv';
+import type { ImportResult } from '@lib/shared/csv';
 import type {
   CreateWeekPlanBody,
   AddPlannedActivityBody,

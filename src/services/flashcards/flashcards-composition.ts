@@ -1,4 +1,4 @@
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { FlashcardsService } from './flashcards.service';
 
 interface FlashcardsServices {

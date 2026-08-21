@@ -1,13 +1,13 @@
 import type { DataSource, EntityManager } from 'typeorm';
-import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
-import { WritingSubmissionsRepository } from '../../repositories/writing-submissions.repository';
-import type { CreateSubmissionData } from '../../repositories/writing-submissions.repository';
-import { PlanningRepository } from '../../repositories/planning.repository';
+import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
+import { WritingSubmissionsRepository } from '@repositories/writing/writing-submissions.repository';
+import type { CreateSubmissionData } from '@repositories/writing/writing-submissions.repository';
+import { PlanningRepository } from '@repositories/planning/planning.repository';
 import type { WritingTask } from '../../models/WritingTask';
 import type { WritingSubmission } from '../../models/WritingSubmission';
 import type { WritingTaskSafeDto } from '../../interfaces/writing/writing-task.interface';
 import type { WritingSubmissionStartResultDto } from '../../interfaces/writing/writing-submission.interface';
-import { toWritingSubmissionSafeDto } from '../../lib/writing-submission-dto';
+import { toWritingSubmissionSafeDto } from '@lib/writing/writing-submission-dto';
 
 export enum StartWritingSubmissionErrorCode {
   INVALID_INPUT = 'invalid_input',

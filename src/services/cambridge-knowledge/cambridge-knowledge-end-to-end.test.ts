@@ -11,14 +11,14 @@ import { SearchCambridgeKnowledgeService } from './search-cambridge-knowledge.se
 import type { CambridgeKnowledgeItemsRepositoryPort as SearchItemsRepositoryPort } from './search-cambridge-knowledge.service';
 import type { CambridgeChunkClassifier } from './classify-cambridge-chunk';
 import type { EmbeddingClient } from './embed-cambridge-chunks';
-import type { CreateSourceData } from '../../repositories/cambridge-sources.repository';
+import type { CreateSourceData } from '@repositories/cambridge-knowledge/cambridge-sources.repository';
 import type {
   CreateKnowledgeItemData,
   KnowledgeItemSearchCandidate,
-} from '../../repositories/cambridge-knowledge-items.repository';
+} from '@repositories/cambridge-knowledge/cambridge-knowledge-items.repository';
 import type { CambridgeSource } from '../../models/CambridgeSource';
 import { CambridgeSourceStatus } from '../../models/enums';
-import { extractPdf } from '../../lib/cambridge-pdf-extractor';
+import { extractPdf } from '@lib/cambridge-knowledge/cambridge-pdf-extractor';
 import { buildTestPdf } from '../../test-fixtures/build-test-pdf';
 
 /**

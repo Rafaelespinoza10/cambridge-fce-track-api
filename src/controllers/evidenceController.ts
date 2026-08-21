@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
 import { EvidenceService } from '../services/evidence/evidence.service';
 import type {
   CreateEvidenceBody,

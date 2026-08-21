@@ -17,7 +17,7 @@ import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.
 import { WritingSubmissionStatus, EnglishLevel, WritingTaskType } from '../../models/enums';
 import type { WritingTask } from '../../models/WritingTask';
 import type { WritingSubmission } from '../../models/WritingSubmission';
-import type { GradeSubmissionData } from '../../repositories/writing-submissions.repository';
+import type { GradeSubmissionData } from '@repositories/writing/writing-submissions.repository';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const SUBMISSION_ID = 'bbbbbbbb-1111-1111-1111-111111111111';

@@ -1,7 +1,7 @@
 import type { DataSource, UpdateResult } from 'typeorm';
 
-import { DecksRepository } from '../../repositories/decks.repository';
-import type { CreateDeckData, UpdateDeckData } from '../../repositories/decks.repository';
+import { DecksRepository } from '@repositories/decks/decks.repository';
+import type { CreateDeckData, UpdateDeckData } from '@repositories/decks/decks.repository';
 import type { Deck } from '../../models/Deck';
 import type {
   CreateDeckRequestBody,

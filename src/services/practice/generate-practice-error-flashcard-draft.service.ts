@@ -4,7 +4,7 @@ import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeExercise } from '../../models/PracticeExercise';
 import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswer } from '../../models/PracticeAnswer';
-import { formatAcceptedAnswers, formatUserAnswer } from '../../lib/practice-attempt-grading';
+import { formatAcceptedAnswers, formatUserAnswer } from '@lib/practice/practice-attempt-grading';
 import {
   FlashcardDraftGenerationError,
   FlashcardDraftGenerationErrorCode,

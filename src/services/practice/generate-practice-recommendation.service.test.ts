@@ -7,7 +7,7 @@ import {
   practiceInsightsSnapshotHash,
 } from './generate-practice-recommendation.service';
 import { GetPracticeInsightsService } from './get-practice-insights.service';
-import type { PracticeInsightRow } from '../../lib/practice-insights-calculator';
+import type { PracticeInsightRow } from '@lib/practice/practice-insights-calculator';
 import type {
   PracticeInsights,
   PracticeLocale,
@@ -17,7 +17,7 @@ import type {
   PracticeCandidate,
   PracticeRecommendationGenerator,
 } from './practice-recommendation-generator';
-import type { PracticeRecommendationsRepository } from '../../repositories/practice-recommendations.repository';
+import type { PracticeRecommendationsRepository } from '@repositories/practice/practice-recommendations.repository';
 import {
   PracticeRecommendation,
   PracticeRecommendationStatus,

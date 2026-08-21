@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapDeckError } from '@lib/deck-error-mapper';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapDeckError } from '@lib/decks/deck-error-mapper';
 import { buildDecksServices } from '../services/decks/decks-composition';
 import type {
   CreateDeckRequestBody,

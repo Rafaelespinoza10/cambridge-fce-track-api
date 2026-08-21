@@ -5,7 +5,7 @@ import * as assert from 'node:assert/strict';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 import { insightsHandler, recommendationsHandler } from './practiceAdaptiveController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import {
   PracticeRecommendationError,
   PracticeRecommendationErrorCode,

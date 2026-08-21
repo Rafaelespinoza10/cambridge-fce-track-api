@@ -1,15 +1,18 @@
 import type { DataSource, EntityManager } from 'typeorm';
 
-import { UsersRepository } from '../../repositories/users.repository';
-import { FlashcardPreferencesRepository } from '../../repositories/flashcard-preferences.repository';
-import { StudySessionsRepository } from '../../repositories/study-sessions.repository';
-import { DailyReviewStatsRepository } from '../../repositories/daily-review-stats.repository';
-import type { CreateDailyReviewStatData } from '../../repositories/daily-review-stats.repository';
-import { DecksRepository } from '../../repositories/decks.repository';
-import { FlashcardsRepository } from '../../repositories/flashcards.repository';
-import type { FindDueOptions, CountDueOptions } from '../../repositories/flashcards.repository';
+import { UsersRepository } from '@repositories/users/users.repository';
+import { FlashcardPreferencesRepository } from '@repositories/flashcards/flashcard-preferences.repository';
+import { StudySessionsRepository } from '@repositories/flashcards/study-sessions.repository';
+import { DailyReviewStatsRepository } from '@repositories/flashcards/daily-review-stats.repository';
+import type { CreateDailyReviewStatData } from '@repositories/flashcards/daily-review-stats.repository';
+import { DecksRepository } from '@repositories/decks/decks.repository';
+import { FlashcardsRepository } from '@repositories/flashcards/flashcards.repository';
+import type {
+  FindDueOptions,
+  CountDueOptions,
+} from '@repositories/flashcards/flashcards.repository';
 
-import { resolveLocalDay, isValidTimeZone } from '../../lib/timezone';
+import { resolveLocalDay, isValidTimeZone } from '@lib/flashcards/timezone';
 
 import type { User } from '../../models/User';
 import type { Deck } from '../../models/Deck';

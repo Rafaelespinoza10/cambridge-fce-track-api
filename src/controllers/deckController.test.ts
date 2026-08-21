@@ -15,7 +15,7 @@ import {
   deleteDeckHandler,
 } from './deckController';
 import type { DeckControllerDeps, DecksServicePort } from './deckController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import { DeckError, DeckErrorCode } from '../services/decks/decks.service';
 import type { DeckDto } from '../interfaces/decks/decks.interface';
 

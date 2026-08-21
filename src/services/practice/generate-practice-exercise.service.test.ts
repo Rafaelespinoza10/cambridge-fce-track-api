@@ -14,12 +14,12 @@ import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.types';
 import type { GeneratePracticeExerciseRequest } from '../../interfaces/practice/practice-exercise.interface';
 import type { PracticeExerciseSafeWithItems } from '../../interfaces/practice/practice-exercise.interface';
-import { PRACTICE_EXAM_CATALOG, findExamInCatalog } from '../../lib/practice-exam-catalog';
+import { PRACTICE_EXAM_CATALOG, findExamInCatalog } from '@lib/practice/practice-exam-catalog';
 import type { DataSource } from 'typeorm';
 import type {
   CreateExerciseData,
   CreateItemData,
-} from '../../repositories/practice-exercises.repository';
+} from '@repositories/practice/practice-exercises.repository';
 import type { PracticeExercise } from '../../models/PracticeExercise';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';

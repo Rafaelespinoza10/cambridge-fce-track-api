@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapWritingSubmissionError } from '@lib/writing-submission-error-mapper';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapWritingSubmissionError } from '@lib/writing/writing-submission-error-mapper';
 import { buildWritingSubmissionServices } from '../services/writing/writing-submission-composition';
 import type {
   WritingSubmissionStartResultDto,

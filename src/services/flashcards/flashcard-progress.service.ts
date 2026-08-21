@@ -1,12 +1,12 @@
 import type { DataSource, EntityManager, UpdateResult } from 'typeorm';
 
-import { UsersRepository } from '../../repositories/users.repository';
-import { FlashcardPreferencesRepository } from '../../repositories/flashcard-preferences.repository';
-import { DailyReviewStatsRepository } from '../../repositories/daily-review-stats.repository';
-import { FlashcardsRepository } from '../../repositories/flashcards.repository';
+import { UsersRepository } from '@repositories/users/users.repository';
+import { FlashcardPreferencesRepository } from '@repositories/flashcards/flashcard-preferences.repository';
+import { DailyReviewStatsRepository } from '@repositories/flashcards/daily-review-stats.repository';
+import { FlashcardsRepository } from '@repositories/flashcards/flashcards.repository';
 
-import { resolveLocalDay, isValidTimeZone } from '../../lib/timezone';
-import { calculateFlashcardStreak } from '../../lib/flashcard-streak';
+import { resolveLocalDay, isValidTimeZone } from '@lib/flashcards/timezone';
+import { calculateFlashcardStreak } from '@lib/flashcards/flashcard-streak';
 
 import type { User } from '../../models/User';
 import type { FlashcardPreference } from '../../models/FlashcardPreference';

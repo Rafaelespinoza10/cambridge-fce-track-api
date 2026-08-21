@@ -1,4 +1,4 @@
-import type { CambridgeSourceDto } from '../../repositories/cambridge-sources.repository';
+import type { CambridgeSourceDto } from '@repositories/cambridge-knowledge/cambridge-sources.repository';
 
 export interface CambridgeSourcesRepositoryPort {
   listSources(): Promise<CambridgeSourceDto[]>;

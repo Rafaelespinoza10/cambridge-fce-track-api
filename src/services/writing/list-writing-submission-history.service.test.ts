@@ -13,7 +13,7 @@ import type {
 import type {
   WritingSubmissionHistoryRow,
   ListHistoryResult,
-} from '../../repositories/writing-submissions.repository';
+} from '@repositories/writing/writing-submissions.repository';
 import { WritingSubmissionStatus, WritingTaskType } from '../../models/enums';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';

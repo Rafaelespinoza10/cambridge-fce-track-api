@@ -15,7 +15,7 @@ import type {
   CreateFlashcardData,
   UpdateFlashcardContentData,
   FindByDeckFilters,
-} from '../../repositories/flashcards.repository';
+} from '@repositories/flashcards/flashcards.repository';
 
 const USER_ID = 'user-1';
 const OTHER_USER_ID = 'user-2';

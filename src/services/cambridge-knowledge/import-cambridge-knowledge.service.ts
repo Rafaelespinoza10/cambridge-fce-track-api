@@ -1,10 +1,10 @@
 import type { DataSource, EntityManager } from 'typeorm';
-import { extractPdf } from '../../lib/cambridge-pdf-extractor';
-import type { ExtractedPdf } from '../../lib/cambridge-pdf-extractor';
-import { stripRepeatedHeadersAndFooters } from '../../lib/cambridge-text-cleaner';
-import { chunkPages } from '../../lib/cambridge-chunker';
-import type { CambridgeChunk } from '../../lib/cambridge-chunker';
-import { CAMBRIDGE_EXAM_CODE } from '../../lib/cambridge-knowledge-catalog';
+import { extractPdf } from '@lib/cambridge-knowledge/cambridge-pdf-extractor';
+import type { ExtractedPdf } from '@lib/cambridge-knowledge/cambridge-pdf-extractor';
+import { stripRepeatedHeadersAndFooters } from '@lib/cambridge-knowledge/cambridge-text-cleaner';
+import { chunkPages } from '@lib/cambridge-knowledge/cambridge-chunker';
+import type { CambridgeChunk } from '@lib/cambridge-knowledge/cambridge-chunker';
+import { CAMBRIDGE_EXAM_CODE } from '@lib/cambridge-knowledge/cambridge-knowledge-catalog';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import type {
   CambridgeChunkClassifier,
@@ -14,13 +14,13 @@ import type { EmbeddingClient } from './embed-cambridge-chunks';
 import {
   CambridgeSourcesRepository,
   toSourceDto,
-} from '../../repositories/cambridge-sources.repository';
+} from '@repositories/cambridge-knowledge/cambridge-sources.repository';
 import type {
   CambridgeSourceDto,
   CreateSourceData,
-} from '../../repositories/cambridge-sources.repository';
-import { CambridgeKnowledgeItemsRepository } from '../../repositories/cambridge-knowledge-items.repository';
-import type { CreateKnowledgeItemData } from '../../repositories/cambridge-knowledge-items.repository';
+} from '@repositories/cambridge-knowledge/cambridge-sources.repository';
+import { CambridgeKnowledgeItemsRepository } from '@repositories/cambridge-knowledge/cambridge-knowledge-items.repository';
+import type { CreateKnowledgeItemData } from '@repositories/cambridge-knowledge/cambridge-knowledge-items.repository';
 import type { CambridgeSource } from '../../models/CambridgeSource';
 
 export enum ImportCambridgeKnowledgeErrorCode {

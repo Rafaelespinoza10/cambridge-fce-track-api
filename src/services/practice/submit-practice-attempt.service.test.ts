@@ -15,7 +15,7 @@ import type {
 import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswer } from '../../models/PracticeAnswer';
-import type { CreateAnswerData } from '../../repositories/practice-answers.repository';
+import type { CreateAnswerData } from '@repositories/practice/practice-answers.repository';
 import { PracticeAttemptStatus } from '../../models/enums';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';

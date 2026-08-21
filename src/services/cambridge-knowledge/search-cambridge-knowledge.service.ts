@@ -1,6 +1,6 @@
 import type { DataSource } from 'typeorm';
-import { CambridgeKnowledgeItemsRepository } from '../../repositories/cambridge-knowledge-items.repository';
-import type { KnowledgeItemSearchCandidate } from '../../repositories/cambridge-knowledge-items.repository';
+import { CambridgeKnowledgeItemsRepository } from '@repositories/cambridge-knowledge/cambridge-knowledge-items.repository';
+import type { KnowledgeItemSearchCandidate } from '@repositories/cambridge-knowledge/cambridge-knowledge-items.repository';
 import type { EmbeddingClient } from './embed-cambridge-chunks';
 
 export enum SearchCambridgeKnowledgeErrorCode {

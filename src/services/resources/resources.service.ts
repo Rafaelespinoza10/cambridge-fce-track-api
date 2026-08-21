@@ -1,7 +1,7 @@
 import type { DataSource, UpdateResult } from 'typeorm';
 
-import { ResourcesRepository } from '../../repositories/resources.repository';
-import type { CreateResourceData } from '../../repositories/resources.repository';
+import { ResourcesRepository } from '@repositories/resources/resources.repository';
+import type { CreateResourceData } from '@repositories/resources/resources.repository';
 import type { Resource } from '../../models/Resource';
 import type {
   CreateResourceRequestBody,

@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapFlashcardError } from '@lib/flashcard-error-mapper';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapFlashcardError } from '@lib/flashcards/flashcard-error-mapper';
 import { buildFlashcardsServices } from '../services/flashcards/flashcards-composition';
 import { FlashcardType } from '../models/enums';
 import type {

@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { isPracticeGenerationSupported } from '../../lib/practice-exam-catalog';
+import { isPracticeGenerationSupported } from '@lib/practice/practice-exam-catalog';
 import type {
   PracticeInsights,
   PracticeLocale,
   PracticeRecommendation,
 } from '../../interfaces/practice/practice-adaptive.interface';
-import type { PracticeRecommendationsRepository } from '../../repositories/practice-recommendations.repository';
+import type { PracticeRecommendationsRepository } from '@repositories/practice/practice-recommendations.repository';
 import { GetPracticeInsightsService } from './get-practice-insights.service';
 import type {
   PracticeCandidate,

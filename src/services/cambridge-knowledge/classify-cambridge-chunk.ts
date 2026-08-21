@@ -4,7 +4,7 @@ import type {
   LLMJsonSchema,
   LLMStructuredCompletionOptions,
 } from '../llm/llm.types';
-import { renderPromptTemplate } from '../../lib/prompt-template';
+import { renderPromptTemplate } from '@lib/llm/prompt-template';
 import {
   CAMBRIDGE_EXAM_CODE,
   CAMBRIDGE_SKILL_SLUGS,
@@ -12,9 +12,9 @@ import {
   isCambridgePartCode,
   isCambridgeSkillSlug,
   isCambridgeTopic,
-} from '../../lib/cambridge-knowledge-catalog';
-import { EXAM_TOPICS } from '../../lib/exam-topics';
-import { PRACTICE_EXAM_CATALOG, findExamInCatalog } from '../../lib/practice-exam-catalog';
+} from '@lib/cambridge-knowledge/cambridge-knowledge-catalog';
+import { EXAM_TOPICS } from '@lib/shared/exam-topics';
+import { PRACTICE_EXAM_CATALOG, findExamInCatalog } from '@lib/practice/practice-exam-catalog';
 import SYSTEM_PROMPT from '../../prompts/cambridge-knowledge/classify-chunk.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/cambridge-knowledge/classify-chunk.user.md';
 
