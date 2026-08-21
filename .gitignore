@@ -42,3 +42,8 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Local Cambridge Knowledge Base source PDFs and inspection output (never commit exam material)
+scripts/fixtures/
+
+.scripts/
