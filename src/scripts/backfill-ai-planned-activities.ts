@@ -59,7 +59,9 @@ async function backfillPractice(ds: DataSource): Promise<BackfillCounts> {
     }
 
     if (attempt.submitted_at === null || attempt.duration_seconds === null) {
-      console.warn(`[backfill]   skipping practice attempt ${attempt.id}: missing submitted_at/duration_seconds`);
+      console.warn(
+        `[backfill]   skipping practice attempt ${attempt.id}: missing submitted_at/duration_seconds`,
+      );
       counts.skippedIncomplete++;
       continue;
     }
@@ -69,7 +71,9 @@ async function backfillPractice(ds: DataSource): Promise<BackfillCounts> {
       withDeleted: true,
     });
     if (exercise === null) {
-      console.warn(`[backfill]   skipping practice attempt ${attempt.id}: exercise ${attempt.exercise_id} not found`);
+      console.warn(
+        `[backfill]   skipping practice attempt ${attempt.id}: exercise ${attempt.exercise_id} not found`,
+      );
       counts.skippedIncomplete++;
       continue;
     }
@@ -135,7 +139,9 @@ async function backfillWriting(ds: DataSource): Promise<BackfillCounts> {
 
     const task = await taskRepo.findOne({ where: { id: submission.task_id }, withDeleted: true });
     if (task === null) {
-      console.warn(`[backfill]   skipping writing submission ${submission.id}: task ${submission.task_id} not found`);
+      console.warn(
+        `[backfill]   skipping writing submission ${submission.id}: task ${submission.task_id} not found`,
+      );
       counts.skippedIncomplete++;
       continue;
     }

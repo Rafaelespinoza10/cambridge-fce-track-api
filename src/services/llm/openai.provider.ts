@@ -51,7 +51,7 @@ async function withTemperatureFallback<T>(
   }
 }
 
-function mapOpenAIError(error: unknown): LLMServiceError {
+export function mapOpenAIError(error: unknown): LLMServiceError {
   if (error instanceof APIConnectionTimeoutError) {
     return new LLMServiceError('OpenAI request timed out', LLMErrorCode.TIMEOUT);
   }

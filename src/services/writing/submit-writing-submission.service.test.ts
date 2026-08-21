@@ -453,8 +453,8 @@ describe('SubmitWritingSubmissionService.execute — AI-linked planned activity'
   });
 
   it('defaults to the grading day when the submission has no target day', async () => {
-    const { service, createAiLinkedActivityCalls, resolvePlanDayIdCalls } = makeService(
-      async () => validGradingResponse(),
+    const { service, createAiLinkedActivityCalls, resolvePlanDayIdCalls } = makeService(async () =>
+      validGradingResponse(),
     );
     await service.execute(USER_ID, SUBMISSION_ID, SUBMITTED_TEXT, SUBMITTED_AT);
 
