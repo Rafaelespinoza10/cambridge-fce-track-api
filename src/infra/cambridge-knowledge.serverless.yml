@@ -1,0 +1,60 @@
+service: cambridge-tracker-cambridge-knowledge
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+    OPEN_AI_API_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPEN_AI_API_KEY}
+    OPENAI_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_MODEL, ''}
+    OPENAI_EMBEDDING_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_EMBEDDING_MODEL, ''}
+
+functions:
+  # KNOWN LIMITATION (see docs/cambridge-knowledge-base.md "Riesgos"): a
+  # large PDF (many dozens of chunks, each an LLM classification call) can
+  # exceed both this Lambda timeout AND the ~29s hard timeout httpApi
+  # enforces regardless of the function's own setting. This synchronous
+  # endpoint is fine for the small/medium admin-curated PDFs this PR targets;
+  # a queued/async pipeline (SQS + a worker Lambda) is the real fix for
+  # large documents and is explicitly out of scope here.
+  cambridgeKnowledgeImportSource:
+    handler: src/controllers/adminCambridgeKnowledgeController.importCambridgeSource
+    timeout: 900
+    events:
+      - httpApi:
+          path: /admin/cambridge-knowledge/sources
+          method: POST
+
+  cambridgeKnowledgeListSources:
+    handler: src/controllers/adminCambridgeKnowledgeController.listCambridgeSources
+    events:
+      - httpApi:
+          path: /admin/cambridge-knowledge/sources
+          method: GET
+
+  cambridgeKnowledgeSearch:
+    handler: src/controllers/adminCambridgeKnowledgeController.searchCambridgeKnowledge
+    timeout: 29
+    events:
+      - httpApi:
+          path: /admin/cambridge-knowledge/search
+          method: POST
+
+package:
+  individually: true
+
+custom:
+  esbuild: ${file(main.serverless.yml):custom.esbuild}
