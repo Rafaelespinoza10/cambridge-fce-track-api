@@ -57,7 +57,9 @@ function main() {
   const databaseUrl = process.env.DATABASE_URL || readDatabaseUrl(ENV_FILE, STAGE);
 
   if (!databaseUrl) {
-    console.error(`[backfill-ai-activities.js] ERROR: DATABASE_URL not found under stage "${STAGE}".`);
+    console.error(
+      `[backfill-ai-activities.js] ERROR: DATABASE_URL not found under stage "${STAGE}".`,
+    );
     process.exit(1);
   }
 
