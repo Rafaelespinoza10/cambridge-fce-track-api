@@ -86,7 +86,8 @@ async function main(): Promise<void> {
   const mdOutPath = mdFlagIndex !== -1 ? args[mdFlagIndex + 1] : undefined;
   const query = args[0] === '--md' ? undefined : args[0];
 
-  process.env.DATABASE_URL = process.env.DATABASE_URL || readEnvValue(ENV_FILE, STAGE, 'DATABASE_URL');
+  process.env.DATABASE_URL =
+    process.env.DATABASE_URL || readEnvValue(ENV_FILE, STAGE, 'DATABASE_URL');
   process.env.OPEN_AI_API_KEY = readEnvValue(ENV_FILE, STAGE, 'OPEN_AI_API_KEY');
   const embeddingModel = readOptionalEnvValue(ENV_FILE, STAGE, 'OPENAI_EMBEDDING_MODEL');
   process.env.OPENAI_MODEL = readEnvValue(ENV_FILE, STAGE, 'OPENAI_MODEL');
@@ -96,7 +97,9 @@ async function main(): Promise<void> {
   console.log(`DB    : ${maskDatabaseUrl(process.env.DATABASE_URL)}\n`);
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { buildCambridgeKnowledgeServices } = require('../src/services/cambridge-knowledge/cambridge-knowledge-composition');
+  const {
+    buildCambridgeKnowledgeServices,
+  } = require('../src/services/cambridge-knowledge/cambridge-knowledge-composition');
   const { listSources, searchKnowledge } = await buildCambridgeKnowledgeServices();
 
   const sources = await listSources.execute();
@@ -111,8 +114,12 @@ async function main(): Promise<void> {
     console.log(`\n=== search: "${query}" ===`);
     for (const r of results) {
       console.log(`\n  score=${r.relevanceScore.toFixed(3)}  ${r.sourceName} p.${r.sourcePage}`);
-      console.log(`  paperCode=${r.paperCode ?? 'null'} partCode=${r.partCode ?? 'null'} skills=[${r.skills.join(', ')}] topics=[${r.topics.join(', ')}]`);
-      console.log(`  "${r.content.slice(0, 200).replace(/\s+/g, ' ')}${r.content.length > 200 ? '...' : ''}"`);
+      console.log(
+        `  paperCode=${r.paperCode ?? 'null'} partCode=${r.partCode ?? 'null'} skills=[${r.skills.join(', ')}] topics=[${r.topics.join(', ')}]`,
+      );
+      console.log(
+        `  "${r.content.slice(0, 200).replace(/\s+/g, ' ')}${r.content.length > 200 ? '...' : ''}"`,
+      );
     }
   } else {
     console.log('\n(pass a query string as the first argument to also run a sample search)');
@@ -143,13 +150,17 @@ async function main(): Promise<void> {
       }
       for (const r of results) {
         lines.push('');
-        lines.push(`### ${escapeMdCell(r.sourceName)} — p.${r.sourcePage} (score ${r.relevanceScore.toFixed(3)})`);
+        lines.push(
+          `### ${escapeMdCell(r.sourceName)} — p.${r.sourcePage} (score ${r.relevanceScore.toFixed(3)})`,
+        );
         lines.push('');
         lines.push(
           `- **paperCode**: ${r.paperCode ?? 'null'} · **partCode**: ${r.partCode ?? 'null'} · **skills**: [${r.skills.join(', ')}] · **topics**: [${r.topics.join(', ')}]`,
         );
         lines.push('');
-        lines.push(`> ${escapeMdCell(r.content.slice(0, 500))}${r.content.length > 500 ? '...' : ''}`);
+        lines.push(
+          `> ${escapeMdCell(r.content.slice(0, 500))}${r.content.length > 500 ? '...' : ''}`,
+        );
       }
     }
 
