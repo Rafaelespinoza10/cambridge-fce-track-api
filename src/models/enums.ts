@@ -202,3 +202,8 @@ export enum WritingSubmissionStatus {
   GRADED = 'graded',
   ABANDONED = 'abandoned',
 }
+
+export enum CambridgeSourceStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}

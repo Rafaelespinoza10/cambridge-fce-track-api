@@ -32,6 +32,8 @@ import { PracticeAnswer } from '../models/PracticeAnswer';
 import { PracticeRecommendation } from '../models/PracticeRecommendation';
 import { WritingTask } from '../models/WritingTask';
 import { WritingSubmission } from '../models/WritingSubmission';
+import { CambridgeSource } from '../models/CambridgeSource';
+import { CambridgeKnowledgeItem } from '../models/CambridgeKnowledgeItem';
 
 function getSslConfig(): boolean | { rejectUnauthorized: boolean } {
   const databaseUrl: string = process.env.DATABASE_URL ?? '';
@@ -83,6 +85,8 @@ export const AppDataSource = new DataSource({
     PracticeRecommendation,
     WritingTask,
     WritingSubmission,
+    CambridgeSource,
+    CambridgeKnowledgeItem,
   ],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',
