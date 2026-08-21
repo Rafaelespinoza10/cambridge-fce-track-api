@@ -33,6 +33,7 @@
     "csv-stringify": "^6.8.1",
     "jsonwebtoken": "^9.0.3",
     "openai": "^7.4.0",
+    "pdf-parse": "1.1.1",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.29"
@@ -43,6 +44,7 @@
     "@types/aws-lambda": "^8.10.71",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.20.1",
+    "@types/pdf-parse": "1.1.5",
     "@types/pg": "^8.20.0",
     "esbuild": "^0.14.11",
     "json-schema-to-ts": "^1.5.0",
