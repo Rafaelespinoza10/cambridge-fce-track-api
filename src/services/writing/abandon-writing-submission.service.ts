@@ -1,6 +1,6 @@
 import { WritingSubmissionStatus } from '../../models/enums';
 import type { WritingSubmission } from '../../models/WritingSubmission';
-import { toWritingSubmissionSafeDto } from '../../lib/writing-submission-dto';
+import { toWritingSubmissionSafeDto } from '@lib/writing/writing-submission-dto';
 import type { WritingSubmissionSafeDto } from '../../interfaces/writing/writing-submission.interface';
 
 export enum AbandonWritingSubmissionErrorCode {

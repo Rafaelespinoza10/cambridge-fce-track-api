@@ -13,7 +13,7 @@ import type {
 import type {
   PracticeAttemptHistoryRow,
   ListPracticeAttemptHistoryResult,
-} from '../../repositories/practice-attempts.repository';
+} from '@repositories/practice/practice-attempts.repository';
 import { PracticeAttemptStatus } from '../../models/enums';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';

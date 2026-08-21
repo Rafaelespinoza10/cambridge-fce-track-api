@@ -5,7 +5,7 @@ import type { DataSource, UpdateResult } from 'typeorm';
 import { DecksService, DeckError, DeckErrorCode } from './decks.service';
 import type { DecksRepositoryPort, DecksServiceDeps } from './decks.service';
 import type { Deck } from '../../models/Deck';
-import type { CreateDeckData, UpdateDeckData } from '../../repositories/decks.repository';
+import type { CreateDeckData, UpdateDeckData } from '@repositories/decks/decks.repository';
 
 const USER_ID = 'user-1';
 const OTHER_USER_ID = 'user-2';

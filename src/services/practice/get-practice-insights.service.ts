@@ -1,6 +1,6 @@
-import { calculatePracticeInsights } from '../../lib/practice-insights-calculator';
+import { calculatePracticeInsights } from '@lib/practice/practice-insights-calculator';
 import type { PracticeInsights } from '../../interfaces/practice/practice-adaptive.interface';
-import type { PracticeInsightsRepository } from '../../repositories/practice-insights.repository';
+import type { PracticeInsightsRepository } from '@repositories/practice/practice-insights.repository';
 export class GetPracticeInsightsService {
   constructor(
     private readonly repository: Pick<PracticeInsightsRepository, 'listRows'>,

@@ -15,7 +15,7 @@ import type {
   GenerateExerciseServicePort,
   GetExerciseServicePort,
 } from './practiceExerciseController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import {
   GeneratePracticeExerciseError,
   GeneratePracticeExerciseErrorCode,

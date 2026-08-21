@@ -1,13 +1,13 @@
 import type { DataSource } from 'typeorm';
 
-import { UsersRepository } from '../../repositories/users.repository';
+import { UsersRepository } from '@repositories/users/users.repository';
 import { FlashcardReviewService } from './flashcard-review.service';
 import {
   StartFlashcardReviewSessionError,
   StartFlashcardReviewSessionErrorCode,
 } from './start-flashcard-review-session.service';
 
-import { resolveLocalDay, isValidTimeZone } from '../../lib/timezone';
+import { resolveLocalDay, isValidTimeZone } from '@lib/flashcards/timezone';
 
 import type { User } from '../../models/User';
 import type { AnswerFlashcardRequestInput } from '../../interfaces/flashcards/answer-flashcard-request.interface';

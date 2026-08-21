@@ -12,7 +12,7 @@ import type {
   SearchCambridgeKnowledgeServiceDeps,
 } from './search-cambridge-knowledge.service';
 import type { EmbeddingClient } from './embed-cambridge-chunks';
-import type { KnowledgeItemSearchCandidate } from '../../repositories/cambridge-knowledge-items.repository';
+import type { KnowledgeItemSearchCandidate } from '@repositories/cambridge-knowledge/cambridge-knowledge-items.repository';
 
 const FAKE_DATA_SOURCE = {} as DataSource;
 

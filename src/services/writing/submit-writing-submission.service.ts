@@ -16,12 +16,12 @@ import type {
   WritingFeedback,
 } from '../../models/writing-json-types';
 import type { WritingSubmissionSubmitResultDto } from '../../interfaces/writing/writing-submission.interface';
-import { renderPromptTemplate } from '../../lib/prompt-template';
-import { buildWritingSubmissionResultDto } from '../../lib/writing-submission-result-dto';
-import { getWritingTaskFormat } from '../../lib/writing-task-catalog';
-import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
-import { WritingSubmissionsRepository } from '../../repositories/writing-submissions.repository';
-import type { GradeSubmissionData } from '../../repositories/writing-submissions.repository';
+import { renderPromptTemplate } from '@lib/llm/prompt-template';
+import { buildWritingSubmissionResultDto } from '@lib/writing/writing-submission-result-dto';
+import { getWritingTaskFormat } from '@lib/writing/writing-task-catalog';
+import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
+import { WritingSubmissionsRepository } from '@repositories/writing/writing-submissions.repository';
+import type { GradeSubmissionData } from '@repositories/writing/writing-submissions.repository';
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';

@@ -9,7 +9,7 @@ import { WritingSubmission } from '../models/WritingSubmission';
 import { WritingTask } from '../models/WritingTask';
 import { PlannedActivity } from '../models/PlannedActivity';
 import { PracticeAttemptStatus, WritingSubmissionStatus } from '../models/enums';
-import { getWritingTaskFormat } from '../lib/writing-task-catalog';
+import { getWritingTaskFormat } from '@lib/writing/writing-task-catalog';
 
 /**
  * One-off backfill for the AI-linked-activities feature

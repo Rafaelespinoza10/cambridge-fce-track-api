@@ -1,4 +1,4 @@
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { ResourcesService } from './resources.service';
 
 interface ResourcesServices {

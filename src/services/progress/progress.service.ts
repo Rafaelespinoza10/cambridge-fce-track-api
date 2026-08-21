@@ -1,13 +1,13 @@
-import { getDatabaseConnection } from '../../lib/database';
-import { getSkillAccentColor } from '../../lib/skill-display';
-import { ProgressRepository } from '../../repositories/progress.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { getSkillAccentColor } from '@lib/shared/skill-display';
+import { ProgressRepository } from '@repositories/progress/progress.repository';
 import {
   calculateStreak,
   createError,
   getCurrentWeekBounds,
   getLastNWeekStarts,
   roundTwo,
-} from '@lib/progress-library';
+} from '@lib/progress/progress-library';
 import type {
   ExamGoalMetric,
   ExamPartMetricsResponse,

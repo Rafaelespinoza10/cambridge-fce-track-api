@@ -10,7 +10,7 @@ import {
   searchCambridgeKnowledgeHandler,
 } from './adminCambridgeKnowledgeController';
 import type { AdminCambridgeKnowledgeControllerDeps } from './adminCambridgeKnowledgeController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import { UserRole } from '../models/enums';
 import {
   ImportCambridgeKnowledgeError,

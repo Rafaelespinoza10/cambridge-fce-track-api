@@ -1,9 +1,9 @@
 import type { DataSource, EntityManager } from 'typeorm';
-import { PracticeAttemptsRepository } from '../../repositories/practice-attempts.repository';
-import type { CompleteAttemptData } from '../../repositories/practice-attempts.repository';
-import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
-import { PracticeAnswersRepository } from '../../repositories/practice-answers.repository';
-import type { CreateAnswerData } from '../../repositories/practice-answers.repository';
+import { PracticeAttemptsRepository } from '@repositories/practice/practice-attempts.repository';
+import type { CompleteAttemptData } from '@repositories/practice/practice-attempts.repository';
+import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
+import { PracticeAnswersRepository } from '@repositories/practice/practice-answers.repository';
+import type { CreateAnswerData } from '@repositories/practice/practice-answers.repository';
 import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswer } from '../../models/PracticeAnswer';
@@ -12,13 +12,13 @@ import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-acti
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
 import type { PracticeAnswerPayload } from '../../models/practice-json-types';
-import { isPracticeAnswerPayload } from '../../lib/practice-jsonb-validators';
+import { isPracticeAnswerPayload } from '@lib/practice/practice-jsonb-validators';
 import {
   gradeItem,
   roundToTwoDecimals,
   computeFeedbackSummary,
   buildPracticeAttemptResultDto,
-} from '../../lib/practice-attempt-grading';
+} from '@lib/practice/practice-attempt-grading';
 import type {
   SubmitPracticeAttemptAnswerInput,
   PracticeAttemptSubmitResultDto,

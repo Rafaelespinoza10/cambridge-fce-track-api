@@ -2,7 +2,7 @@ import { WritingSubmissionStatus } from '../../models/enums';
 import type {
   ListHistoryResult,
   WritingSubmissionHistoryRow,
-} from '../../repositories/writing-submissions.repository';
+} from '@repositories/writing/writing-submissions.repository';
 import type {
   WritingSubmissionHistoryItemDto,
   WritingSubmissionHistoryResponseDto,

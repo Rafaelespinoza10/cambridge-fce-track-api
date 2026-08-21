@@ -1,14 +1,14 @@
 import type { DataSource, EntityManager, UpdateResult } from 'typeorm';
 
-import { FlashcardsRepository } from '../../repositories/flashcards.repository';
-import type { UpdateSchedulingStateData } from '../../repositories/flashcards.repository';
-import { FlashcardReviewsRepository } from '../../repositories/flashcard-reviews.repository';
-import type { CreateFlashcardReviewData } from '../../repositories/flashcard-reviews.repository';
-import { DailyReviewStatsRepository } from '../../repositories/daily-review-stats.repository';
-import type { IncrementDailyReviewStatData } from '../../repositories/daily-review-stats.repository';
-import { DecksRepository } from '../../repositories/decks.repository';
-import { StudySessionsRepository } from '../../repositories/study-sessions.repository';
-import type { UpdateStudySessionProgressData } from '../../repositories/study-sessions.repository';
+import { FlashcardsRepository } from '@repositories/flashcards/flashcards.repository';
+import type { UpdateSchedulingStateData } from '@repositories/flashcards/flashcards.repository';
+import { FlashcardReviewsRepository } from '@repositories/flashcards/flashcard-reviews.repository';
+import type { CreateFlashcardReviewData } from '@repositories/flashcards/flashcard-reviews.repository';
+import { DailyReviewStatsRepository } from '@repositories/flashcards/daily-review-stats.repository';
+import type { IncrementDailyReviewStatData } from '@repositories/flashcards/daily-review-stats.repository';
+import { DecksRepository } from '@repositories/decks/decks.repository';
+import { StudySessionsRepository } from '@repositories/flashcards/study-sessions.repository';
+import type { UpdateStudySessionProgressData } from '@repositories/flashcards/study-sessions.repository';
 
 import { SimpleSchedulingStrategy } from './scheduling/simple-scheduling.strategy';
 import type { SchedulingStrategy, FlashcardSchedulingState } from './scheduling/scheduling.types';

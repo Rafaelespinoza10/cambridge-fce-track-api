@@ -15,12 +15,12 @@ import type {
 } from './import-cambridge-knowledge.service';
 import type { CambridgeChunkClassifier } from './classify-cambridge-chunk';
 import type { EmbeddingClient } from './embed-cambridge-chunks';
-import type { CreateSourceData } from '../../repositories/cambridge-sources.repository';
-import type { CreateKnowledgeItemData } from '../../repositories/cambridge-knowledge-items.repository';
+import type { CreateSourceData } from '@repositories/cambridge-knowledge/cambridge-sources.repository';
+import type { CreateKnowledgeItemData } from '@repositories/cambridge-knowledge/cambridge-knowledge-items.repository';
 import type { CambridgeSource } from '../../models/CambridgeSource';
 import { CambridgeSourceStatus } from '../../models/enums';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
-import type { ExtractedPdf } from '../../lib/cambridge-pdf-extractor';
+import type { ExtractedPdf } from '@lib/cambridge-knowledge/cambridge-pdf-extractor';
 
 // This suite fakes PDF extraction too (via PdfExtractor — see its doc
 // comment in import-cambridge-knowledge.service.ts) rather than running

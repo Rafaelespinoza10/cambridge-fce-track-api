@@ -1,9 +1,9 @@
 import OpenAI from 'openai';
 
-import { getDatabaseConnection } from '../../lib/database';
-import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
-import { PracticeAttemptsRepository } from '../../repositories/practice-attempts.repository';
-import { PracticeAnswersRepository } from '../../repositories/practice-answers.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
+import { PracticeAttemptsRepository } from '@repositories/practice/practice-attempts.repository';
+import { PracticeAnswersRepository } from '@repositories/practice/practice-answers.repository';
 import { LLMService } from '../llm/llm.service';
 import { OpenAIProvider } from '../llm/openai.provider';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';

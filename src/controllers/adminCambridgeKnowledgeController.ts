@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError } from '@lib/response';
-import { getAuthenticatedAdminPayload } from '@lib/admin-auth';
+import { errorResponse, successResponse, handleError } from '@lib/shared/response';
+import { getAuthenticatedAdminPayload } from '@lib/shared/admin-auth';
 import { buildCambridgeKnowledgeServices } from '../services/cambridge-knowledge/cambridge-knowledge-composition';
 import {
   ImportCambridgeKnowledgeError,
@@ -19,7 +19,7 @@ import type {
   SearchCambridgeKnowledgeFilters,
   CambridgeKnowledgeSearchResult,
 } from '../services/cambridge-knowledge/search-cambridge-knowledge.service';
-import type { CambridgeSourceDto } from '../repositories/cambridge-sources.repository';
+import type { CambridgeSourceDto } from '@repositories/cambridge-knowledge/cambridge-sources.repository';
 
 interface ImportServicePort {
   execute(input: ImportCambridgeKnowledgeInput): Promise<ImportCambridgeKnowledgeResult>;

@@ -1,10 +1,10 @@
 import OpenAI from 'openai';
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { LLMService } from '../llm/llm.service';
 import { OpenAIProvider } from '../llm/openai.provider';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
-import { PracticeInsightsRepository } from '../../repositories/practice-insights.repository';
-import { PracticeRecommendationsRepository } from '../../repositories/practice-recommendations.repository';
+import { PracticeInsightsRepository } from '@repositories/practice/practice-insights.repository';
+import { PracticeRecommendationsRepository } from '@repositories/practice/practice-recommendations.repository';
 import { GetPracticeInsightsService } from './get-practice-insights.service';
 import { GeneratePracticeRecommendationService } from './generate-practice-recommendation.service';
 import { PracticeRecommendationGeneratorAdapter } from './practice-recommendation-generator';

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { LLMService } from '../llm/llm.service';
 import { OpenAIProvider } from '../llm/openai.provider';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
@@ -9,7 +9,7 @@ import { CambridgeChunkClassifierAdapter } from './classify-cambridge-chunk';
 import { ImportCambridgeKnowledgeService } from './import-cambridge-knowledge.service';
 import { SearchCambridgeKnowledgeService } from './search-cambridge-knowledge.service';
 import { ListCambridgeSourcesService } from './list-cambridge-sources.service';
-import { CambridgeSourcesRepository } from '../../repositories/cambridge-sources.repository';
+import { CambridgeSourcesRepository } from '@repositories/cambridge-knowledge/cambridge-sources.repository';
 
 const DEFAULT_TEMPERATURE = 0.2;
 const DEFAULT_MAX_OUTPUT_TOKENS = 500;

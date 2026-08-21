@@ -1,8 +1,8 @@
 import OpenAI from 'openai';
 
-import { getDatabaseConnection } from '../../lib/database';
-import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
-import { WritingSubmissionsRepository } from '../../repositories/writing-submissions.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
+import { WritingSubmissionsRepository } from '@repositories/writing/writing-submissions.repository';
 import { LLMService } from '../llm/llm.service';
 import { OpenAIProvider } from '../llm/openai.provider';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';

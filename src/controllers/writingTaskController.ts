@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapGenerateWritingTaskError } from '@lib/generate-writing-task-error-mapper';
-import { mapWritingTaskError } from '@lib/writing-task-error-mapper';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapGenerateWritingTaskError } from '@lib/writing/generate-writing-task-error-mapper';
+import { mapWritingTaskError } from '@lib/writing/writing-task-error-mapper';
 import { buildWritingTaskServices } from '../services/writing/generate-writing-task-composition';
 import type {
   GenerateWritingTaskRequest,

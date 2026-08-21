@@ -1,6 +1,6 @@
-import { getDatabaseConnection } from '../../lib/database';
-import { PasswordService } from '../../lib/password';
-import { JwtService } from '../../lib/jwt';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { PasswordService } from '@lib/auth/password';
+import { JwtService } from '@lib/shared/jwt';
 import { UserRole } from '../../models/enums';
 import type { User } from '../../models/User';
 import type {
@@ -11,7 +11,7 @@ import type {
   RegisterBody,
   SafeUser,
 } from '../../interfaces/auth/auth.interface';
-import { AuthRepository } from '../../repositories/auth.repository';
+import { AuthRepository } from '@repositories/auth/auth.repository';
 
 function createError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });

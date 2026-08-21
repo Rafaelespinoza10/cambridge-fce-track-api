@@ -2,8 +2,8 @@ import { WritingSubmissionStatus } from '../../models/enums';
 import type { WritingSubmission } from '../../models/WritingSubmission';
 import type { WritingTaskSafeDto } from '../../interfaces/writing/writing-task.interface';
 import type { WritingSubmissionViewDto } from '../../interfaces/writing/writing-submission.interface';
-import { toWritingSubmissionSafeDto } from '../../lib/writing-submission-dto';
-import { buildWritingSubmissionResultDto } from '../../lib/writing-submission-result-dto';
+import { toWritingSubmissionSafeDto } from '@lib/writing/writing-submission-dto';
+import { buildWritingSubmissionResultDto } from '@lib/writing/writing-submission-result-dto';
 
 export enum GetWritingSubmissionErrorCode {
   SUBMISSION_NOT_FOUND = 'submission_not_found',

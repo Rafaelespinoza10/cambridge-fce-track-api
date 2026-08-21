@@ -12,7 +12,7 @@ import type {
   FlashcardAiDraftControllerDeps,
   GenerateFlashcardDraftServicePort,
 } from './flashcardAiDraftController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import {
   GenerateFlashcardDraftError,
   GenerateFlashcardDraftErrorCode,

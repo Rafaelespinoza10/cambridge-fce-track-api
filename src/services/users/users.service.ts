@@ -1,5 +1,5 @@
-import { getDatabaseConnection } from '../../lib/database';
-import { UsersRepository } from 'src/repositories/users.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { UsersRepository } from '@repositories/users/users.repository';
 import { GoalStatus } from '../../models/enums';
 import type { User } from '../../models/User';
 import type { UserProfile } from '../../models/UserProfile';

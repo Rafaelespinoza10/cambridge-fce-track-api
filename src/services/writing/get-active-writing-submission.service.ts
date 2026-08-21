@@ -1,7 +1,7 @@
 import type { WritingSubmission } from '../../models/WritingSubmission';
 import type { WritingTaskSafeDto } from '../../interfaces/writing/writing-task.interface';
 import type { WritingSubmissionViewDto } from '../../interfaces/writing/writing-submission.interface';
-import { toWritingSubmissionSafeDto } from '../../lib/writing-submission-dto';
+import { toWritingSubmissionSafeDto } from '@lib/writing/writing-submission-dto';
 
 export interface WritingTasksRepositoryPort {
   findSafeTaskForUser(taskId: string, userId: string): Promise<WritingTaskSafeDto | null>;

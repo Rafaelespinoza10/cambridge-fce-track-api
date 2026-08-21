@@ -1,13 +1,13 @@
 import type { DataSource, EntityManager } from 'typeorm';
-import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
-import { PracticeAttemptsRepository } from '../../repositories/practice-attempts.repository';
-import type { CreateAttemptData } from '../../repositories/practice-attempts.repository';
-import { PlanningRepository } from '../../repositories/planning.repository';
+import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
+import { PracticeAttemptsRepository } from '@repositories/practice/practice-attempts.repository';
+import type { CreateAttemptData } from '@repositories/practice/practice-attempts.repository';
+import { PlanningRepository } from '@repositories/planning/planning.repository';
 import type { PracticeExercise } from '../../models/PracticeExercise';
 import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeExerciseSafeWithItems } from '../../interfaces/practice/practice-exercise.interface';
 import type { PracticeAttemptStartResultDto } from '../../interfaces/practice/practice-attempt.interface';
-import { toPracticeAttemptSafeDto } from '../../lib/practice-attempt-dto';
+import { toPracticeAttemptSafeDto } from '@lib/practice/practice-attempt-dto';
 
 export enum StartPracticeAttemptErrorCode {
   INVALID_INPUT = 'invalid_input',

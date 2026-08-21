@@ -1,12 +1,12 @@
 import OpenAI from 'openai';
 
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { LLMService } from '../llm/llm.service';
 import { OpenAIProvider } from '../llm/openai.provider';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import { GeneratePracticeExerciseService } from './generate-practice-exercise.service';
 import { PracticeExercisesService } from './practice-exercises.service';
-import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
+import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
 
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1024;

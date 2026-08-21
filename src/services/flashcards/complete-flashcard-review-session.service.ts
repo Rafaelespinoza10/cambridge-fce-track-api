@@ -1,7 +1,7 @@
 import type { DataSource, EntityManager, UpdateResult } from 'typeorm';
 
-import { StudySessionsRepository } from '../../repositories/study-sessions.repository';
-import { FlashcardReviewsRepository } from '../../repositories/flashcard-reviews.repository';
+import { StudySessionsRepository } from '@repositories/flashcards/study-sessions.repository';
+import { FlashcardReviewsRepository } from '@repositories/flashcards/flashcard-reviews.repository';
 
 import { StudySessionStatus } from '../../models/enums';
 import type { StudySession } from '../../models/StudySession';

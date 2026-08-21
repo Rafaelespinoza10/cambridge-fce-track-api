@@ -1,6 +1,6 @@
-import { getDatabaseConnection } from '../../lib/database';
-import { getSkillAccentColor } from '../../lib/skill-display';
-import { ScoringRepository } from '../../repositories/scoring.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { getSkillAccentColor } from '@lib/shared/skill-display';
+import { ScoringRepository } from '@repositories/scoring/scoring.repository';
 import { ScoreType, DifficultyLevel, ScoreCriterion } from '../../models/enums';
 import type { ActivityScore } from '../../models/ActivityScore';
 import type { ActivityScoreDetail } from '../../models/ActivityScoreDetail';

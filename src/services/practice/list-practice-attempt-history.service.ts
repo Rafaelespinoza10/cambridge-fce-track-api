@@ -3,13 +3,13 @@ import {
   isPracticeExamCode,
   isPracticePaperCode,
   isPracticePartCode,
-} from '../../lib/practice-exam-catalog';
-import { toNullableNumber } from '../../lib/pg-numeric';
+} from '@lib/practice/practice-exam-catalog';
+import { toNullableNumber } from '@lib/practice/pg-numeric';
 import type {
   PracticeAttemptHistoryStatusFilter,
   PracticeAttemptHistoryRow,
   ListPracticeAttemptHistoryResult,
-} from '../../repositories/practice-attempts.repository';
+} from '@repositories/practice/practice-attempts.repository';
 import type {
   PracticeAttemptHistoryItemDto,
   PracticeAttemptHistoryResponseDto,

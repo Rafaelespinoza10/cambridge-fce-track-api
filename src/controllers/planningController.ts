@@ -6,9 +6,9 @@ import {
   csvResponse,
   handleError,
   isValidUuid,
-} from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { toCsv } from '@lib/csv';
+} from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { toCsv } from '@lib/shared/csv';
 import { ActivityPriority, PlannedActivityStatus } from '../models/enums';
 import { PlanningService } from '../services/planning/planning.service';
 import type {
