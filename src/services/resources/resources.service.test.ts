@@ -80,6 +80,17 @@ function buildFakeResourcesRepo(world: World): ResourcesRepositoryPort {
       resource.deleted_at = new Date();
       return OK_RESULT;
     },
+    update: async (resourceId, userId, data) => {
+      const resource = world.resources.find(
+        (r) => r.id === resourceId && r.user_id === userId && r.deleted_at === null,
+      );
+      if (resource === undefined) return NO_MATCH_RESULT;
+      if (data.title !== undefined) resource.title = data.title;
+      if (data.description !== undefined) resource.description = data.description;
+      if (data.url !== undefined) resource.url = data.url;
+      if (data.imageUrl !== undefined) resource.image_url = data.imageUrl;
+      return OK_RESULT;
+    },
   };
 }
 
@@ -202,6 +213,69 @@ describe('ResourcesService.deleteResource', () => {
     const { service } = setup();
     await assert.rejects(
       () => service.deleteResource(USER_ID, 'missing'),
+      (error: unknown) =>
+        error instanceof ResourceError && error.code === ResourceErrorCode.RESOURCE_NOT_FOUND,
+    );
+  });
+});
+
+describe('ResourcesService.updateResource', () => {
+  it('updates the provided fields of a personal link belonging to the user', async () => {
+    const { service } = setup({
+      resources: [makeResource({ user_id: USER_ID, is_global: false })],
+    });
+    const updated = await service.updateResource(USER_ID, RESOURCE_ID, {
+      title: '  New title  ',
+      url: 'https://example.com/updated',
+    });
+    assert.equal(updated.title, 'New title');
+    assert.equal(updated.url, 'https://example.com/updated');
+    assert.equal(updated.description, 'B2 First exam practice');
+  });
+
+  it('rejects an update with no fields', async () => {
+    const { service } = setup({
+      resources: [makeResource({ user_id: USER_ID, is_global: false })],
+    });
+    await assert.rejects(() => service.updateResource(USER_ID, RESOURCE_ID, {}), isInvalidInput);
+  });
+
+  it('rejects a malformed url', async () => {
+    const { service } = setup({
+      resources: [makeResource({ user_id: USER_ID, is_global: false })],
+    });
+    await assert.rejects(
+      () => service.updateResource(USER_ID, RESOURCE_ID, { url: 'not a url' }),
+      isInvalidInput,
+    );
+  });
+
+  it('rejects updating a global resource', async () => {
+    const { service } = setup({
+      resources: [makeResource({ user_id: null, is_global: true })],
+    });
+    await assert.rejects(
+      () => service.updateResource(USER_ID, RESOURCE_ID, { title: 'New title' }),
+      (error: unknown) =>
+        error instanceof ResourceError && error.code === ResourceErrorCode.RESOURCE_NOT_EDITABLE,
+    );
+  });
+
+  it("rejects updating another user's personal resource", async () => {
+    const { service } = setup({
+      resources: [makeResource({ user_id: OTHER_USER_ID, is_global: false })],
+    });
+    await assert.rejects(
+      () => service.updateResource(USER_ID, RESOURCE_ID, { title: 'New title' }),
+      (error: unknown) =>
+        error instanceof ResourceError && error.code === ResourceErrorCode.RESOURCE_NOT_EDITABLE,
+    );
+  });
+
+  it('rejects updating a nonexistent resource', async () => {
+    const { service } = setup();
+    await assert.rejects(
+      () => service.updateResource(USER_ID, 'missing', { title: 'New title' }),
       (error: unknown) =>
         error instanceof ResourceError && error.code === ResourceErrorCode.RESOURCE_NOT_FOUND,
     );

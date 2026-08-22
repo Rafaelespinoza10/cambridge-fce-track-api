@@ -8,6 +8,13 @@ export interface CreateResourceRequestBody {
   imageUrl?: string;
 }
 
+export interface UpdateResourceRequestBody {
+  title?: string;
+  url?: string;
+  description?: string;
+  imageUrl?: string;
+}
+
 export interface ResourceDto {
   id: string;
   title: string;
