@@ -71,9 +71,12 @@ interface RepoState {
   findByIdForUpdateCalls: number;
   createAiLinkedActivityCalls: unknown[];
   resolvePlanDayIdCalls: { userId: string; dateKey: string }[];
+  resolveUserLocalDayKeyCalls: { userId: string; instant: Date }[];
 }
 
 interface Overrides {
+  /** The user's local calendar day for submittedAt — what resolveUserLocalDayKey would return. */
+  localDayKey?: string;
   findByIdForUpdate?: PracticeAttemptsRepositoryPort['findByIdForUpdate'];
   findExerciseWithAnswerKeysForEvaluation?: PracticeExercisesRepositoryPort['findExerciseWithAnswerKeysForEvaluation'];
   findByAttemptForUser?: PracticeAnswersRepositoryPort['findByAttemptForUser'];
@@ -90,6 +93,7 @@ function makeService(overrides: Overrides = {}): {
     findByIdForUpdateCalls: 0,
     createAiLinkedActivityCalls: [],
     resolvePlanDayIdCalls: [],
+    resolveUserLocalDayKeyCalls: [],
   };
 
   const dataSource = {
@@ -136,6 +140,13 @@ function makeService(overrides: Overrides = {}): {
     resolvePlanDayId: async (_manager, userId, dateKey) => {
       state.resolvePlanDayIdCalls.push({ userId, dateKey });
       return 'default-day-id';
+    },
+    // Stubbed because the real one hits the UserProfile repository, and this
+    // suite's EntityManager is `{}`. Defaults to submittedAt's own UTC day so
+    // the pre-existing assertions still describe the same scenario.
+    resolveUserLocalDayKey: async (_manager, userId, instant) => {
+      state.resolveUserLocalDayKeyCalls.push({ userId, instant });
+      return overrides.localDayKey ?? instant.toISOString().slice(0, 10);
     },
   });
   return { service, state };
@@ -374,12 +385,30 @@ describe('SubmitPracticeAttemptService.execute — AI-linked planned activity', 
     assert.equal(input.planDayId, 'default-day-id');
   });
 
+  it("uses the user's LOCAL day, not submittedAt's UTC day", async () => {
+    // SUBMITTED_AT is 2026-01-01 in UTC; for a user in a negative-offset zone
+    // it is still 2025-12-31 locally. Before this fix the activity landed on
+    // Jan 1 and disappeared from "today" on the Plan screen.
+    const { service, state } = makeService({
+      localDayKey: '2025-12-31',
+      findByIdForUpdate: async () => makeAttempt({ plan_day_id: null }),
+    });
+    await service.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT);
+
+    assert.equal(state.resolveUserLocalDayKeyCalls.length, 1);
+    assert.equal(state.resolveUserLocalDayKeyCalls[0]!.userId, USER_ID);
+    assert.equal(state.resolveUserLocalDayKeyCalls[0]!.instant, SUBMITTED_AT);
+    assert.equal(state.resolvePlanDayIdCalls[0]!.dateKey, '2025-12-31');
+  });
+
   it('does not resolve a default day when the attempt already targets one', async () => {
     const { service, state } = makeService({
       findByIdForUpdate: async () => makeAttempt({ plan_day_id: PLAN_DAY_ID }),
     });
     await service.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT);
     assert.equal(state.resolvePlanDayIdCalls.length, 0);
+    // `??` short-circuits, so the profile lookup never happens either.
+    assert.equal(state.resolveUserLocalDayKeyCalls.length, 0);
   });
 
   it('does not create a duplicate planned_activity on an idempotent replay', async () => {
