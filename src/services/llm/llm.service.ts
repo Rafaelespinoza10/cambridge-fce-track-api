@@ -81,6 +81,7 @@ export class LLMService {
       maxOutputTokens: options.maxOutputTokens ?? this.deps.defaultMaxOutputTokens,
       responseSchema: options.responseSchema,
       timeoutMs: options.timeoutMs,
+      reasoningEffort: options.reasoningEffort,
     });
 
     if (typeof result.content !== 'string' || result.content.trim() === '') {

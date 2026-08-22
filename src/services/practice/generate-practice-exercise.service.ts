@@ -675,6 +675,11 @@ export class GeneratePracticeExerciseService {
         timeoutMs: REQUEST_TIMEOUT_MS,
         temperature: RESPONSE_TEMPERATURE,
         maxOutputTokens: RESPONSE_MAX_OUTPUT_TOKENS,
+        // Reasoning-tier models (e.g. gpt-5.6) default to 'medium' effort,
+        // which regularly exceeds API Gateway's ~29s hard integration
+        // timeout for this endpoint. 'low' trades some reasoning depth for
+        // staying inside that budget; ignored by non-reasoning models.
+        reasoningEffort: 'low',
       });
     } catch (err: unknown) {
       throw mapLLMError(err);
