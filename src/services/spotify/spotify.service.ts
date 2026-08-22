@@ -87,26 +87,38 @@ const DEFAULT_DEPS: SpotifyServiceDeps = {
   resources: (dataSource) => new ResourcesService(dataSource),
 };
 
+/**
+ * Every nested read is guarded because Spotify omits these fields in real
+ * responses (see SpotifyPlaylistItem). One playlist missing a cover or an
+ * owner used to throw a TypeError here, and since that is neither a
+ * SpotifyError nor a SpotifyApiError it escaped the error mapper and became a
+ * bare 500 for the entire listing — one odd playlist hid all the others.
+ *
+ * externalUrl falls back to the canonical open.spotify.com form rather than an
+ * empty string: the client dedupes imported items by URL, so a blank one would
+ * collide across every such playlist.
+ */
 function toPlaylistDto(item: SpotifyPlaylistItem): SpotifyPlaylistDto {
   return {
     id: item.id,
     name: item.name,
-    description: item.description,
-    imageUrl: item.images[0]?.url ?? null,
-    externalUrl: item.external_urls.spotify,
-    ownerName: item.owner.display_name ?? 'Unknown',
-    trackCount: item.tracks.total,
+    description: item.description ?? null,
+    imageUrl: item.images?.[0]?.url ?? null,
+    externalUrl: item.external_urls?.spotify ?? `https://open.spotify.com/playlist/${item.id}`,
+    ownerName: item.owner?.display_name ?? 'Unknown',
+    trackCount: item.tracks?.total ?? 0,
   };
 }
 
+/** Same guarding as toPlaylistDto — see the note there. */
 function toShowDto(item: SpotifyShowItem): SpotifyShowDto {
   return {
     id: item.id,
     name: item.name,
-    publisher: item.publisher,
-    description: item.description,
-    imageUrl: item.images[0]?.url ?? null,
-    externalUrl: item.external_urls.spotify,
+    publisher: item.publisher ?? 'Unknown',
+    description: item.description ?? null,
+    imageUrl: item.images?.[0]?.url ?? null,
+    externalUrl: item.external_urls?.spotify ?? `https://open.spotify.com/show/${item.id}`,
   };
 }
 
