@@ -218,9 +218,7 @@ export class AddDailySessionModule1787500000000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     // ── planned_activities: restore the original two-way XOR ───────────────
 
-    await queryRunner.query(
-      `DROP INDEX "uq_planned_activities_daily_session_submission"`,
-    );
+    await queryRunner.query(`DROP INDEX "uq_planned_activities_daily_session_submission"`);
 
     await queryRunner.query(`
       ALTER TABLE "planned_activities" DROP CONSTRAINT "chk_planned_activities_ai_link"

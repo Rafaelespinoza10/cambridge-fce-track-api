@@ -100,7 +100,8 @@ async function startMockAttemptHandler(
     return errorResponse('Invalid request body', 400);
   }
   const examType =
-    typeof body.examType === 'string' && (Object.values(ExamType) as string[]).includes(body.examType)
+    typeof body.examType === 'string' &&
+    (Object.values(ExamType) as string[]).includes(body.examType)
       ? (body.examType as ExamType)
       : ExamType.B2_FIRST;
 
@@ -164,9 +165,7 @@ async function getMockAttemptHandler(
   }
 }
 
-export async function getMockAttempt(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function getMockAttempt(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   return getMockAttemptHandler(event, DEFAULT_DEPS);
 }
 

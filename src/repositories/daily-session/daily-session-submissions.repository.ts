@@ -67,7 +67,10 @@ class DailySessionSubmissionsRepository {
       .getOne();
   }
 
-  async findByIdForUser(submissionId: string, userId: string): Promise<DailySessionSubmission | null> {
+  async findByIdForUser(
+    submissionId: string,
+    userId: string,
+  ): Promise<DailySessionSubmission | null> {
     return this.submissionRepo
       .createQueryBuilder('submission')
       .where('submission.id = :submissionId', { submissionId })

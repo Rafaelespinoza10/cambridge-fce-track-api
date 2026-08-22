@@ -7,10 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import type {
-  DailySessionItemOption,
-  DailySessionItemAnswerKey,
-} from './daily-session-json-types';
+import type { DailySessionItemOption, DailySessionItemAnswerKey } from './daily-session-json-types';
 import type { DailySession } from './DailySession';
 
 @Entity('daily_session_items')

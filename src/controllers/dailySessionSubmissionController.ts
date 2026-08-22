@@ -84,7 +84,10 @@ async function startDailySessionSubmissionHandler(
       sessionId,
       deps.now(),
     );
-    return successResponse({ success: true, data: { ...submission, resumed } }, resumed ? 200 : 201);
+    return successResponse(
+      { success: true, data: { ...submission, resumed } },
+      resumed ? 200 : 201,
+    );
   } catch (err: unknown) {
     return handleError(mapDailySessionSubmissionError(err));
   }

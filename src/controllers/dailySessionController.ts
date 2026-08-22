@@ -104,9 +104,7 @@ async function getDailySessionHandler(
   }
 }
 
-export async function getDailySession(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function getDailySession(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   return getDailySessionHandler(event, DEFAULT_DEPS);
 }
 

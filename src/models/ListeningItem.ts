@@ -7,10 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import type {
-  PracticeItemOption,
-  PracticeItemAnswerKey,
-} from './practice-json-types';
+import type { PracticeItemOption, PracticeItemAnswerKey } from './practice-json-types';
 import type { ListeningSource } from './ListeningSource';
 
 /**
