@@ -67,6 +67,7 @@ export interface SafePlannedActivity {
   source: PlannedActivitySource;
   practiceAttemptId: string | null;
   writingSubmissionId: string | null;
+  dailySessionSubmissionId: string | null;
 }
 
 export interface SafePlanDay {

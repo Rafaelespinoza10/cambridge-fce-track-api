@@ -103,7 +103,12 @@ interface MakeServiceOverrides {
 interface RepoCalls {
   gradeSubmission: unknown[];
   createAiLinkedActivity: unknown[];
+  createAiLinkedActivityScore: unknown[];
 }
+
+const LINKED_ACTIVITY_ID = 'planned-activity-id';
+const LINKED_SKILL_ID = 'reading-skill-id';
+const LINKED_EXAM_SECTION_ID = 'reading-part-5-id';
 
 function makeService(
   completeStructured: (
@@ -112,7 +117,11 @@ function makeService(
   ) => Promise<unknown>,
   overrides: MakeServiceOverrides = {},
 ): { service: SubmitDailySessionSubmissionService; calls: RepoCalls; llmCallCount: () => number } {
-  const calls: RepoCalls = { gradeSubmission: [], createAiLinkedActivity: [] };
+  const calls: RepoCalls = {
+    gradeSubmission: [],
+    createAiLinkedActivity: [],
+    createAiLinkedActivityScore: [],
+  };
   let llmCalls = 0;
   const llm: LLMServicePort = {
     completeStructured: async (...args) => {
@@ -150,6 +159,14 @@ function makeService(
     dailySessionSubmissions,
     createAiLinkedActivity: async (_manager, input) => {
       calls.createAiLinkedActivity.push(input);
+      return {
+        id: LINKED_ACTIVITY_ID,
+        skill_id: LINKED_SKILL_ID,
+        exam_section_id: LINKED_EXAM_SECTION_ID,
+      };
+    },
+    createAiLinkedActivityScore: async (_manager, input) => {
+      calls.createAiLinkedActivityScore.push(input);
       return {};
     },
     resolvePlanDayId: async () => 'plan-day-id',
@@ -195,6 +212,42 @@ describe('SubmitDailySessionSubmissionService.execute — happy path', () => {
     assert.equal(calls.createAiLinkedActivity.length, 1);
     const linked = calls.createAiLinkedActivity[0] as { dailySessionSubmissionId: string };
     assert.equal(linked.dailySessionSubmissionId, SUBMISSION_ID);
+  });
+
+  it('writes the activity_scores row the Progress metrics read, scored on comprehension only', async () => {
+    const { service, calls } = makeService(async () => validSentenceGradingResponse());
+    await service.execute(USER_ID, SUBMISSION_ID, validInput(), SUBMITTED_AT);
+
+    assert.equal(calls.createAiLinkedActivityScore.length, 1);
+    const score = calls.createAiLinkedActivityScore[0] as {
+      userId: string;
+      plannedActivityId: string;
+      skillId: string | null;
+      examSectionId: string | null;
+      percentage: number;
+      correctAnswers: number;
+      totalQuestions: number;
+      timeSpentMinutes: number | null;
+      attemptedAt: Date;
+    };
+
+    // Linked to the activity created a moment earlier, reusing its already
+    // resolved skill/exam-section instead of looking them up by slug again.
+    assert.equal(score.plannedActivityId, LINKED_ACTIVITY_ID);
+    assert.equal(score.skillId, LINKED_SKILL_ID);
+    assert.equal(score.examSectionId, LINKED_EXAM_SECTION_ID);
+    assert.equal(score.userId, USER_ID);
+
+    // Comprehension only (1 of 2 = 50%). The LLM-graded sentence task scored
+    // 1 of 2 as well here, so assert the shape that proves it wasn't averaged
+    // in: raw/total must be the comprehension counts, not 2 of 4.
+    assert.equal(score.percentage, 50);
+    assert.equal(score.correctAnswers, 1);
+    assert.equal(score.totalQuestions, 2);
+
+    // Non-null, else Progress "study minutes" contributes 0 for this session.
+    assert.equal(score.timeSpentMinutes, 10); // 11:50 -> 12:00
+    assert.equal(score.attemptedAt.toISOString(), SUBMITTED_AT.toISOString());
   });
 
   it("never trusts the model's own correctCount — always recomputed from usesTargetCorrectly", async () => {
@@ -278,12 +331,17 @@ describe('SubmitDailySessionSubmissionService.execute — status handling', () =
       },
     } as unknown as DailySessionSubmission;
 
-    const { service, llmCallCount } = makeService(async () => validSentenceGradingResponse(), {
-      submission: graded,
-    });
+    const { service, calls, llmCallCount } = makeService(
+      async () => validSentenceGradingResponse(),
+      { submission: graded },
+    );
     const result = await service.execute(USER_ID, SUBMISSION_ID, validInput(), SUBMITTED_AT);
     assert.equal(result.idempotentReplay, true);
     assert.equal(llmCallCount(), 0);
+    // A replay must not double-register the day on the Plan, nor double-count
+    // the session in every Progress metric.
+    assert.equal(calls.createAiLinkedActivity.length, 0);
+    assert.equal(calls.createAiLinkedActivityScore.length, 0);
   });
 
   it('rejects submitting an abandoned submission', async () => {

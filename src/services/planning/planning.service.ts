@@ -103,6 +103,7 @@ function toSafePlannedActivity(pa: PlannedActivity): SafePlannedActivity {
     source: pa.source,
     practiceAttemptId: pa.practice_attempt_id,
     writingSubmissionId: pa.writing_submission_id,
+    dailySessionSubmissionId: pa.daily_session_submission_id,
   };
 }
 
