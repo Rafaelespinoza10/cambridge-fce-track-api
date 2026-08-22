@@ -1,0 +1,89 @@
+service: cambridge-tracker-spotify
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+    SPOTIFY_CLIENT_ID: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_CLIENT_ID}
+    SPOTIFY_CLIENT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_CLIENT_SECRET}
+    SPOTIFY_REDIRECT_URI: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_REDIRECT_URI}
+    SPOTIFY_TOKEN_ENCRYPTION_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_TOKEN_ENCRYPTION_KEY}
+    FRONTEND_APP_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.FRONTEND_APP_URL}
+
+functions:
+  spotifyConnect:
+    handler: src/controllers/spotifyController.connect
+    events:
+      - httpApi:
+          path: /spotify/connect
+          method: GET
+
+  spotifyCallback:
+    handler: src/controllers/spotifyController.callback
+    events:
+      - httpApi:
+          path: /spotify/callback
+          method: GET
+
+  spotifyStatus:
+    handler: src/controllers/spotifyController.status
+    events:
+      - httpApi:
+          path: /spotify/status
+          method: GET
+
+  spotifyDisconnect:
+    handler: src/controllers/spotifyController.disconnect
+    events:
+      - httpApi:
+          path: /spotify/connection
+          method: DELETE
+
+  spotifyListPlaylists:
+    handler: src/controllers/spotifyController.listPlaylists
+    events:
+      - httpApi:
+          path: /spotify/playlists
+          method: GET
+
+  spotifyListShows:
+    handler: src/controllers/spotifyController.listShows
+    events:
+      - httpApi:
+          path: /spotify/shows
+          method: GET
+
+  spotifyImportItem:
+    handler: src/controllers/spotifyController.importItem
+    events:
+      - httpApi:
+          path: /spotify/import
+          method: POST
+
+package:
+  individually: true
+
+custom:
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    exclude:
+      - 'aws-sdk'
+    target: 'node22'
+    platform: node
+    concurrency: 10

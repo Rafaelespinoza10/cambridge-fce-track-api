@@ -41,6 +41,9 @@ export class Resource {
   @Column({ type: 'varchar', length: 1024, nullable: true })
   storage_key: string | null;
 
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  image_url: string | null;
+
   @Column({ type: 'boolean', default: false })
   is_global: boolean;
 

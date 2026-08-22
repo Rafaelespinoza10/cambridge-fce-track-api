@@ -22,6 +22,7 @@ export * from './practice-json-types';
 export * from './Recommendation';
 export * from './Resource';
 export * from './Skill';
+export * from './SpotifyConnection';
 export * from './StudySession';
 export * from './User';
 export * from './UserGoal';

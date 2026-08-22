@@ -16,6 +16,12 @@ export const errorResponse = (
   body: JSON.stringify({ success: false, message }),
 });
 
+export const redirectResponse = (location: string): APIGatewayProxyResult => ({
+  statusCode: 302,
+  headers: { Location: location },
+  body: '',
+});
+
 export const csvResponse = (csv: string, filename: string): APIGatewayProxyResult => ({
   statusCode: 200,
   headers: {

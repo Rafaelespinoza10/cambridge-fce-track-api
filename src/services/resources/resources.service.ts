@@ -3,6 +3,7 @@ import type { DataSource, UpdateResult } from 'typeorm';
 import { ResourcesRepository } from '@repositories/resources/resources.repository';
 import type { CreateResourceData } from '@repositories/resources/resources.repository';
 import type { Resource } from '../../models/Resource';
+import type { ResourceType } from '../../models/enums';
 import type {
   CreateResourceRequestBody,
   ResourceDto,
@@ -27,6 +28,7 @@ export class ResourceError extends Error {
 interface ResourcesRepositoryPort {
   findGlobalLinks(): Promise<Resource[]>;
   findByUserId(userId: string): Promise<Resource[]>;
+  findByUserIdAndType(userId: string, resourceType: ResourceType): Promise<Resource[]>;
   create(data: CreateResourceData): Promise<Resource>;
   findActiveById(resourceId: string): Promise<Resource | null>;
   softDelete(resourceId: string, userId: string): Promise<UpdateResult>;
@@ -77,6 +79,26 @@ function normalizeDescription(value: unknown): string | null {
   return trimmed;
 }
 
+function normalizeImageUrl(value: unknown): string | null {
+  if (value === undefined) return null;
+  if (typeof value !== 'string') {
+    throw new ResourceError('imageUrl must be a string', ResourceErrorCode.INVALID_INPUT);
+  }
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new ResourceError('imageUrl must be a valid URL', ResourceErrorCode.INVALID_INPUT);
+  }
+  if (!ALLOWED_URL_PROTOCOLS.has(parsed.protocol)) {
+    throw new ResourceError('imageUrl must use http or https', ResourceErrorCode.INVALID_INPUT);
+  }
+  return trimmed;
+}
+
 function normalizeUrl(value: unknown): string {
   if (typeof value !== 'string') {
     throw new ResourceError('url must be a string', ResourceErrorCode.INVALID_INPUT);
@@ -111,6 +133,7 @@ function toResourceDto(resource: Resource): ResourceDto {
     description: resource.description,
     url: resource.url ?? '',
     resourceType: resource.resource_type,
+    imageUrl: resource.image_url ?? null,
     isGlobal: resource.is_global,
     createdAt: resource.created_at,
   };
@@ -134,13 +157,27 @@ class ResourcesService {
     return [...globalLinks, ...personalLinks].map(toResourceDto);
   }
 
+  async listResourcesByType(userId: string, resourceType: ResourceType): Promise<ResourceDto[]> {
+    const resources = await this.resourcesRepo().findByUserIdAndType(userId, resourceType);
+    return resources.map(toResourceDto);
+  }
+
   async createResource(userId: string, input: CreateResourceRequestBody): Promise<ResourceDto> {
     const title = normalizeTitle(input.title);
     const description =
       input.description === undefined ? null : normalizeDescription(input.description);
     const url = normalizeUrl(input.url);
+    const imageUrl = normalizeImageUrl(input.imageUrl);
+    const resourceType = input.resourceType;
 
-    const resource = await this.resourcesRepo().create({ userId, title, description, url });
+    const resource = await this.resourcesRepo().create({
+      userId,
+      title,
+      description,
+      url,
+      resourceType,
+      imageUrl,
+    });
     return toResourceDto(resource);
   }
 

@@ -7,6 +7,8 @@ interface CreateResourceData {
   title: string;
   description: string | null;
   url: string;
+  resourceType?: ResourceType;
+  imageUrl?: string | null;
 }
 
 class ResourcesRepository {
@@ -41,12 +43,23 @@ class ResourcesRepository {
       user_id: data.userId,
       title: data.title,
       description: data.description,
-      resource_type: ResourceType.LINK,
+      resource_type: data.resourceType ?? ResourceType.LINK,
       url: data.url,
       storage_key: null,
+      image_url: data.imageUrl ?? null,
       is_global: false,
     });
     return this.repo.save(resource);
+  }
+
+  async findByUserIdAndType(userId: string, resourceType: ResourceType): Promise<Resource[]> {
+    return this.repo
+      .createQueryBuilder('resource')
+      .where('resource.user_id = :userId', { userId })
+      .andWhere('resource.resource_type = :type', { type: resourceType })
+      .andWhere('resource.deleted_at IS NULL')
+      .orderBy('resource.created_at', 'DESC')
+      .getMany();
   }
 
   async findActiveById(resourceId: string): Promise<Resource | null> {
