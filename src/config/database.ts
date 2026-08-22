@@ -34,6 +34,10 @@ import { WritingTask } from '../models/WritingTask';
 import { WritingSubmission } from '../models/WritingSubmission';
 import { CambridgeSource } from '../models/CambridgeSource';
 import { CambridgeKnowledgeItem } from '../models/CambridgeKnowledgeItem';
+import { ListeningSource } from '../models/ListeningSource';
+import { ListeningItem } from '../models/ListeningItem';
+import { MockAttempt } from '../models/MockAttempt';
+import { MockAttemptSection } from '../models/MockAttemptSection';
 import { DailySession } from '../models/DailySession';
 import { DailySessionItem } from '../models/DailySessionItem';
 import { DailySessionSubmission } from '../models/DailySessionSubmission';
@@ -91,6 +95,10 @@ export const AppDataSource = new DataSource({
     WritingSubmission,
     CambridgeSource,
     CambridgeKnowledgeItem,
+    ListeningSource,
+    ListeningItem,
+    MockAttempt,
+    MockAttemptSection,
     DailySession,
     DailySessionItem,
     DailySessionSubmission,

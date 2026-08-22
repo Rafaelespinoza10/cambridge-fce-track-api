@@ -210,6 +210,29 @@ export enum CambridgeSourceStatus {
   INACTIVE = 'inactive',
 }
 
+export enum ListeningSourceStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}
+
+export enum MockAttemptStatus {
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  ABANDONED = 'abandoned',
+}
+
+export enum MockAttemptSectionStatus {
+  PENDING = 'pending',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+}
+
+export enum MockAttemptSectionContentType {
+  PRACTICE_EXERCISE = 'practice_exercise',
+  WRITING_TASK = 'writing_task',
+  LISTENING = 'listening',
+}
+
 export enum DailySessionSource {
   AI = 'ai',
   SYSTEM = 'system',
