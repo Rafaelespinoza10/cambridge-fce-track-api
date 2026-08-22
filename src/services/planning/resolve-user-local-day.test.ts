@@ -77,11 +77,7 @@ describe('resolveUserLocalDayKey', () => {
     // Unlike session generation, this runs inside an already-graded
     // submission's transaction — aborting it after the LLM was paid for
     // would be worse than placing the activity on the UTC day.
-    const key = await resolveUserLocalDayKey(
-      makeManager('Not/AZone'),
-      USER_ID,
-      LATE_NIGHT_UTC,
-    );
+    const key = await resolveUserLocalDayKey(makeManager('Not/AZone'), USER_ID, LATE_NIGHT_UTC);
 
     assert.equal(key, '2026-01-01');
   });

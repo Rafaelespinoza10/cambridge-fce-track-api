@@ -121,9 +121,7 @@ async function backfillPlanDays(ds: DataSource): Promise<BackfillCounts> {
         },
       );
     });
-    console.log(
-      `[backfill]   moved "${row.title}" from ${row.currentDate} to ${targetDateKey}`,
-    );
+    console.log(`[backfill]   moved "${row.title}" from ${row.currentDate} to ${targetDateKey}`);
     counts.moved++;
   }
 

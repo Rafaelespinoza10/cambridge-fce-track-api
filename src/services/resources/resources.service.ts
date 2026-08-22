@@ -1,7 +1,10 @@
 import type { DataSource, UpdateResult } from 'typeorm';
 
 import { ResourcesRepository } from '@repositories/resources/resources.repository';
-import type { CreateResourceData, UpdateResourceData } from '@repositories/resources/resources.repository';
+import type {
+  CreateResourceData,
+  UpdateResourceData,
+} from '@repositories/resources/resources.repository';
 import type { Resource } from '../../models/Resource';
 import type { ResourceType } from '../../models/enums';
 import type {

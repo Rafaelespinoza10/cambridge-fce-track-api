@@ -134,5 +134,10 @@ export async function updateResource(event: APIGatewayProxyEvent): Promise<APIGa
   return updateResourceHandler(event, DEFAULT_DEPS);
 }
 
-export { listResourcesHandler, createResourceHandler, deleteResourceHandler, updateResourceHandler };
+export {
+  listResourcesHandler,
+  createResourceHandler,
+  deleteResourceHandler,
+  updateResourceHandler,
+};
 export type { ResourceControllerDeps, ResourcesServicePort };
