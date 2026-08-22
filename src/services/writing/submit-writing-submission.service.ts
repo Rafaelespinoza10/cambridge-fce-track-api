@@ -25,6 +25,7 @@ import type { GradeSubmissionData } from '@repositories/writing/writing-submissi
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
+import { resolveUserLocalDayKey } from '../planning/resolve-user-local-day';
 import SYSTEM_PROMPT from '../../prompts/writing/grade-submission.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/writing/grade-submission.user.md';
 
@@ -89,6 +90,11 @@ export interface SubmitWritingSubmissionServiceDeps {
   ) => Promise<unknown>;
   // Injectable seam for tests — see resolve-plan-day-for-date.ts.
   resolvePlanDayId?: (manager: EntityManager, userId: string, dateKey: string) => Promise<string>;
+  resolveUserLocalDayKey?: (
+    manager: EntityManager,
+    userId: string,
+    instant: Date,
+  ) => Promise<string>;
 }
 
 const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
@@ -550,9 +556,17 @@ export class SubmitWritingSubmissionService {
       {
         const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
         const resolveDay = this.deps.resolvePlanDayId ?? resolvePlanDayIdForDate;
+        const resolveLocalDayKey = this.deps.resolveUserLocalDayKey ?? resolveUserLocalDayKey;
+        // The user's OWN calendar day, not submittedAt's UTC day — see
+        // resolve-user-local-day.ts. Only reached when start time didn't
+        // already capture a plan day.
         const planDayId =
           locked.plan_day_id ??
-          (await resolveDay(manager, userId, submittedAt.toISOString().slice(0, 10)));
+          (await resolveDay(
+            manager,
+            userId,
+            await resolveLocalDayKey(manager, userId, submittedAt),
+          ));
         const part = getWritingTaskFormat(task.task_type).part;
         await linker(manager, {
           planDayId,

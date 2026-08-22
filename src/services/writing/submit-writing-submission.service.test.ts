@@ -107,6 +107,8 @@ const FAKE_DATA_SOURCE = {
 } as unknown as DataSource;
 
 interface MakeServiceOverrides {
+  /** The user's local calendar day for submittedAt — what resolveUserLocalDayKey would return. */
+  localDayKey?: string;
   submission?: WritingSubmission | null;
   lockedSubmission?: WritingSubmission | null;
   task?: WritingTask | null;
@@ -129,10 +131,12 @@ function makeService(
   llmCallCount: () => number;
   createAiLinkedActivityCalls: unknown[];
   resolvePlanDayIdCalls: { userId: string; dateKey: string }[];
+  resolveUserLocalDayKeyCalls: { userId: string; instant: Date }[];
 } {
   const gradeCalls: { id: string; userId: string; data: GradeSubmissionData }[] = [];
   const createAiLinkedActivityCalls: unknown[] = [];
   const resolvePlanDayIdCalls: { userId: string; dateKey: string }[] = [];
+  const resolveUserLocalDayKeyCalls: { userId: string; instant: Date }[] = [];
   let llmCalls = 0;
   const llm: LLMServicePort = {
     completeStructured: async (...args) => {
@@ -170,6 +174,13 @@ function makeService(
       resolvePlanDayIdCalls.push({ userId, dateKey });
       return 'default-day-id';
     },
+    // Stubbed because the real one hits the UserProfile repository, and this
+    // suite's EntityManager is `{}`. Defaults to submittedAt's own UTC day so
+    // the pre-existing assertions still describe the same scenario.
+    resolveUserLocalDayKey: async (_manager, userId, instant) => {
+      resolveUserLocalDayKeyCalls.push({ userId, instant });
+      return overrides.localDayKey ?? instant.toISOString().slice(0, 10);
+    },
   });
   return {
     service,
@@ -177,6 +188,7 @@ function makeService(
     llmCallCount: () => llmCalls,
     createAiLinkedActivityCalls,
     resolvePlanDayIdCalls,
+    resolveUserLocalDayKeyCalls,
   };
 }
 
@@ -462,8 +474,24 @@ describe('SubmitWritingSubmissionService.execute — AI-linked planned activity'
     assert.equal(resolvePlanDayIdCalls[0]!.userId, USER_ID);
     assert.equal(resolvePlanDayIdCalls[0]!.dateKey, '2026-01-01');
     assert.equal(createAiLinkedActivityCalls.length, 1);
-    const input = createAiLinkedActivityCalls[0] as Record<string, unknown>;
-    assert.equal(input.planDayId, 'default-day-id');
+    const firstInput = createAiLinkedActivityCalls[0] as Record<string, unknown>;
+    assert.equal(firstInput.planDayId, 'default-day-id');
+  });
+
+  it("uses the user's LOCAL day, not submittedAt's UTC day", async () => {
+    // SUBMITTED_AT is 2026-01-01 in UTC; for a user in a negative-offset zone
+    // it is still 2025-12-31 locally. Before this fix the activity landed on
+    // Jan 1 and disappeared from "today" on the Plan screen.
+    const { service, resolvePlanDayIdCalls, resolveUserLocalDayKeyCalls } = makeService(
+      async () => validGradingResponse(),
+      { localDayKey: '2025-12-31' },
+    );
+    await service.execute(USER_ID, SUBMISSION_ID, SUBMITTED_TEXT, SUBMITTED_AT);
+
+    assert.equal(resolveUserLocalDayKeyCalls.length, 1);
+    assert.equal(resolveUserLocalDayKeyCalls[0]!.userId, USER_ID);
+    assert.equal(resolveUserLocalDayKeyCalls[0]!.instant, SUBMITTED_AT);
+    assert.equal(resolvePlanDayIdCalls[0]!.dateKey, '2025-12-31');
   });
 
   it('does not resolve a default day when the submission already targets one', async () => {
