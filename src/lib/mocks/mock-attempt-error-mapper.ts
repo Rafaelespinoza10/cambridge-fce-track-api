@@ -26,6 +26,10 @@ import {
   ImportListeningSourceError,
   ImportListeningSourceErrorCode,
 } from '../../services/mocks/import-listening-source.service';
+import {
+  GetMockAttemptSectionResultError,
+  GetMockAttemptSectionResultErrorCode,
+} from '../../services/mocks/get-mock-attempt-section-result.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -80,6 +84,10 @@ const IMPORT_LISTENING_SOURCE_STATUS_BY_CODE: Record<ImportListeningSourceErrorC
   [ImportListeningSourceErrorCode.INVALID_INPUT]: 400,
 };
 
+const GET_SECTION_RESULT_STATUS_BY_CODE: Record<GetMockAttemptSectionResultErrorCode, number> = {
+  [GetMockAttemptSectionResultErrorCode.SECTION_NOT_FOUND]: 404,
+};
+
 /**
  * Translates every full-mock-attempt-domain error (start/start-section/
  * submit-section/submit/abandon/get, plus the admin Listening import) into
@@ -112,6 +120,9 @@ function mapMockAttemptError(error: unknown): unknown {
   }
   if (error instanceof ImportListeningSourceError) {
     return httpError(error.message, IMPORT_LISTENING_SOURCE_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof GetMockAttemptSectionResultError) {
+    return httpError(error.message, GET_SECTION_RESULT_STATUS_BY_CODE[error.code]);
   }
   return error;
 }

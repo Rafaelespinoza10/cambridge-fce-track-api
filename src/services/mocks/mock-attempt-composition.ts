@@ -14,6 +14,7 @@ import { SubmitMockAttemptService } from './submit-mock-attempt.service';
 import { AbandonMockAttemptService } from './abandon-mock-attempt.service';
 import { GetActiveMockAttemptService } from './get-active-mock-attempt.service';
 import { GetMockAttemptService } from './get-mock-attempt.service';
+import { GetMockAttemptSectionResultService } from './get-mock-attempt-section-result.service';
 
 const DEFAULT_TEMPERATURE = 0.5;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2500;
@@ -41,6 +42,7 @@ interface MockAttemptServices {
   abandonAttempt: AbandonMockAttemptService;
   getActiveAttempt: GetActiveMockAttemptService;
   getAttempt: GetMockAttemptService;
+  getSectionResult: GetMockAttemptSectionResultService;
 }
 
 async function buildMockAttemptServices(): Promise<MockAttemptServices> {
@@ -73,6 +75,9 @@ async function buildMockAttemptServices(): Promise<MockAttemptServices> {
     abandonAttempt: new AbandonMockAttemptService({ repository: mockAttemptsRepository }),
     getActiveAttempt: new GetActiveMockAttemptService({ repository: mockAttemptsRepository }),
     getAttempt: new GetMockAttemptService({ repository: mockAttemptsRepository }),
+    getSectionResult: new GetMockAttemptSectionResultService({
+      repository: mockAttemptsRepository,
+    }),
   };
 }
 

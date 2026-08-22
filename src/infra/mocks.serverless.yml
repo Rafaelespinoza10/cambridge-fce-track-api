@@ -125,6 +125,17 @@ functions:
           path: /mocks/attempts/{attemptId}/sections/{sectionCode}/submit
           method: POST
 
+  # Re-serves an already-submitted section's grading result — submitting a
+  # section returns it once, transiently, so a client that reloads before
+  # acknowledging the result screen would otherwise lose it. DB-only, no
+  # explicit timeout needed.
+  mockAttemptsGetSectionResult:
+    handler: src/controllers/mockAttemptsController.getMockAttemptSectionResult
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/sections/{sectionCode}
+          method: GET
+
   mockAttemptsSubmit:
     handler: src/controllers/mockAttemptsController.submitMockAttempt
     events:

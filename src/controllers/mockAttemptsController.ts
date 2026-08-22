@@ -14,6 +14,7 @@ import type {
   SubmitMockAttemptSectionRequest,
   SubmitObjectiveSectionAnswerInput,
 } from '../interfaces/mocks/mock-attempt.interface';
+import type { MockAttemptSectionResultViewDto } from '../services/mocks/get-mock-attempt-section-result.service';
 
 type NowProvider = () => Date;
 
@@ -51,6 +52,13 @@ interface AbandonAttemptPort {
     attemptId: string,
   ): Promise<{ attempt: MockAttemptSafeDto; idempotentReplay: boolean }>;
 }
+interface GetSectionResultPort {
+  execute(
+    userId: string,
+    attemptId: string,
+    sectionCode: string,
+  ): Promise<MockAttemptSectionResultViewDto>;
+}
 
 interface MockAttemptsControllerDeps {
   now: NowProvider;
@@ -62,6 +70,7 @@ interface MockAttemptsControllerDeps {
     submitSection: SubmitSectionPort;
     submitAttempt: SubmitAttemptPort;
     abandonAttempt: AbandonAttemptPort;
+    getSectionResult: GetSectionResultPort;
   }>;
 }
 
@@ -316,6 +325,35 @@ export async function abandonMockAttempt(
   return abandonMockAttemptHandler(event, DEFAULT_DEPS);
 }
 
+// ── GET /mocks/attempts/{attemptId}/sections/{sectionCode} ────────────────────
+
+async function getMockAttemptSectionResultHandler(
+  event: APIGatewayProxyEvent,
+  deps: MockAttemptsControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const attemptId = getAttemptIdParam(event);
+  if (attemptId === null) return errorResponse('Invalid or missing attemptId', 400);
+  const sectionCode = getSectionCodeParam(event);
+  if (sectionCode === null) return errorResponse('Invalid or missing sectionCode', 400);
+
+  try {
+    const { getSectionResult } = await deps.services();
+    const result = await getSectionResult.execute(payload.sub, attemptId, sectionCode);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapMockAttemptError(err));
+  }
+}
+
+export async function getMockAttemptSectionResult(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return getMockAttemptSectionResultHandler(event, DEFAULT_DEPS);
+}
+
 export {
   startMockAttemptHandler,
   getActiveMockAttemptHandler,
@@ -324,5 +362,6 @@ export {
   submitMockAttemptSectionHandler,
   submitMockAttemptHandler,
   abandonMockAttemptHandler,
+  getMockAttemptSectionResultHandler,
 };
 export type { MockAttemptsControllerDeps, NowProvider };
