@@ -29,7 +29,8 @@ export interface OpenAIClientPort {
 }
 
 const UNSUPPORTED_TEMPERATURE_PATTERN = /'temperature'\s+is not supported/i;
-const UNSUPPORTED_REASONING_PATTERN = /'reasoning'\s+is not supported|unknown parameter.*reasoning/i;
+const UNSUPPORTED_REASONING_PATTERN =
+  /'reasoning'\s+is not supported|unknown parameter.*reasoning/i;
 
 /**
  * Some models (reasoning-tier: o1/o3, gpt-5-thinking family, and others)
@@ -157,30 +158,31 @@ export class OpenAIProvider implements LLMProvider {
 
     let response: OpenAI.Responses.Response;
     try {
-      response = await withStructuredCompletionFallback(({ includeTemperature, includeReasoning }) =>
-        this.client.responses.create(
-          {
-            model: params.model,
-            input: params.messages.map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
-            max_output_tokens: params.maxOutputTokens,
-            ...(includeTemperature ? { temperature: params.temperature } : {}),
-            ...(includeReasoning && params.reasoningEffort !== undefined
-              ? { reasoning: { effort: params.reasoningEffort } }
-              : {}),
-            text: {
-              format: {
-                type: 'json_schema',
-                name: params.responseSchema.name,
-                schema: params.responseSchema.schema,
-                strict: params.responseSchema.strict ?? true,
+      response = await withStructuredCompletionFallback(
+        ({ includeTemperature, includeReasoning }) =>
+          this.client.responses.create(
+            {
+              model: params.model,
+              input: params.messages.map((message) => ({
+                role: message.role,
+                content: message.content,
+              })),
+              max_output_tokens: params.maxOutputTokens,
+              ...(includeTemperature ? { temperature: params.temperature } : {}),
+              ...(includeReasoning && params.reasoningEffort !== undefined
+                ? { reasoning: { effort: params.reasoningEffort } }
+                : {}),
+              text: {
+                format: {
+                  type: 'json_schema',
+                  name: params.responseSchema.name,
+                  schema: params.responseSchema.schema,
+                  strict: params.responseSchema.strict ?? true,
+                },
               },
             },
-          },
-          requestOptions,
-        ),
+            requestOptions,
+          ),
       );
     } catch (err: unknown) {
       throw mapOpenAIError(err);
