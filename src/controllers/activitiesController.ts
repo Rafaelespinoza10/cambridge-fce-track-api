@@ -6,9 +6,9 @@ import {
   csvResponse,
   handleError,
   isValidUuid,
-} from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { toCsv } from '@lib/csv';
+} from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { toCsv } from '@lib/shared/csv';
 import { ScoreType } from '../models/enums';
 import { ActivitiesService } from 'src/services/activities/activities.service';
 import type {

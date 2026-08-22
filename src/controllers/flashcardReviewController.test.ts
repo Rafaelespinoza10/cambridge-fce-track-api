@@ -16,7 +16,7 @@ import type {
   AnswerFlashcardPort,
   CompleteSessionPort,
 } from './flashcardReviewController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import { ReviewRating, StudySessionStatus, FlashcardStatus } from '../models/enums';
 import {
   FlashcardReviewError,

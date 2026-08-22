@@ -6,8 +6,8 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { getDatabaseConnection } from '../../lib/database';
-import { EvidenceRepository } from '../../repositories/evidence.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { EvidenceRepository } from '@repositories/evidence/evidence.repository';
 import { StorageProvider } from '../../models/enums';
 import type {
   CreateEvidenceBody,
@@ -15,7 +15,7 @@ import type {
   GenerateUploadUrlBody,
   SafeEvidence,
 } from '../../interfaces/evidence/evidence.interface';
-import { ALL_VALID_MIME_TYPES, createError, toSafeEvidence } from '@lib/evidence-library';
+import { ALL_VALID_MIME_TYPES, createError, toSafeEvidence } from '@lib/evidence/evidence-library';
 
 const S3_BUCKET = process.env['S3_EVIDENCE_BUCKET'] ?? '';
 const S3_REGION = process.env['S3_REGION'] ?? 'us-east-1';

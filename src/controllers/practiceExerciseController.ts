@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapGeneratePracticeExerciseError } from '@lib/generate-practice-exercise-error-mapper';
-import { mapPracticeExerciseError } from '@lib/practice-exercise-error-mapper';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapGeneratePracticeExerciseError } from '@lib/practice/generate-practice-exercise-error-mapper';
+import { mapPracticeExerciseError } from '@lib/practice/practice-exercise-error-mapper';
 import { buildPracticeExerciseServices } from '../services/practice/generate-practice-exercise-composition';
 import type {
   GeneratePracticeExerciseRequest,

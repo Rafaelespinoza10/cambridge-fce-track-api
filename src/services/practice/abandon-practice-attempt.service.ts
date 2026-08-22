@@ -1,7 +1,7 @@
 import { PracticeAttemptStatus } from '../../models/enums';
 import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeAttemptAbandonResultDto } from '../../interfaces/practice/practice-attempt.interface';
-import { toPracticeAttemptSafeDto } from '../../lib/practice-attempt-dto';
+import { toPracticeAttemptSafeDto } from '@lib/practice/practice-attempt-dto';
 
 export enum AbandonPracticeAttemptErrorCode {
   ATTEMPT_NOT_FOUND = 'attempt_not_found',

@@ -1,8 +1,8 @@
-import { getDatabaseConnection } from '../../lib/database';
-import { fromCsv } from '../../lib/csv';
-import { MocksRepository } from '../../repositories/mocks.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { fromCsv } from '@lib/shared/csv';
+import { MocksRepository } from '@repositories/mocks/mocks.repository';
 import { ExamType, MockType, EnglishLevel } from '../../models/enums';
-import type { ImportResult } from '../../lib/csv';
+import type { ImportResult } from '@lib/shared/csv';
 import type {
   CreateMockBody,
   UpdateMockBody,
@@ -20,8 +20,8 @@ import {
   VALID_LEVELS,
   VALID_MOCK_TYPES,
   validateSections,
-} from '@lib/mocks-library';
-import { findMockExamSectionByName, getMockExamCatalog } from '@lib/mock-exam-catalog';
+} from '@lib/mocks/mocks-library';
+import { findMockExamSectionByName, getMockExamCatalog } from '@lib/mocks/mock-exam-catalog';
 
 class MocksService {
   getSectionCatalog(examType: ExamType) {

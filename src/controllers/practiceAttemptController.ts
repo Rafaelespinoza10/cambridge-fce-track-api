@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapPracticeAttemptError } from '@lib/practice-attempt-error-mapper';
+import { errorResponse, successResponse, handleError, isValidUuid } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapPracticeAttemptError } from '@lib/practice/practice-attempt-error-mapper';
 import { buildPracticeAttemptServices } from '../services/practice/practice-attempt-composition';
 import type {
   PracticeAttemptStartResultDto,

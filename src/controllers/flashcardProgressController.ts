@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapFlashcardProgressError } from '@lib/flashcard-progress-error-mapper';
+import { errorResponse, successResponse, handleError } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapFlashcardProgressError } from '@lib/flashcards/flashcard-progress-error-mapper';
 import { buildFlashcardProgressServices } from '../services/flashcards/flashcard-progress-composition';
 import type {
   FlashcardPreferencesDto,

@@ -13,11 +13,11 @@ import type {
 } from '../../interfaces/writing/writing-task.interface';
 import type { WritingTaskGenerationMetadata } from '../../models/writing-json-types';
 import type { WritingTask } from '../../models/WritingTask';
-import { renderPromptTemplate } from '../../lib/prompt-template';
-import { getWritingTaskFormat } from '../../lib/writing-task-catalog';
-import { pickRandomExamTopic } from '../../lib/exam-topics';
-import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
-import type { CreateTaskData } from '../../repositories/writing-tasks.repository';
+import { renderPromptTemplate } from '@lib/llm/prompt-template';
+import { getWritingTaskFormat } from '@lib/writing/writing-task-catalog';
+import { pickRandomExamTopic } from '@lib/shared/exam-topics';
+import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
+import type { CreateTaskData } from '@repositories/writing/writing-tasks.repository';
 import SYSTEM_PROMPT_TEMPLATE from '../../prompts/writing/generate-task.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/writing/generate-task.user.md';
 

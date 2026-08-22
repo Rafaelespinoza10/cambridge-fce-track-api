@@ -30,7 +30,7 @@ import type {
   ListAttemptHistoryPort,
   GenerateErrorFlashcardDraftPort,
 } from './practiceAttemptController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import { PracticeAttemptStatus, FlashcardType, EnglishLevel } from '../models/enums';
 import {
   StartPracticeAttemptError,

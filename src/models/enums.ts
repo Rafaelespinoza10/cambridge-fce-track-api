@@ -115,6 +115,8 @@ export enum ResourceType {
   VOCABULARY = 'vocabulary',
   GRAMMAR = 'grammar',
   WRITING_SAMPLE = 'writing_sample',
+  PODCAST = 'podcast',
+  PLAYLIST = 'playlist',
   OTHER = 'other',
 }
 
@@ -198,6 +200,45 @@ export enum WritingTaskType {
 }
 
 export enum WritingSubmissionStatus {
+  IN_PROGRESS = 'in_progress',
+  GRADED = 'graded',
+  ABANDONED = 'abandoned',
+}
+
+export enum CambridgeSourceStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}
+
+export enum ListeningSourceStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}
+
+export enum MockAttemptStatus {
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  ABANDONED = 'abandoned',
+}
+
+export enum MockAttemptSectionStatus {
+  PENDING = 'pending',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+}
+
+export enum MockAttemptSectionContentType {
+  PRACTICE_EXERCISE = 'practice_exercise',
+  WRITING_TASK = 'writing_task',
+  LISTENING = 'listening',
+}
+
+export enum DailySessionSource {
+  AI = 'ai',
+  SYSTEM = 'system',
+}
+
+export enum DailySessionSubmissionStatus {
   IN_PROGRESS = 'in_progress',
   GRADED = 'graded',
   ABANDONED = 'abandoned',

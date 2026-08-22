@@ -1,7 +1,7 @@
 import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeExerciseSafeWithItems } from '../../interfaces/practice/practice-exercise.interface';
 import type { PracticeAttemptViewDto } from '../../interfaces/practice/practice-attempt.interface';
-import { toPracticeAttemptSafeDto } from '../../lib/practice-attempt-dto';
+import { toPracticeAttemptSafeDto } from '@lib/practice/practice-attempt-dto';
 
 export interface PracticeExercisesRepositoryPort {
   findSafeExerciseWithItemsForUser(

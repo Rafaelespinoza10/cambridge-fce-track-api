@@ -5,4 +5,6 @@ Number of items: {{itemCount}}
 Target CEFR level: {{targetLevel}}
 Topic area: {{topicHint}}
 
+{{groundingContext}}
+
 {{taskTypeInstructions}}

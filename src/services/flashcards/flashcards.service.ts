@@ -1,12 +1,12 @@
 import type { DataSource, EntityManager, UpdateResult } from 'typeorm';
 
-import { FlashcardsRepository } from '../../repositories/flashcards.repository';
+import { FlashcardsRepository } from '@repositories/flashcards/flashcards.repository';
 import type {
   CreateFlashcardData,
   UpdateFlashcardContentData,
   FindByDeckFilters,
-} from '../../repositories/flashcards.repository';
-import { DecksRepository } from '../../repositories/decks.repository';
+} from '@repositories/flashcards/flashcards.repository';
+import { DecksRepository } from '@repositories/decks/decks.repository';
 import type { Flashcard } from '../../models/Flashcard';
 import type { Deck } from '../../models/Deck';
 import { FlashcardType, FlashcardStatus, EnglishLevel } from '../../models/enums';

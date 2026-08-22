@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { errorResponse, successResponse, handleError } from '@lib/response';
+import { errorResponse, successResponse, handleError } from '@lib/shared/response';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import type { LoginBody, RegisterBody } from '../interfaces/auth/auth.interface';
 import { AuthService } from '../services/auth/auth.service';

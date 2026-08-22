@@ -1,12 +1,12 @@
 import OpenAI from 'openai';
 
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { LLMService } from '../llm/llm.service';
 import { OpenAIProvider } from '../llm/openai.provider';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import { GenerateWritingTaskService } from './generate-writing-task.service';
 import { WritingTasksService } from './writing-tasks.service';
-import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
+import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
 
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1024;

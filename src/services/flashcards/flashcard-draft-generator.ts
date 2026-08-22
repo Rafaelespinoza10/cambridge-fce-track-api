@@ -7,7 +7,7 @@ import type {
   LLMStructuredCompletionOptions,
 } from '../llm/llm.types';
 import type { GeneratedFlashcardDraftDto } from '../../interfaces/flashcards/generate-flashcard-draft.interface';
-import { renderPromptTemplate } from '../../lib/prompt-template';
+import { renderPromptTemplate } from '@lib/llm/prompt-template';
 import TERM_SYSTEM_PROMPT from '../../prompts/flashcards/generate-draft.system.md';
 import TERM_USER_PROMPT_TEMPLATE from '../../prompts/flashcards/generate-draft.user.md';
 import PRACTICE_ERROR_SYSTEM_PROMPT from '../../prompts/flashcards/generate-draft-from-practice-error.system.md';

@@ -1,13 +1,13 @@
-import { getDatabaseConnection } from '../../lib/database';
-import { fromCsv } from '../../lib/csv';
-import { isValidUuid } from '@lib/response';
-import { ActivitiesRepository } from 'src/repositories/activities.repository';
+import { getDatabaseConnection } from '@lib/shared/database';
+import { fromCsv } from '@lib/shared/csv';
+import { isValidUuid } from '@lib/shared/response';
+import { ActivitiesRepository } from '@repositories/activities/activities.repository';
 import { ScoreType } from '../../models/enums';
 import type { Skill } from '../../models/Skill';
 import type { ExamSection } from '../../models/ExamSection';
 import type { ActivityTemplate } from '../../models/ActivityTemplate';
 import type { CustomActivity } from '../../models/CustomActivity';
-import type { ImportResult } from '../../lib/csv';
+import type { ImportResult } from '@lib/shared/csv';
 import type {
   SafeSkill,
   SafeExamSection,

@@ -16,14 +16,15 @@ import type {
   WritingFeedback,
 } from '../../models/writing-json-types';
 import type { WritingSubmissionSubmitResultDto } from '../../interfaces/writing/writing-submission.interface';
-import { renderPromptTemplate } from '../../lib/prompt-template';
-import { buildWritingSubmissionResultDto } from '../../lib/writing-submission-result-dto';
-import { getWritingTaskFormat } from '../../lib/writing-task-catalog';
-import { WritingTasksRepository } from '../../repositories/writing-tasks.repository';
-import { WritingSubmissionsRepository } from '../../repositories/writing-submissions.repository';
-import type { GradeSubmissionData } from '../../repositories/writing-submissions.repository';
+import { renderPromptTemplate } from '@lib/llm/prompt-template';
+import { buildWritingSubmissionResultDto } from '@lib/writing/writing-submission-result-dto';
+import { getWritingTaskFormat } from '@lib/writing/writing-task-catalog';
+import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
+import { WritingSubmissionsRepository } from '@repositories/writing/writing-submissions.repository';
+import type { GradeSubmissionData } from '@repositories/writing/writing-submissions.repository';
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
+import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
 import SYSTEM_PROMPT from '../../prompts/writing/grade-submission.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/writing/grade-submission.user.md';
 
@@ -86,6 +87,8 @@ export interface SubmitWritingSubmissionServiceDeps {
     manager: EntityManager,
     input: CreateAiLinkedPlannedActivityInput,
   ) => Promise<unknown>;
+  // Injectable seam for tests — see resolve-plan-day-for-date.ts.
+  resolvePlanDayId?: (manager: EntityManager, userId: string, dateKey: string) => Promise<string>;
 }
 
 const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
@@ -541,13 +544,18 @@ export class SubmitWritingSubmissionService {
       }
 
       // Register on the Plan/Home only once the submission is really graded
-      // — never at start time — and only when the user picked a target day
-      // when starting it (see StartWritingSubmissionService).
-      if (locked.plan_day_id !== null) {
+      // — never at start time. Every graded submission registers: the day
+      // picked at start time (StartWritingSubmissionService) if there was
+      // one, otherwise it defaults to the day it was actually graded.
+      {
         const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
+        const resolveDay = this.deps.resolvePlanDayId ?? resolvePlanDayIdForDate;
+        const planDayId =
+          locked.plan_day_id ??
+          (await resolveDay(manager, userId, submittedAt.toISOString().slice(0, 10)));
         const part = getWritingTaskFormat(task.task_type).part;
         await linker(manager, {
-          planDayId: locked.plan_day_id,
+          planDayId,
           title: `Writing — ${task.title}`,
           skillSlug: 'writing',
           examSectionSlug: `writing-part-${part}`,

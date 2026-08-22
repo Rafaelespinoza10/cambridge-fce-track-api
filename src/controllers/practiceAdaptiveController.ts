@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
+import { errorResponse, successResponse } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
 import { buildPracticeAdaptiveServices } from '../services/practice/practice-adaptive-composition';
 import { PracticeRecommendationError } from '../services/practice/generate-practice-recommendation.service';
 import type { PracticeLocale } from '../interfaces/practice/practice-adaptive.interface';

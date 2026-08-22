@@ -17,7 +17,7 @@ import {
   deleteFlashcardHandler,
 } from './flashcardController';
 import type { FlashcardControllerDeps, FlashcardsServicePort } from './flashcardController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import { FlashcardError, FlashcardErrorCode } from '../services/flashcards/flashcards.service';
 import type { FlashcardDto, WordFamilyDto } from '../interfaces/flashcards/flashcards.interface';
 import { FlashcardType, FlashcardStatus } from '../models/enums';

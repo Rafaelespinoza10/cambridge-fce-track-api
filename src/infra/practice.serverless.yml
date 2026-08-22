@@ -20,6 +20,7 @@ provider:
     JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
     OPEN_AI_API_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPEN_AI_API_KEY}
     OPENAI_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_MODEL, ''}
+    OPENAI_EMBEDDING_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_EMBEDDING_MODEL, ''}
 
 functions:
   practiceGenerateExercise:

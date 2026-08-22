@@ -1,0 +1,46 @@
+service: cambridge-tracker-listening
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+
+functions:
+  # Admin-only, internal tooling — no public UI consumes this yet. An admin
+  # registers a real official YouTube Listening test's video id + per-part
+  # timestamps together with that test's real published questions/answer
+  # key. Nothing here is AI-generated — see ListeningSource / the mocks
+  # module doc comments for why.
+  listeningSourcesImport:
+    handler: src/controllers/adminListeningSourcesController.importListeningSource
+    events:
+      - httpApi:
+          path: /admin/listening-sources
+          method: POST
+
+  listeningSourcesList:
+    handler: src/controllers/adminListeningSourcesController.listListeningSources
+    events:
+      - httpApi:
+          path: /admin/listening-sources
+          method: GET
+
+package:
+  individually: true
+
+custom:
+  esbuild: ${file(main.serverless.yml):custom.esbuild}

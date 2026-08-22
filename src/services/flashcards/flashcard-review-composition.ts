@@ -1,4 +1,4 @@
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { StartFlashcardReviewSessionService } from './start-flashcard-review-session.service';
 import { AnswerFlashcardRequestService } from './answer-flashcard-request.service';
 import { CompleteFlashcardReviewSessionService } from './complete-flashcard-review-session.service';

@@ -16,7 +16,7 @@ import * as path from 'path';
 import { DataSource } from 'typeorm';
 
 import { AppDataSource } from '../src/config/database';
-import { ProgressRepository } from '../src/repositories/progress.repository';
+import { ProgressRepository } from '../src/repositories/progress/progress.repository';
 
 const ROOT = path.resolve(__dirname, '..');
 const ENV_FILE = path.join(ROOT, 'serverless.env.yml');

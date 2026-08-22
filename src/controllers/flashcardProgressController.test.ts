@@ -14,7 +14,7 @@ import type {
   FlashcardProgressControllerDeps,
   FlashcardProgressServicePort,
 } from './flashcardProgressController';
-import { JwtService } from '../lib/jwt';
+import { JwtService } from '@lib/shared/jwt';
 import {
   FlashcardProgressError,
   FlashcardProgressErrorCode,

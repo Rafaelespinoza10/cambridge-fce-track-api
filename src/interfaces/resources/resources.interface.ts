@@ -1,7 +1,11 @@
+import type { ResourceType } from '../../models/enums';
+
 export interface CreateResourceRequestBody {
   title: string;
   url: string;
   description?: string;
+  resourceType?: ResourceType;
+  imageUrl?: string;
 }
 
 export interface ResourceDto {
@@ -10,6 +14,7 @@ export interface ResourceDto {
   description: string | null;
   url: string;
   resourceType: string;
+  imageUrl: string | null;
   isGlobal: boolean;
   createdAt: Date;
 }

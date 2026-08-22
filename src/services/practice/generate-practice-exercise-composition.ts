@@ -1,12 +1,13 @@
 import OpenAI from 'openai';
 
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { LLMService } from '../llm/llm.service';
 import { OpenAIProvider } from '../llm/openai.provider';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import { GeneratePracticeExerciseService } from './generate-practice-exercise.service';
 import { PracticeExercisesService } from './practice-exercises.service';
-import { PracticeExercisesRepository } from '../../repositories/practice-exercises.repository';
+import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
+import { buildCambridgeKnowledgeServices } from '../cambridge-knowledge/cambridge-knowledge-composition';
 
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
@@ -44,11 +45,19 @@ async function buildPracticeExerciseServices(): Promise<PracticeExerciseServices
     defaultMaxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
   });
 
+  // Grounding is best-effort: the Cambridge Knowledge Base search service
+  // reuses the same OpenAI client/model, so wiring it costs nothing extra
+  // here — GeneratePracticeExerciseService only ever consults it for parts
+  // flagged groundingRecommended (Reading), and degrades gracefully to "no
+  // grounding material" if the Knowledge Base has nothing for the topic.
+  const { searchKnowledge } = await buildCambridgeKnowledgeServices();
+
   return {
     generateExercise: new GeneratePracticeExerciseService(dataSource, {
       llm,
       providerLabel: provider.name,
       modelLabel: provider.defaultModel,
+      searchKnowledge,
     }),
     getExercise: new PracticeExercisesService({
       repository: new PracticeExercisesRepository(dataSource),

@@ -4,8 +4,8 @@ import type { PracticeAnswer } from '../../models/PracticeAnswer';
 import { PracticeAttemptStatus } from '../../models/enums';
 import type { PracticeExerciseSafeWithItems } from '../../interfaces/practice/practice-exercise.interface';
 import type { PracticeAttemptViewDto } from '../../interfaces/practice/practice-attempt.interface';
-import { toPracticeAttemptSafeDto } from '../../lib/practice-attempt-dto';
-import { buildPracticeAttemptResultDto } from '../../lib/practice-attempt-grading';
+import { toPracticeAttemptSafeDto } from '@lib/practice/practice-attempt-dto';
+import { buildPracticeAttemptResultDto } from '@lib/practice/practice-attempt-grading';
 
 export enum GetPracticeAttemptErrorCode {
   ATTEMPT_NOT_FOUND = 'attempt_not_found',

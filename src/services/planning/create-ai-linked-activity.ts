@@ -13,15 +13,17 @@ interface CreateAiLinkedPlannedActivityInput {
   completedAt: Date;
   practiceAttemptId?: string;
   writingSubmissionId?: string;
+  dailySessionSubmissionId?: string;
 }
 
 /**
- * Called from inside the Practice/Writing submit transaction once an
- * AI-generated session actually completes (see the "register on completion
- * only" decision) — never at generation/start time. Exactly one of
- * practiceAttemptId/writingSubmissionId must be provided, matching the
- * chk_planned_activities_ai_link constraint added in
- * AddAiLinkedPlannedActivities.
+ * Called from inside the Practice/Writing/Daily Session submit transaction
+ * once an AI-generated session actually completes (see the "register on
+ * completion only" decision) — never at generation/start time. Exactly one
+ * of practiceAttemptId/writingSubmissionId/dailySessionSubmissionId must be
+ * provided, matching the 3-way chk_planned_activities_ai_link constraint
+ * (originally 2-way in AddAiLinkedPlannedActivities, extended by
+ * AddDailySessionModule).
  *
  * Takes a bare EntityManager (not PlanningRepository, which is DataSource-only)
  * so it composes into a transaction that a different service already owns.
@@ -56,6 +58,7 @@ async function createAiLinkedPlannedActivity(
     source: PlannedActivitySource.AI_GENERATED,
     practice_attempt_id: input.practiceAttemptId ?? null,
     writing_submission_id: input.writingSubmissionId ?? null,
+    daily_session_submission_id: input.dailySessionSubmissionId ?? null,
   });
 
   return plannedActivityRepo.save(entity);

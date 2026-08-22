@@ -32,6 +32,16 @@ import { PracticeAnswer } from '../models/PracticeAnswer';
 import { PracticeRecommendation } from '../models/PracticeRecommendation';
 import { WritingTask } from '../models/WritingTask';
 import { WritingSubmission } from '../models/WritingSubmission';
+import { CambridgeSource } from '../models/CambridgeSource';
+import { CambridgeKnowledgeItem } from '../models/CambridgeKnowledgeItem';
+import { ListeningSource } from '../models/ListeningSource';
+import { ListeningItem } from '../models/ListeningItem';
+import { MockAttempt } from '../models/MockAttempt';
+import { MockAttemptSection } from '../models/MockAttemptSection';
+import { DailySession } from '../models/DailySession';
+import { DailySessionItem } from '../models/DailySessionItem';
+import { DailySessionSubmission } from '../models/DailySessionSubmission';
+import { SpotifyConnection } from '../models/SpotifyConnection';
 
 function getSslConfig(): boolean | { rejectUnauthorized: boolean } {
   const databaseUrl: string = process.env.DATABASE_URL ?? '';
@@ -83,6 +93,16 @@ export const AppDataSource = new DataSource({
     PracticeRecommendation,
     WritingTask,
     WritingSubmission,
+    CambridgeSource,
+    CambridgeKnowledgeItem,
+    ListeningSource,
+    ListeningItem,
+    MockAttempt,
+    MockAttemptSection,
+    DailySession,
+    DailySessionItem,
+    DailySessionSubmission,
+    SpotifyConnection,
   ],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',

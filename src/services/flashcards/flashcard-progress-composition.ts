@@ -1,4 +1,4 @@
-import { getDatabaseConnection } from '../../lib/database';
+import { getDatabaseConnection } from '@lib/shared/database';
 import { FlashcardProgressService } from './flashcard-progress.service';
 
 interface FlashcardProgressServices {

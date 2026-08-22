@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { errorResponse, successResponse, handleError } from '@lib/response';
-import { getAuthenticatedPayload } from '@lib/jwt';
-import { mapGenerateFlashcardDraftError } from '@lib/generate-flashcard-draft-error-mapper';
+import { errorResponse, successResponse, handleError } from '@lib/shared/response';
+import { getAuthenticatedPayload } from '@lib/shared/jwt';
+import { mapGenerateFlashcardDraftError } from '@lib/flashcards/generate-flashcard-draft-error-mapper';
 import { buildGenerateFlashcardDraftServices } from '../services/flashcards/generate-flashcard-draft-composition';
 import type {
   GenerateFlashcardDraftRequest,

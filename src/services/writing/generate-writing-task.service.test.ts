@@ -14,7 +14,7 @@ import type { GenerateWritingTaskRequest } from '../../interfaces/writing/writin
 import type { WritingTaskSafeDto } from '../../interfaces/writing/writing-task.interface';
 import { WritingTaskType, EnglishLevel } from '../../models/enums';
 import type { WritingTask } from '../../models/WritingTask';
-import type { CreateTaskData } from '../../repositories/writing-tasks.repository';
+import type { CreateTaskData } from '@repositories/writing/writing-tasks.repository';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const IDEMPOTENCY_KEY = 'aaaaaaaa-1111-1111-1111-111111111111';
