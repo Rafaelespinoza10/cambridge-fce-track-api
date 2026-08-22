@@ -3,6 +3,13 @@ import type { APIGatewayProxyEvent } from 'aws-lambda';
 import type { JwtPayload } from '../../interfaces/auth/auth.interface';
 import type { SignOptions } from 'jsonwebtoken';
 
+interface StatePayload {
+  userId: string;
+  purpose: string;
+}
+
+const STATE_EXPIRES_IN = '10m';
+
 class JwtService {
   static sign(payload: JwtPayload): string {
     const secret = process.env.JWT_SECRET;
@@ -25,6 +32,26 @@ class JwtService {
 
     return jwt.verify(token, secret) as JwtPayload;
   }
+
+  static signState(payload: StatePayload): string {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+
+    return jwt.sign(payload, secret, { expiresIn: STATE_EXPIRES_IN } as SignOptions);
+  }
+
+  static verifyState(token: string): StatePayload {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+
+    return jwt.verify(token, secret) as StatePayload;
+  }
 }
 
 export function getAuthenticatedPayload(event: APIGatewayProxyEvent): JwtPayload | null {
@@ -39,3 +66,4 @@ export function getAuthenticatedPayload(event: APIGatewayProxyEvent): JwtPayload
 }
 
 export { JwtService };
+export type { StatePayload };

@@ -115,6 +115,8 @@ export enum ResourceType {
   VOCABULARY = 'vocabulary',
   GRAMMAR = 'grammar',
   WRITING_SAMPLE = 'writing_sample',
+  PODCAST = 'podcast',
+  PLAYLIST = 'playlist',
   OTHER = 'other',
 }
 
