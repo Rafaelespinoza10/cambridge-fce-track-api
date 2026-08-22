@@ -18,13 +18,34 @@ provider:
     DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
     JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
     JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
-    SPOTIFY_CLIENT_ID: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_CLIENT_ID}
-    SPOTIFY_CLIENT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_CLIENT_SECRET}
-    SPOTIFY_REDIRECT_URI: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_REDIRECT_URI}
-    SPOTIFY_TOKEN_ENCRYPTION_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_TOKEN_ENCRYPTION_KEY}
-    FRONTEND_APP_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.FRONTEND_APP_URL}
+    # TEMPORARILY COMMENTED OUT — bootstrap deploy only.
+    #
+    # SPOTIFY_REDIRECT_URI has to be this service's own deployed callback URL,
+    # registered verbatim in the Spotify dashboard. That URL doesn't exist
+    # until the service is deployed, so the first deploy goes out with these
+    # unset and only spotifyHealth wired up, purely to mint the API Gateway
+    # URL. Every other function in this service will throw until they're back.
+    #
+    # TO RESTORE: uncomment all five, fill the real values into
+    # serverless.env.yml, delete the spotifyHealth function below and
+    # src/controllers/spotifyHealthController.ts, then redeploy. Env vars are
+    # baked into the Lambda at deploy time, so a redeploy is required.
+    #
+    # SPOTIFY_CLIENT_ID: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_CLIENT_ID}
+    # SPOTIFY_CLIENT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_CLIENT_SECRET}
+    # SPOTIFY_REDIRECT_URI: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_REDIRECT_URI}
+    # SPOTIFY_TOKEN_ENCRYPTION_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.SPOTIFY_TOKEN_ENCRYPTION_KEY}
+    # FRONTEND_APP_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.FRONTEND_APP_URL}
 
 functions:
+  # TEMPORARY — remove together with the commented env vars above.
+  spotifyHealth:
+    handler: src/controllers/spotifyHealthController.health
+    events:
+      - httpApi:
+          path: /spotify/health
+          method: GET
+
   spotifyConnect:
     handler: src/controllers/spotifyController.connect
     events:
