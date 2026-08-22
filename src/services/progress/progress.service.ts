@@ -54,8 +54,8 @@ class ProgressService {
       overallRows,
     ] = await Promise.all([
       repo.getWeeklyActivityStats(userId, weekStart, weekEnd),
-      repo.getWeeklyScoreStats(userId, weekStart, weekEnd),
-      repo.getSkillAverages(userId, skillLookbackDate),
+      repo.getWeeklyScoreStats(userId, weekStart, weekEnd, timeZone),
+      repo.getSkillAverages(userId, skillLookbackDate, timeZone),
       repo.getStudyDates(userId, timeZone),
       repo.getLastMock(userId),
       repo.getMonthlySkillProgress(userId, weekStarts[0]!, timeZone),
@@ -204,7 +204,8 @@ class ProgressService {
 
     const ds = await getDatabaseConnection();
     const repo = new ProgressRepository(ds);
-    const rows = await repo.getScoreEvolution(userId, from, to);
+    const timeZone = await getUserTimeZone(ds, userId);
+    const rows = await repo.getScoreEvolution(userId, from, to, timeZone);
 
     return {
       scores: rows.map((row) => ({

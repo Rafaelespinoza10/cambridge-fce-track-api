@@ -160,13 +160,16 @@ class ProgressRepository {
     userId: string,
     weekStart: string,
     weekEnd: string,
+    timeZone: string,
   ): Promise<WeeklyScoreStats> {
     const rows = await this.ds.query<{ avg_score: string | null; study_minutes: string }[]>(
       `${UNIFIED_SCORES_CTE}
        SELECT AVG(percentage) AS avg_score, COALESCE(SUM(duration_minutes), 0) AS study_minutes
        FROM unified_scores
-       WHERE user_id = $1 AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')`,
-      [userId, weekStart, weekEnd],
+       WHERE user_id = $1
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)`,
+      [userId, weekStart, weekEnd, timeZone],
     );
     const row = rows[0];
 
@@ -178,15 +181,23 @@ class ProgressRepository {
     };
   }
 
-  async getSkillAverages(userId: string, since: string): Promise<SkillAverage[]> {
+  /**
+   * from/to are the USER's calendar days (the client builds them from local
+   * components), so the window has to be opened in the user's zone too.
+   * `$n::date` alone is midnight UTC: with a local 'to' of the 21st that cuts
+   * the window at 18:00 local, silently dropping every activity done that
+   * evening.
+   */
+  async getSkillAverages(userId: string, since: string, timeZone: string): Promise<SkillAverage[]> {
     const rows = await this.ds.query<{ skillName: string; avgScore: string }[]>(
       `${UNIFIED_SCORES_CTE}
        SELECT skill_name AS "skillName", AVG(percentage) AS "avgScore"
        FROM unified_scores
-       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL AND occurred_at >= $2::date
+       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $3)
        GROUP BY skill_name
        ORDER BY skill_name ASC`,
-      [userId, since],
+      [userId, since, timeZone],
     );
 
     return rows.map((r) => ({
@@ -242,7 +253,8 @@ class ProgressRepository {
               TO_CHAR(DATE_TRUNC('week', occurred_at AT TIME ZONE $3), 'YYYY-MM-DD') AS "weekStart",
               AVG(percentage) AS "avgScore"
        FROM unified_scores
-       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL AND occurred_at >= $2::date
+       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $3)
        GROUP BY skill_name, DATE_TRUNC('week', occurred_at AT TIME ZONE $3)
        ORDER BY skill_name ASC, DATE_TRUNC('week', occurred_at AT TIME ZONE $3) ASC`,
       [userId, since, timeZone],
@@ -310,7 +322,19 @@ class ProgressRepository {
    * doesn't map to a single skill and is left NULL, same as any other
    * unmapped row.
    */
-  async getScoreEvolution(userId: string, from: string, to: string): Promise<ScoreEvolutionRow[]> {
+  /**
+   * from/to are the USER's calendar days (the client builds them from local
+   * components), so the window has to be opened in the user's zone too.
+   * `$n::date` alone is midnight UTC: with a local 'to' of the 21st that cuts
+   * the window at 18:00 local, silently dropping every activity done that
+   * evening.
+   */
+  async getScoreEvolution(
+    userId: string,
+    from: string,
+    to: string,
+    timeZone: string,
+  ): Promise<ScoreEvolutionRow[]> {
     const rows = await this.ds.query<
       { occurredAt: Date; skillSlug: string | null; skillName: string | null; percentage: string }[]
     >(
@@ -348,17 +372,19 @@ class ProgressRepository {
        SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
        FROM unified_scores
        WHERE user_id = $1 AND skill_slug IS NOT NULL AND percentage IS NOT NULL
-         AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)
 
        UNION ALL
 
        SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
        FROM mock_scores
        WHERE skill_slug IS NOT NULL
-         AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)
 
        ORDER BY "occurredAt" ASC`,
-      [userId, from, to],
+      [userId, from, to, timeZone],
     );
 
     return rows
@@ -394,7 +420,8 @@ class ProgressRepository {
        SELECT TO_CHAR(DATE_TRUNC('week', occurred_at AT TIME ZONE $3), 'YYYY-MM-DD') AS "weekStart",
               AVG(percentage) AS "avgScore"
        FROM unified_scores
-       WHERE user_id = $1 AND percentage IS NOT NULL AND occurred_at >= $2::date
+       WHERE user_id = $1 AND percentage IS NOT NULL
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $3)
        GROUP BY DATE_TRUNC('week', occurred_at AT TIME ZONE $3)
        ORDER BY DATE_TRUNC('week', occurred_at AT TIME ZONE $3) ASC`,
       [userId, since, timeZone],
