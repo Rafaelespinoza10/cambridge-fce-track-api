@@ -207,3 +207,14 @@ export enum CambridgeSourceStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
 }
+
+export enum DailySessionSource {
+  AI = 'ai',
+  SYSTEM = 'system',
+}
+
+export enum DailySessionSubmissionStatus {
+  IN_PROGRESS = 'in_progress',
+  GRADED = 'graded',
+  ABANDONED = 'abandoned',
+}

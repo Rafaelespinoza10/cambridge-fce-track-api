@@ -34,6 +34,9 @@ import { WritingTask } from '../models/WritingTask';
 import { WritingSubmission } from '../models/WritingSubmission';
 import { CambridgeSource } from '../models/CambridgeSource';
 import { CambridgeKnowledgeItem } from '../models/CambridgeKnowledgeItem';
+import { DailySession } from '../models/DailySession';
+import { DailySessionItem } from '../models/DailySessionItem';
+import { DailySessionSubmission } from '../models/DailySessionSubmission';
 
 function getSslConfig(): boolean | { rejectUnauthorized: boolean } {
   const databaseUrl: string = process.env.DATABASE_URL ?? '';
@@ -87,6 +90,9 @@ export const AppDataSource = new DataSource({
     WritingSubmission,
     CambridgeSource,
     CambridgeKnowledgeItem,
+    DailySession,
+    DailySessionItem,
+    DailySessionSubmission,
   ],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',

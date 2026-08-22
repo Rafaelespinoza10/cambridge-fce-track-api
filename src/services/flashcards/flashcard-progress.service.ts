@@ -5,7 +5,7 @@ import { FlashcardPreferencesRepository } from '@repositories/flashcards/flashca
 import { DailyReviewStatsRepository } from '@repositories/flashcards/daily-review-stats.repository';
 import { FlashcardsRepository } from '@repositories/flashcards/flashcards.repository';
 
-import { resolveLocalDay, isValidTimeZone } from '@lib/flashcards/timezone';
+import { resolveLocalDay, isValidTimeZone } from '@lib/shared/timezone';
 import { calculateFlashcardStreak } from '@lib/flashcards/flashcard-streak';
 
 import type { User } from '../../models/User';

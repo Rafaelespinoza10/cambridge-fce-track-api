@@ -20,6 +20,7 @@ import type { StudySession } from './StudySession';
 import type { EvidenceFile } from './EvidenceFile';
 import type { PracticeAttempt } from './PracticeAttempt';
 import type { WritingSubmission } from './WritingSubmission';
+import type { DailySessionSubmission } from './DailySessionSubmission';
 
 @Entity('planned_activities')
 export class PlannedActivity {
@@ -89,6 +90,9 @@ export class PlannedActivity {
   @Column({ type: 'uuid', nullable: true })
   writing_submission_id: string | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  daily_session_submission_id: string | null;
+
   @CreateDateColumn({ type: 'timestamp with time zone' })
   created_at: Date;
 
@@ -136,4 +140,8 @@ export class PlannedActivity {
   @ManyToOne('WritingSubmission', { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'writing_submission_id' })
   writing_submission: WritingSubmission | null;
+
+  @ManyToOne('DailySessionSubmission', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'daily_session_submission_id' })
+  daily_session_submission: DailySessionSubmission | null;
 }
