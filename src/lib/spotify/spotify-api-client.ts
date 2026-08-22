@@ -21,32 +21,44 @@ interface SpotifyImage {
   width: number | null;
 }
 
+/**
+ * Nullable where Spotify actually is, not where its docs imply. A playlist
+ * with no cover comes back with `images: null` rather than `[]`, and `owner`
+ * and `tracks` can both be absent on playlists the account can no longer
+ * fully see. Declaring them non-null is what let a single odd playlist crash
+ * the whole listing.
+ */
 interface SpotifyPlaylistItem {
   id: string;
   name: string;
   description: string | null;
-  images: SpotifyImage[];
-  external_urls: { spotify: string };
-  owner: { display_name: string | null };
-  tracks: { total: number };
+  images: SpotifyImage[] | null;
+  external_urls: { spotify: string } | null;
+  owner: { display_name: string | null } | null;
+  tracks: { total: number } | null;
 }
 
 interface SpotifyShowItem {
   id: string;
   name: string;
-  publisher: string;
+  publisher: string | null;
   description: string | null;
-  images: SpotifyImage[];
-  external_urls: { spotify: string };
+  images: SpotifyImage[] | null;
+  external_urls: { spotify: string } | null;
 }
 
+/**
+ * `items` holds nulls, not just Ts. /me/playlists returns a null entry for a
+ * playlist that has become unavailable to the account — a long-standing
+ * Spotify behaviour — and collectAllPages drops them.
+ */
 interface SpotifyPage<T> {
-  items: T[];
+  items: (T | null)[] | null;
   next: string | null;
 }
 
 interface SpotifySavedShowItem {
-  show: SpotifyShowItem;
+  show: SpotifyShowItem | null;
 }
 
 interface SpotifyTokenResponse {
@@ -125,7 +137,12 @@ async function collectAllPages<T>(accessToken: string, firstPageUrl: string): Pr
 
   while (nextUrl !== null && pagesFetched < MAX_PAGES) {
     const page: SpotifyPage<T> = await apiGet<SpotifyPage<T>>(nextUrl, accessToken);
-    items.push(...page.items);
+    // A null entry is not an error, just an item this account can no longer
+    // see. Dropping it silently is right: the alternative was a TypeError in
+    // the DTO mapper, which surfaced as an opaque 500 for the entire list.
+    for (const item of page.items ?? []) {
+      if (item !== null && item !== undefined) items.push(item);
+    }
     nextUrl = page.next;
     pagesFetched += 1;
   }
@@ -174,7 +191,9 @@ export async function getMyShows(accessToken: string): Promise<SpotifyShowItem[]
     accessToken,
     `${API_BASE_URL}/me/shows?limit=${PAGE_LIMIT}`,
   );
-  return saved.map((entry) => entry.show);
+  return saved
+    .map((entry) => entry.show)
+    .filter((show): show is SpotifyShowItem => show !== null && show !== undefined);
 }
 
 export async function getPlaylistById(
