@@ -8,6 +8,8 @@ import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.
 import { StartDailySessionSubmissionService } from './start-daily-session-submission.service';
 import { SubmitDailySessionSubmissionService } from './submit-daily-session-submission.service';
 import type { LLMServicePort } from './submit-daily-session-submission.service';
+import { GetDailySessionSubmissionService } from './get-daily-session-submission.service';
+import { DailySessionSubmissionsRepository } from '@repositories/daily-session/daily-session-submissions.repository';
 
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
@@ -61,6 +63,7 @@ function getLazyLLMService(): LLMServicePort {
 interface DailySessionSubmissionServices {
   startSubmission: StartDailySessionSubmissionService;
   submitSubmission: SubmitDailySessionSubmissionService;
+  getSubmission: GetDailySessionSubmissionService;
 }
 
 async function buildDailySessionSubmissionServices(): Promise<DailySessionSubmissionServices> {
@@ -70,6 +73,9 @@ async function buildDailySessionSubmissionServices(): Promise<DailySessionSubmis
     startSubmission: new StartDailySessionSubmissionService(dataSource),
     submitSubmission: new SubmitDailySessionSubmissionService(dataSource, {
       llm: getLazyLLMService(),
+    }),
+    getSubmission: new GetDailySessionSubmissionService({
+      repository: new DailySessionSubmissionsRepository(dataSource),
     }),
   };
 }

@@ -57,6 +57,15 @@ functions:
           path: /daily-session/submissions/{submissionId}/submit
           method: POST
 
+  # "dailySessionSubGet" (not "dailySessionSubmissionGet") for the same
+  # 64-char margin reason as dailySessionStart above.
+  dailySessionSubGet:
+    handler: src/controllers/dailySessionSubmissionController.getDailySessionSubmission
+    events:
+      - httpApi:
+          path: /daily-session/submissions/{submissionId}
+          method: GET
+
 package:
   individually: true
 

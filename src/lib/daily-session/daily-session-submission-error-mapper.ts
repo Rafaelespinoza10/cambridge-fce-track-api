@@ -6,6 +6,10 @@ import {
   SubmitDailySessionSubmissionError,
   SubmitDailySessionSubmissionErrorCode,
 } from '../../services/daily-session/submit-daily-session-submission.service';
+import {
+  DailySessionSubmissionError,
+  DailySessionSubmissionErrorCode,
+} from '../../services/daily-session/get-daily-session-submission.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -28,12 +32,19 @@ const SUBMIT_STATUS_BY_CODE: Record<SubmitDailySessionSubmissionErrorCode, numbe
   [SubmitDailySessionSubmissionErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
 };
 
+const GET_STATUS_BY_CODE: Record<DailySessionSubmissionErrorCode, number> = {
+  [DailySessionSubmissionErrorCode.SUBMISSION_NOT_FOUND]: 404,
+};
+
 function mapDailySessionSubmissionError(error: unknown): unknown {
   if (error instanceof StartDailySessionSubmissionError) {
     return httpError(error.message, START_STATUS_BY_CODE[error.code]);
   }
   if (error instanceof SubmitDailySessionSubmissionError) {
     return httpError(error.message, SUBMIT_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof DailySessionSubmissionError) {
+    return httpError(error.message, GET_STATUS_BY_CODE[error.code]);
   }
   return error;
 }
