@@ -2,11 +2,7 @@ import type { DataSource, EntityManager, Repository } from 'typeorm';
 import { DailySession } from '@models/DailySession';
 import { DailySessionItem } from '@models/DailySessionItem';
 import { DailySessionSubmission } from '@models/DailySessionSubmission';
-import type {
-  DailySessionSource,
-  DailySessionSubmissionStatus,
-  EnglishLevel,
-} from '@models/enums';
+import type { DailySessionSource, DailySessionSubmissionStatus, EnglishLevel } from '@models/enums';
 import type {
   DailySessionItemOption,
   DailySessionItemAnswerKey,

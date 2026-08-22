@@ -130,9 +130,7 @@ function toItemDto(row: DailySessionHistoryRow): DailySessionHistoryItemDto {
     durationSeconds: submission?.durationSeconds ?? null,
     comprehensionCorrectCount: isGraded ? submission.comprehensionCorrectCount : null,
     comprehensionTotalCount: isGraded ? submission.comprehensionTotalCount : null,
-    comprehensionPercentage: isGraded
-      ? toNullableNumber(submission.comprehensionPercentage)
-      : null,
+    comprehensionPercentage: isGraded ? toNullableNumber(submission.comprehensionPercentage) : null,
     sentenceCorrectCount: isGraded ? (submission.sentenceFeedback?.correctCount ?? null) : null,
     sentenceTotalCount: isGraded ? (submission.sentenceFeedback?.totalCount ?? null) : null,
   };
