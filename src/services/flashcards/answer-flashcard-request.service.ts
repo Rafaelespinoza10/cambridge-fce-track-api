@@ -7,7 +7,7 @@ import {
   StartFlashcardReviewSessionErrorCode,
 } from './start-flashcard-review-session.service';
 
-import { resolveLocalDay, isValidTimeZone } from '@lib/flashcards/timezone';
+import { resolveLocalDay, isValidTimeZone } from '@lib/shared/timezone';
 
 import type { User } from '../../models/User';
 import type { AnswerFlashcardRequestInput } from '../../interfaces/flashcards/answer-flashcard-request.interface';

@@ -12,7 +12,7 @@ import type {
   CountDueOptions,
 } from '@repositories/flashcards/flashcards.repository';
 
-import { resolveLocalDay, isValidTimeZone } from '@lib/flashcards/timezone';
+import { resolveLocalDay, isValidTimeZone } from '@lib/shared/timezone';
 
 import type { User } from '../../models/User';
 import type { Deck } from '../../models/Deck';
