@@ -195,15 +195,22 @@ class ProgressRepository {
     }));
   }
 
-  async getStudyDates(userId: string): Promise<string[]> {
+  /**
+   * Distinct days the user studied, in THEIR timezone — this is what the
+   * study streak counts. Bucketing by the UTC day (as this used to) both
+   * broke and inflated streaks west of Greenwich: an evening session and the
+   * next morning's collapse into one UTC day, while a single Friday-evening
+   * session registers as Saturday.
+   */
+  async getStudyDates(userId: string, timeZone: string): Promise<string[]> {
     const rows = await this.ds.query<{ study_date: string }[]>(
       `${UNIFIED_SCORES_CTE}
-       SELECT TO_CHAR(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS study_date
+       SELECT TO_CHAR(occurred_at AT TIME ZONE $2, 'YYYY-MM-DD') AS study_date
        FROM unified_scores
        WHERE user_id = $1
        GROUP BY study_date
        ORDER BY study_date DESC`,
-      [userId],
+      [userId, timeZone],
     );
 
     return rows.map((r) => r.study_date);
@@ -219,16 +226,26 @@ class ProgressRepository {
       .getOne();
   }
 
-  async getMonthlySkillProgress(userId: string, since: string): Promise<SkillWeekRow[]> {
+  /**
+   * Weeks are the user's weeks. A bare DATE_TRUNC('week', occurred_at) on a
+   * timestamptz truncates in the CONNECTION's timezone (UTC here), so a
+   * Sunday-evening session fell into the following week's bucket.
+   */
+  async getMonthlySkillProgress(
+    userId: string,
+    since: string,
+    timeZone: string,
+  ): Promise<SkillWeekRow[]> {
     const rows = await this.ds.query<{ skillName: string; weekStart: string; avgScore: string }[]>(
       `${UNIFIED_SCORES_CTE}
-       SELECT skill_name AS "skillName", TO_CHAR(DATE_TRUNC('week', occurred_at), 'YYYY-MM-DD') AS "weekStart",
+       SELECT skill_name AS "skillName",
+              TO_CHAR(DATE_TRUNC('week', occurred_at AT TIME ZONE $3), 'YYYY-MM-DD') AS "weekStart",
               AVG(percentage) AS "avgScore"
        FROM unified_scores
        WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL AND occurred_at >= $2::date
-       GROUP BY skill_name, DATE_TRUNC('week', occurred_at)
-       ORDER BY skill_name ASC, DATE_TRUNC('week', occurred_at) ASC`,
-      [userId, since],
+       GROUP BY skill_name, DATE_TRUNC('week', occurred_at AT TIME ZONE $3)
+       ORDER BY skill_name ASC, DATE_TRUNC('week', occurred_at AT TIME ZONE $3) ASC`,
+      [userId, since, timeZone],
     );
 
     return rows.map((r) => ({
@@ -238,18 +255,28 @@ class ProgressRepository {
     }));
   }
 
-  async getRecentActivities(userId: string, limit: number): Promise<RecentActivityRow[]> {
+  /**
+   * `date` is a display value the client renders as a weekday ("Vie", "Hoy"),
+   * so it has to be the user's calendar day. Formatting the instant in UTC
+   * made anything finished after ~18:00 west of Greenwich show up as the
+   * following day.
+   */
+  async getRecentActivities(
+    userId: string,
+    limit: number,
+    timeZone: string,
+  ): Promise<RecentActivityRow[]> {
     const rows = await this.ds.query<
       { id: string; title: string; skillName: string | null; score: string | null; date: string }[]
     >(
       `${UNIFIED_SCORES_CTE}
        SELECT id, title, skill_name AS "skillName", percentage AS score,
-              TO_CHAR(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date
+              TO_CHAR(occurred_at AT TIME ZONE $3, 'YYYY-MM-DD') AS date
        FROM unified_scores
        WHERE user_id = $1
        ORDER BY occurred_at DESC
        LIMIT $2`,
-      [userId, limit],
+      [userId, limit, timeZone],
     );
 
     return rows.map((r) => ({
@@ -356,16 +383,21 @@ class ProgressRepository {
       .getOne();
   }
 
-  async getOverallWeeklyScores(userId: string, since: string): Promise<OverallWeekRow[]> {
+  /** Same user-week bucketing as getMonthlySkillProgress — see the note there. */
+  async getOverallWeeklyScores(
+    userId: string,
+    since: string,
+    timeZone: string,
+  ): Promise<OverallWeekRow[]> {
     const rows = await this.ds.query<{ weekStart: string; avgScore: string }[]>(
       `${UNIFIED_SCORES_CTE}
-       SELECT TO_CHAR(DATE_TRUNC('week', occurred_at), 'YYYY-MM-DD') AS "weekStart",
+       SELECT TO_CHAR(DATE_TRUNC('week', occurred_at AT TIME ZONE $3), 'YYYY-MM-DD') AS "weekStart",
               AVG(percentage) AS "avgScore"
        FROM unified_scores
        WHERE user_id = $1 AND percentage IS NOT NULL AND occurred_at >= $2::date
-       GROUP BY DATE_TRUNC('week', occurred_at)
-       ORDER BY DATE_TRUNC('week', occurred_at) ASC`,
-      [userId, since],
+       GROUP BY DATE_TRUNC('week', occurred_at AT TIME ZONE $3)
+       ORDER BY DATE_TRUNC('week', occurred_at AT TIME ZONE $3) ASC`,
+      [userId, since, timeZone],
     );
 
     return rows.map((r) => ({

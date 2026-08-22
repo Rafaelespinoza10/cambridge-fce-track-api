@@ -1,4 +1,4 @@
-import type { EntityManager } from 'typeorm';
+import type { DataSource, EntityManager } from 'typeorm';
 import { UserProfile } from '../../models/UserProfile';
 import { resolveLocalDay, isValidTimeZone } from '@lib/shared/timezone';
 
@@ -29,12 +29,30 @@ export async function resolveUserLocalDayKey(
   userId: string,
   instant: Date,
 ): Promise<string> {
-  const profile = await manager
+  const timezone = await getUserTimeZone(manager, userId);
+  return resolveLocalDay(instant, timezone).localDate;
+}
+
+/**
+ * The user's IANA timezone, already validated, falling back to UTC.
+ *
+ * Separate from resolveUserLocalDayKey because SQL sometimes needs the zone
+ * itself rather than one resolved day: the Progress metrics bucket instants
+ * into days and weeks inside Postgres (`AT TIME ZONE $tz`), which can't be
+ * expressed as a per-instant call from JS.
+ *
+ * Always returns a zone Postgres will accept: an unset or unparseable stored
+ * value becomes 'UTC' rather than reaching a query, where a bad identifier
+ * would raise `invalid value for parameter TimeZone` and fail the request.
+ */
+export async function getUserTimeZone(
+  source: DataSource | EntityManager,
+  userId: string,
+): Promise<string> {
+  const profile = await source
     .getRepository(UserProfile)
     .findOne({ where: { user_id: userId }, select: { timezone: true } });
 
   const stored = profile?.timezone ?? null;
-  const timezone = stored !== null && isValidTimeZone(stored) ? stored : DEFAULT_TIMEZONE;
-
-  return resolveLocalDay(instant, timezone).localDate;
+  return stored !== null && isValidTimeZone(stored) ? stored : DEFAULT_TIMEZONE;
 }
