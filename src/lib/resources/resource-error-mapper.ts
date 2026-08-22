@@ -8,6 +8,7 @@ const RESOURCE_STATUS_BY_CODE: Record<ResourceErrorCode, number> = {
   [ResourceErrorCode.INVALID_INPUT]: 400,
   [ResourceErrorCode.RESOURCE_NOT_FOUND]: 404,
   [ResourceErrorCode.RESOURCE_NOT_DELETABLE]: 403,
+  [ResourceErrorCode.RESOURCE_NOT_EDITABLE]: 403,
 };
 
 function mapResourceError(error: unknown): unknown {

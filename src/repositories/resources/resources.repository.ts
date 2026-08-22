@@ -11,6 +11,13 @@ interface CreateResourceData {
   imageUrl?: string | null;
 }
 
+interface UpdateResourceData {
+  title?: string;
+  description?: string | null;
+  url?: string;
+  imageUrl?: string | null;
+}
+
 class ResourcesRepository {
   private readonly repo: Repository<Resource>;
 
@@ -73,7 +80,23 @@ class ResourcesRepository {
   async softDelete(resourceId: string, userId: string): Promise<UpdateResult> {
     return this.repo.softDelete({ id: resourceId, user_id: userId });
   }
+
+  async update(
+    resourceId: string,
+    userId: string,
+    data: UpdateResourceData,
+  ): Promise<UpdateResult> {
+    return this.repo.update(
+      { id: resourceId, user_id: userId },
+      {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.url !== undefined && { url: data.url }),
+        ...(data.imageUrl !== undefined && { image_url: data.imageUrl }),
+      },
+    );
+  }
 }
 
 export { ResourcesRepository };
-export type { CreateResourceData };
+export type { CreateResourceData, UpdateResourceData };
