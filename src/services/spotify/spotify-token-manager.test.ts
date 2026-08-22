@@ -58,12 +58,19 @@ describe('SpotifyTokenManager.getValidAccessToken', () => {
 
   it('refreshes and persists rotated tokens when the access token is expired', async () => {
     const connection = makeConnection({ token_expires_at: new Date(Date.now() - 1000) });
-    let persisted: { userId: string; accessTokenEncrypted: string; refreshTokenEncrypted: string } | null =
-      null;
+    let persisted: {
+      userId: string;
+      accessTokenEncrypted: string;
+      refreshTokenEncrypted: string;
+    } | null = null;
     const deps: SpotifyTokenManagerDeps = {
       refreshAccessToken: async (refreshToken) => {
         assert.equal(refreshToken, 'current-refresh-token');
-        return { accessToken: 'refreshed-access-token', refreshToken: 'rotated-refresh-token', expiresIn: 3600 };
+        return {
+          accessToken: 'refreshed-access-token',
+          refreshToken: 'rotated-refresh-token',
+          expiresIn: 3600,
+        };
       },
       persistTokens: async (userId, data) => {
         persisted = {

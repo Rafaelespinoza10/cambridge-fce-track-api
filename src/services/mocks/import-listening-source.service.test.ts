@@ -8,7 +8,10 @@ import {
   ImportListeningSourceErrorCode,
 } from './import-listening-source.service';
 import type { ListeningSourcesRepositoryPort } from './import-listening-source.service';
-import type { ImportListeningSourceInput, ImportListeningItemInput } from './import-listening-source.service';
+import type {
+  ImportListeningSourceInput,
+  ImportListeningItemInput,
+} from './import-listening-source.service';
 
 const FAKE_DATA_SOURCE = {} as DataSource;
 
@@ -27,7 +30,9 @@ function validItem(position: number): ImportListeningItemInput {
   };
 }
 
-function validInput(overrides: Partial<ImportListeningSourceInput> = {}): ImportListeningSourceInput {
+function validInput(
+  overrides: Partial<ImportListeningSourceInput> = {},
+): ImportListeningSourceInput {
   return {
     paperCode: 'PAPER_3',
     partCode: 'LISTENING_PART_1',

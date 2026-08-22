@@ -155,7 +155,8 @@ function validateComprehensionAnswersShape(
 
 /** Strips any extra client-supplied properties (e.g. a spoofed `isCorrect`) — only the fields the kind actually needs survive. */
 function toCleanPayload(payload: DailySessionAnswerPayload): DailySessionAnswerPayload {
-  if (payload.kind === 'single_choice') return { kind: 'single_choice', optionId: payload.optionId };
+  if (payload.kind === 'single_choice')
+    return { kind: 'single_choice', optionId: payload.optionId };
   if (payload.kind === 'text') return { kind: 'text', value: payload.value };
   return { kind: 'unanswered' };
 }
@@ -238,7 +239,13 @@ const RESPONSE_SCHEMA: LLMJsonSchema = {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['targetIndex', 'usesTargetCorrectly', 'feedback', 'correctedSentence', 'evidenceQuote'],
+          required: [
+            'targetIndex',
+            'usesTargetCorrectly',
+            'feedback',
+            'correctedSentence',
+            'evidenceQuote',
+          ],
           properties: {
             targetIndex: {
               type: 'integer',
@@ -249,7 +256,7 @@ const RESPONSE_SCHEMA: LLMJsonSchema = {
             correctedSentence: { type: ['string', 'null'] },
             evidenceQuote: {
               type: ['string', 'null'],
-              description: 'Copied verbatim from that target\'s own submitted sentence, or null.',
+              description: "Copied verbatim from that target's own submitted sentence, or null.",
             },
           },
         },
@@ -469,7 +476,10 @@ export class SubmitDailySessionSubmissionService {
     // ── Comprehension: pure, deterministic, no LLM ─────────────────────────
 
     const itemsById = new Map(items.map((item) => [item.id, item]));
-    const submittedByItemId = new Map<string, { itemId: string; answer: DailySessionAnswerPayload }>();
+    const submittedByItemId = new Map<
+      string,
+      { itemId: string; answer: DailySessionAnswerPayload }
+    >();
     for (const answer of comprehensionAnswers) {
       if (submittedByItemId.has(answer.itemId)) {
         invalidInput(`duplicate answer submitted for item ${answer.itemId}`);

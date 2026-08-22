@@ -38,7 +38,10 @@ export class GetMockAttemptService {
   async execute(userId: string, attemptId: string): Promise<MockAttemptSafeDto> {
     const attempt = await this.deps.repository.findByIdForUser(attemptId, userId);
     if (attempt === null) {
-      throw new GetMockAttemptError('Mock attempt not found', GetMockAttemptErrorCode.ATTEMPT_NOT_FOUND);
+      throw new GetMockAttemptError(
+        'Mock attempt not found',
+        GetMockAttemptErrorCode.ATTEMPT_NOT_FOUND,
+      );
     }
     const sections = await this.deps.repository.findSectionsByAttempt(attemptId);
     return toMockAttemptSafeDto(attempt, sections);

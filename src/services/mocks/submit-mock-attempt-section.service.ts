@@ -3,7 +3,11 @@ import { MockAttemptsRepository } from '@repositories/mocks/mock-attempts.reposi
 import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
 import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
 import { ListeningSourcesRepository } from '@repositories/mocks/listening-sources.repository';
-import { MockAttemptStatus, MockAttemptSectionStatus, MockAttemptSectionContentType } from '@models/enums';
+import {
+  MockAttemptStatus,
+  MockAttemptSectionStatus,
+  MockAttemptSectionContentType,
+} from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
 import type { PracticeItem } from '@models/PracticeItem';
@@ -19,10 +23,7 @@ import {
   roundToTwoDecimals,
 } from '@lib/practice/practice-attempt-grading';
 import { isMockAttemptObjectiveAnswer } from '@lib/mocks/mock-attempt-jsonb-validators';
-import {
-  gradeWritingSubmission,
-  WritingGradingError,
-} from '@lib/writing/writing-grading';
+import { gradeWritingSubmission, WritingGradingError } from '@lib/writing/writing-grading';
 import type { WritingGradingLLMPort } from '@lib/writing/writing-grading';
 import { findMockAttemptSectionCatalogEntry } from '@lib/mocks/mock-attempt-catalog';
 import { toMockAttemptSectionSafeDto } from '@lib/mocks/mock-attempt-dto';
@@ -116,10 +117,7 @@ const DEFAULT_LISTENING_SOURCES_FACTORY = (
 ): ListeningSourcesRepositoryPort => new ListeningSourcesRepository(dataSource);
 
 function invalidInput(message: string): never {
-  throw new SubmitMockAttemptSectionError(
-    message,
-    SubmitMockAttemptSectionErrorCode.INVALID_INPUT,
-  );
+  throw new SubmitMockAttemptSectionError(message, SubmitMockAttemptSectionErrorCode.INVALID_INPUT);
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -140,7 +138,11 @@ function mapWritingError(error: unknown): SubmitMockAttemptSectionError {
 }
 
 function buildResultFromSection(section: MockAttemptSection): MockAttemptSectionResultDto {
-  if (section.raw_score === null || section.max_score === null || section.grading_feedback === null) {
+  if (
+    section.raw_score === null ||
+    section.max_score === null ||
+    section.grading_feedback === null
+  ) {
     throw new SubmitMockAttemptSectionError(
       'Mock attempt section is completed but missing its grading result',
       SubmitMockAttemptSectionErrorCode.PERSISTENCE_INCONSISTENCY,

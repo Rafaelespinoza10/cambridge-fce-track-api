@@ -38,12 +38,12 @@ export interface MockAttemptsRepositoryPort {
 }
 
 export interface MocksRepositoryPort {
-  createMock(data: Parameters<MocksRepository['createMock']>[0]): ReturnType<
-    MocksRepository['createMock']
-  >;
-  createSections(data: Parameters<MocksRepository['createSections']>[0]): ReturnType<
-    MocksRepository['createSections']
-  >;
+  createMock(
+    data: Parameters<MocksRepository['createMock']>[0],
+  ): ReturnType<MocksRepository['createMock']>;
+  createSections(
+    data: Parameters<MocksRepository['createSections']>[0],
+  ): ReturnType<MocksRepository['createSections']>;
   resolveExamSectionIds(
     ...args: Parameters<MocksRepository['resolveExamSectionIds']>
   ): ReturnType<MocksRepository['resolveExamSectionIds']>;

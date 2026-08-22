@@ -14,7 +14,10 @@ import type {
   SearchKnowledgePort,
 } from './generate-daily-session.service';
 import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.types';
-import type { CreateSessionData, CreateItemData } from '@repositories/daily-session/daily-sessions.repository';
+import type {
+  CreateSessionData,
+  CreateItemData,
+} from '@repositories/daily-session/daily-sessions.repository';
 import type { DailySession } from '../../models/DailySession';
 import type { User } from '../../models/User';
 import type { DailySessionSafeWithItems } from '../../interfaces/daily-session/daily-session.interface';
@@ -109,7 +112,8 @@ function makeService(
     },
   };
   const users = (): UsersRepositoryPort => ({
-    findUserWithProfile: async () => (overrides.user === undefined ? USER_WITH_TIMEZONE : overrides.user),
+    findUserWithProfile: async () =>
+      overrides.user === undefined ? USER_WITH_TIMEZONE : overrides.user,
   });
   const dailySessions = (): DailySessionsRepositoryPort => ({
     createSession: async (data) => {
@@ -124,7 +128,8 @@ function makeService(
     findSafeSessionForUser: overrides.findSafeSessionForUser ?? (async () => SAFE_RESULT),
     findByUserAndSessionDate: async (userId, sessionDate) => {
       calls.findByUserAndSessionDate.push({ userId, sessionDate });
-      if (overrides.findByUserAndSessionDate) return overrides.findByUserAndSessionDate(userId, sessionDate);
+      if (overrides.findByUserAndSessionDate)
+        return overrides.findByUserAndSessionDate(userId, sessionDate);
       return null;
     },
   });
@@ -182,7 +187,11 @@ describe('GenerateDailySessionService.execute — happy path', () => {
   it('folds Knowledge Base search results into generation_metadata.knowledgeSourceNames, never the raw content', async () => {
     const searchKnowledge: SearchKnowledgePort = {
       execute: async () => [
-        { content: 'Some real Cambridge excerpt about bees.', sourceName: 'B2 First Handbook', sourcePage: 12 },
+        {
+          content: 'Some real Cambridge excerpt about bees.',
+          sourceName: 'B2 First Handbook',
+          sourcePage: 12,
+        },
       ],
     };
     const { calls } = await (async () => {
@@ -193,7 +202,10 @@ describe('GenerateDailySessionService.execute — happy path', () => {
 
     const metadata = calls.createSession[0]?.generationMetadata;
     assert.ok(metadata);
-    assert.deepEqual(metadata?.knowledgeSourceNames, ['B2 First Handbook p.12', 'B2 First Handbook p.12']);
+    assert.deepEqual(metadata?.knowledgeSourceNames, [
+      'B2 First Handbook p.12',
+      'B2 First Handbook p.12',
+    ]);
     assert.equal(JSON.stringify(metadata).includes('Some real Cambridge excerpt'), false);
   });
 
@@ -232,7 +244,8 @@ describe('GenerateDailySessionService.execute — idempotency', () => {
         if (attempt === 1) throw IDEMPOTENCY_CONSTRAINT_ERROR;
         return { id: 'session-id' } as DailySession;
       },
-      findByUserAndSessionDate: async () => (attempt >= 1 ? ({ id: 'session-id' } as DailySession) : null),
+      findByUserAndSessionDate: async () =>
+        attempt >= 1 ? ({ id: 'session-id' } as DailySession) : null,
     });
     const result = await service.execute(USER_ID, REQUESTED_AT);
     assert.deepEqual(result, SAFE_RESULT);
@@ -249,7 +262,10 @@ describe('GenerateDailySessionService.execute — idempotency', () => {
         throw unrelatedError;
       },
     });
-    await assert.rejects(() => service.execute(USER_ID, REQUESTED_AT), (err) => err === unrelatedError);
+    await assert.rejects(
+      () => service.execute(USER_ID, REQUESTED_AT),
+      (err) => err === unrelatedError,
+    );
   });
 });
 

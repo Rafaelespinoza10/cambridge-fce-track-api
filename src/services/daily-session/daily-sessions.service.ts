@@ -15,7 +15,10 @@ export class DailySessionError extends Error {
 }
 
 interface DailySessionsRepositoryPort {
-  findSafeSessionForUser(sessionId: string, userId: string): Promise<DailySessionSafeWithItems | null>;
+  findSafeSessionForUser(
+    sessionId: string,
+    userId: string,
+  ): Promise<DailySessionSafeWithItems | null>;
 }
 
 export interface DailySessionsServiceDeps {
@@ -29,7 +32,10 @@ export class DailySessionsService {
   async getSession(userId: string, sessionId: string): Promise<DailySessionSafeWithItems> {
     const result = await this.deps.repository.findSafeSessionForUser(sessionId, userId);
     if (result === null) {
-      throw new DailySessionError('Daily session not found', DailySessionErrorCode.SESSION_NOT_FOUND);
+      throw new DailySessionError(
+        'Daily session not found',
+        DailySessionErrorCode.SESSION_NOT_FOUND,
+      );
     }
     return result;
   }

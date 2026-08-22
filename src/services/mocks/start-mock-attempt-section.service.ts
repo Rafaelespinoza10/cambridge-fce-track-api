@@ -4,7 +4,11 @@ import { PracticeExercisesRepository } from '@repositories/practice/practice-exe
 import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
 import { ListeningSourcesRepository } from '@repositories/mocks/listening-sources.repository';
 import type { ListeningSourceSafeWithItems } from '@repositories/mocks/listening-sources.repository';
-import { MockAttemptStatus, MockAttemptSectionStatus, MockAttemptSectionContentType } from '@models/enums';
+import {
+  MockAttemptStatus,
+  MockAttemptSectionStatus,
+  MockAttemptSectionContentType,
+} from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
 import type { PracticeExerciseSafeWithItems } from '../../interfaces/practice/practice-exercise.interface';

@@ -135,7 +135,9 @@ function makeService(
     findByIdForUser: async () =>
       overrides.submission === undefined ? makeInProgressSubmission() : overrides.submission,
     findByIdForUpdate: async () =>
-      overrides.lockedSubmission === undefined ? makeInProgressSubmission() : overrides.lockedSubmission,
+      overrides.lockedSubmission === undefined
+        ? makeInProgressSubmission()
+        : overrides.lockedSubmission,
     gradeSubmission: async (submissionId, userId, data) => {
       calls.gradeSubmission.push({ submissionId, userId, data });
       return { affected: overrides.gradeSubmissionAffected ?? 1 };
@@ -195,18 +197,30 @@ describe('SubmitDailySessionSubmissionService.execute — happy path', () => {
     assert.equal(linked.dailySessionSubmissionId, SUBMISSION_ID);
   });
 
-  it('never trusts the model\'s own correctCount — always recomputed from usesTargetCorrectly', async () => {
+  it("never trusts the model's own correctCount — always recomputed from usesTargetCorrectly", async () => {
     const { service } = makeService(async () => ({
       items: [
-        { targetIndex: 1, usesTargetCorrectly: true, feedback: 'ok', correctedSentence: null, evidenceQuote: null },
-        { targetIndex: 2, usesTargetCorrectly: true, feedback: 'ok', correctedSentence: null, evidenceQuote: null },
+        {
+          targetIndex: 1,
+          usesTargetCorrectly: true,
+          feedback: 'ok',
+          correctedSentence: null,
+          evidenceQuote: null,
+        },
+        {
+          targetIndex: 2,
+          usesTargetCorrectly: true,
+          feedback: 'ok',
+          correctedSentence: null,
+          evidenceQuote: null,
+        },
       ],
     }));
     const result = await service.execute(USER_ID, SUBMISSION_ID, validInput(), SUBMITTED_AT);
     assert.equal(result.result.sentenceFeedback.correctCount, 2);
   });
 
-  it('drops an evidenceQuote that is not a real substring of that target\'s own submitted sentence', async () => {
+  it("drops an evidenceQuote that is not a real substring of that target's own submitted sentence", async () => {
     const { service } = makeService(async () => ({
       items: [
         {
@@ -256,7 +270,12 @@ describe('SubmitDailySessionSubmissionService.execute — status handling', () =
       comprehension_total_count: 2,
       comprehension_percentage: '50',
       sentence_submissions: [],
-      sentence_feedback: { version: 'daily-session-sentence-feedback-v1', items: [], correctCount: 0, totalCount: 0 },
+      sentence_feedback: {
+        version: 'daily-session-sentence-feedback-v1',
+        items: [],
+        correctCount: 0,
+        totalCount: 0,
+      },
     } as unknown as DailySessionSubmission;
 
     const { service, llmCallCount } = makeService(async () => validSentenceGradingResponse(), {
@@ -268,8 +287,13 @@ describe('SubmitDailySessionSubmissionService.execute — status handling', () =
   });
 
   it('rejects submitting an abandoned submission', async () => {
-    const abandoned = { ...makeInProgressSubmission(), status: DailySessionSubmissionStatus.ABANDONED } as DailySessionSubmission;
-    const { service } = makeService(async () => validSentenceGradingResponse(), { submission: abandoned });
+    const abandoned = {
+      ...makeInProgressSubmission(),
+      status: DailySessionSubmissionStatus.ABANDONED,
+    } as DailySessionSubmission;
+    const { service } = makeService(async () => validSentenceGradingResponse(), {
+      submission: abandoned,
+    });
     await assert.rejects(
       () => service.execute(USER_ID, SUBMISSION_ID, validInput(), SUBMITTED_AT),
       (err) => assertErr(err, SubmitDailySessionSubmissionErrorCode.SUBMISSION_ABANDONED),
@@ -287,12 +311,20 @@ describe('SubmitDailySessionSubmissionService.execute — status handling', () =
       comprehension_total_count: 2,
       comprehension_percentage: '100',
       sentence_submissions: [],
-      sentence_feedback: { version: 'daily-session-sentence-feedback-v1', items: [], correctCount: 2, totalCount: 2 },
+      sentence_feedback: {
+        version: 'daily-session-sentence-feedback-v1',
+        items: [],
+        correctCount: 2,
+        totalCount: 2,
+      },
     } as unknown as DailySessionSubmission;
 
-    const { service, llmCallCount, calls } = makeService(async () => validSentenceGradingResponse(), {
-      lockedSubmission: gradedByWinner,
-    });
+    const { service, llmCallCount, calls } = makeService(
+      async () => validSentenceGradingResponse(),
+      {
+        lockedSubmission: gradedByWinner,
+      },
+    );
     const result = await service.execute(USER_ID, SUBMISSION_ID, validInput(), SUBMITTED_AT);
     assert.equal(result.idempotentReplay, true);
     assert.equal(result.result.comprehensionCorrectCount, 2); // the winner's result, not ours
@@ -301,7 +333,9 @@ describe('SubmitDailySessionSubmissionService.execute — status handling', () =
   });
 
   it('rejects a missing submission', async () => {
-    const { service } = makeService(async () => validSentenceGradingResponse(), { submission: null });
+    const { service } = makeService(async () => validSentenceGradingResponse(), {
+      submission: null,
+    });
     await assert.rejects(
       () => service.execute(USER_ID, SUBMISSION_ID, validInput(), SUBMITTED_AT),
       (err) => assertErr(err, SubmitDailySessionSubmissionErrorCode.SUBMISSION_NOT_FOUND),

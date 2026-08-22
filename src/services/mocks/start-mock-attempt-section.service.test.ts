@@ -15,7 +15,13 @@ import type {
   GeneratePracticeExercisePort,
   GenerateWritingTaskPort,
 } from './start-mock-attempt-section.service';
-import { ExamType, MockAttemptStatus, MockAttemptSectionStatus, MockAttemptSectionContentType, WritingTaskType } from '@models/enums';
+import {
+  ExamType,
+  MockAttemptStatus,
+  MockAttemptSectionStatus,
+  MockAttemptSectionContentType,
+  WritingTaskType,
+} from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
 
@@ -105,7 +111,8 @@ function makeHarness(opts: {
     },
   };
   const practiceExercises: PracticeExercisesRepositoryPort = {
-    findSafeExerciseWithItemsForUser: async () => ({ exercise: { id: 'exercise-1' }, items: [] }) as never,
+    findSafeExerciseWithItemsForUser: async () =>
+      ({ exercise: { id: 'exercise-1' }, items: [] }) as never,
   };
   const writingTasks: WritingTasksRepositoryPort = {
     findSafeTaskForUser: async () => ({ id: 'task-1' }) as never,
@@ -139,7 +146,9 @@ describe('StartMockAttemptSectionService.execute', () => {
 
     assert.equal(result.content.contentType, 'practice_exercise');
     assert.equal(generateExerciseCalls.length, 1);
-    const call = generateExerciseCalls[0] as { request: { partCode: string; idempotencyKey: string } };
+    const call = generateExerciseCalls[0] as {
+      request: { partCode: string; idempotencyKey: string };
+    };
     assert.equal(call.request.partCode, 'UOE_PART_1');
     assert.equal(call.request.idempotencyKey, `${ATTEMPT_ID}:uoe-part-1`);
     assert.equal(startCalls.length, 1);

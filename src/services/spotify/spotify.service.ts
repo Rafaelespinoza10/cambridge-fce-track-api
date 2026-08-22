@@ -6,7 +6,11 @@ import type {
   UpdateSpotifyConnectionTokensData,
 } from '@repositories/spotify/spotify-connection.repository';
 import * as spotifyApiClient from '@lib/spotify/spotify-api-client';
-import type { SpotifyPlaylistItem, SpotifyShowItem, SpotifyTokens } from '@lib/spotify/spotify-api-client';
+import type {
+  SpotifyPlaylistItem,
+  SpotifyShowItem,
+  SpotifyTokens,
+} from '@lib/spotify/spotify-api-client';
 import { JwtService } from '@lib/shared/jwt';
 import { encrypt } from '@lib/shared/crypto';
 import { ResourceType } from '@models/enums';
@@ -130,7 +134,8 @@ class SpotifyService {
   private tokenManager(): SpotifyTokenManager {
     const repo = this.connectionsRepo();
     return new SpotifyTokenManager({
-      refreshAccessToken: (refreshToken) => this.deps.spotifyClient.refreshAccessToken(refreshToken),
+      refreshAccessToken: (refreshToken) =>
+        this.deps.spotifyClient.refreshAccessToken(refreshToken),
       persistTokens: (userId, data) =>
         repo.updateTokens(userId, {
           accessTokenEncrypted: data.accessTokenEncrypted,
@@ -243,4 +248,9 @@ class SpotifyService {
 }
 
 export { SpotifyService };
-export type { SpotifyConnectionRepositoryPort, SpotifyClientPort, ResourcesServicePort, SpotifyServiceDeps };
+export type {
+  SpotifyConnectionRepositoryPort,
+  SpotifyClientPort,
+  ResourcesServicePort,
+  SpotifyServiceDeps,
+};

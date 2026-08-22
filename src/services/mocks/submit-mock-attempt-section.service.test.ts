@@ -13,7 +13,13 @@ import type {
   ListeningSourcesRepositoryPort,
   WritingTasksRepositoryPort,
 } from './submit-mock-attempt-section.service';
-import { ExamType, MockAttemptStatus, MockAttemptSectionStatus, MockAttemptSectionContentType, WritingTaskType } from '@models/enums';
+import {
+  ExamType,
+  MockAttemptStatus,
+  MockAttemptSectionStatus,
+  MockAttemptSectionContentType,
+  WritingTaskType,
+} from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
 import type { PracticeItem } from '@models/PracticeItem';
@@ -134,8 +140,7 @@ function makeService(opts: {
     findByIdForUser: async () => opts.task ?? null,
   };
   const listeningSources: ListeningSourcesRepositoryPort = {
-    findItemsWithAnswerKeysBySourceId: async () =>
-      (opts.listeningItems ?? []) as never,
+    findItemsWithAnswerKeysBySourceId: async () => (opts.listeningItems ?? []) as never,
   };
 
   const service = new SubmitMockAttemptSectionService(FAKE_DATA_SOURCE, {
@@ -153,7 +158,13 @@ function makeService(opts: {
     now: () => SUBMITTED_AT,
   });
 
-  return { service, completeCalls, get llmCalls() { return llmCalls; } } as Harness;
+  return {
+    service,
+    completeCalls,
+    get llmCalls() {
+      return llmCalls;
+    },
+  } as Harness;
 }
 
 describe('SubmitMockAttemptSectionService.execute — objective sections', () => {
@@ -161,13 +172,19 @@ describe('SubmitMockAttemptSectionService.execute — objective sections', () =>
     const items = [makeItem('item-1', 'a'), makeItem('item-2', 'a'), makeItem('item-3', 'a')];
     const { service, completeCalls } = makeService({ section: makeSection(), items });
 
-    const result = await service.execute(USER_ID, ATTEMPT_ID, 'uoe-part-1', {
-      answers: [
-        { itemId: 'item-1', answer: { kind: 'single_choice', optionId: 'a' } }, // correct
-        { itemId: 'item-2', answer: { kind: 'single_choice', optionId: 'b' } }, // wrong
-        // item-3 left unanswered
-      ],
-    }, SUBMITTED_AT);
+    const result = await service.execute(
+      USER_ID,
+      ATTEMPT_ID,
+      'uoe-part-1',
+      {
+        answers: [
+          { itemId: 'item-1', answer: { kind: 'single_choice', optionId: 'a' } }, // correct
+          { itemId: 'item-2', answer: { kind: 'single_choice', optionId: 'b' } }, // wrong
+          // item-3 left unanswered
+        ],
+      },
+      SUBMITTED_AT,
+    );
 
     assert.equal(result.section.status, MockAttemptSectionStatus.COMPLETED);
     assert.equal(result.percentage, Math.round((1 / 3) * 10000) / 100);
@@ -187,7 +204,11 @@ describe('SubmitMockAttemptSectionService.execute — objective sections', () =>
     const { service } = makeService({
       section,
       listeningItems: [
-        { id: 'litem-1', answer_key: { kind: 'single_choice', acceptedOptionIds: ['a'] }, skill_tags: [] },
+        {
+          id: 'litem-1',
+          answer_key: { kind: 'single_choice', acceptedOptionIds: ['a'] },
+          skill_tags: [],
+        },
       ],
     });
 
@@ -207,19 +228,32 @@ describe('SubmitMockAttemptSectionService.execute — objective sections', () =>
       status: MockAttemptSectionStatus.COMPLETED,
       raw_score: '2.00',
       max_score: '4.00',
-      grading_feedback: { kind: 'objective', version: 'practice-attempt-feedback-v1', unansweredCount: 0, skillBreakdown: [] },
+      grading_feedback: {
+        kind: 'objective',
+        version: 'practice-attempt-feedback-v1',
+        unansweredCount: 0,
+        skillBreakdown: [],
+      },
       completed_at: SUBMITTED_AT,
     });
     const { service, completeCalls } = makeService({ section: completedSection });
 
-    const result = await service.execute(USER_ID, ATTEMPT_ID, 'uoe-part-1', { answers: [] }, SUBMITTED_AT);
+    const result = await service.execute(
+      USER_ID,
+      ATTEMPT_ID,
+      'uoe-part-1',
+      { answers: [] },
+      SUBMITTED_AT,
+    );
 
     assert.equal(result.percentage, 50);
     assert.equal(completeCalls.length, 0);
   });
 
   it('rejects submitting a section that was never started (still pending)', async () => {
-    const { service } = makeService({ section: makeSection({ status: MockAttemptSectionStatus.PENDING }) });
+    const { service } = makeService({
+      section: makeSection({ status: MockAttemptSectionStatus.PENDING }),
+    });
 
     await assert.rejects(
       () => service.execute(USER_ID, ATTEMPT_ID, 'uoe-part-1', { answers: [] }, SUBMITTED_AT),
@@ -272,10 +306,30 @@ describe('SubmitMockAttemptSectionService.execute — writing section', () => {
   function validGradingResponse() {
     return {
       criteria: [
-        { criterion: 'content', band: 4, justification: 'Good content, addresses the topic well.', evidenceQuotes: [] },
-        { criterion: 'communicative_achievement', band: 4, justification: 'Clear and appropriate.', evidenceQuotes: [] },
-        { criterion: 'organization', band: 4, justification: 'Well organized text.', evidenceQuotes: [] },
-        { criterion: 'language', band: 3, justification: 'Mostly accurate language use.', evidenceQuotes: [] },
+        {
+          criterion: 'content',
+          band: 4,
+          justification: 'Good content, addresses the topic well.',
+          evidenceQuotes: [],
+        },
+        {
+          criterion: 'communicative_achievement',
+          band: 4,
+          justification: 'Clear and appropriate.',
+          evidenceQuotes: [],
+        },
+        {
+          criterion: 'organization',
+          band: 4,
+          justification: 'Well organized text.',
+          evidenceQuotes: [],
+        },
+        {
+          criterion: 'language',
+          band: 3,
+          justification: 'Mostly accurate language use.',
+          evidenceQuotes: [],
+        },
       ],
       corrections: [],
       rewrittenText: 'A rewritten version of the essay.',

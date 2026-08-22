@@ -428,7 +428,9 @@ function validateOptions(
     invalidResponse(`item at position ${position} has invalid options`);
   }
   if (value.length !== expectedOptionCount) {
-    invalidResponse(`item at position ${position} must have exactly ${expectedOptionCount} options`);
+    invalidResponse(
+      `item at position ${position} must have exactly ${expectedOptionCount} options`,
+    );
   }
   for (const option of value) {
     if (option.label.length > OPTION_LABEL_MAX_LENGTH) {

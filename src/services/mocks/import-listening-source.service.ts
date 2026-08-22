@@ -114,7 +114,8 @@ export class ImportListeningSourceService {
     const title = isNonEmptyString(input.title)
       ? input.title.trim()
       : invalidInput('title is required');
-    if (title.length > TITLE_MAX_LENGTH) invalidInput(`title exceeds ${TITLE_MAX_LENGTH} characters`);
+    if (title.length > TITLE_MAX_LENGTH)
+      invalidInput(`title exceeds ${TITLE_MAX_LENGTH} characters`);
 
     const instructions = isNonEmptyString(input.instructions)
       ? input.instructions.trim()

@@ -475,9 +475,8 @@ function mapLLMError(error: unknown): GenerateDailySessionError {
 
 const DEFAULT_USERS_FACTORY = (source: RepositorySource): UsersRepositoryPort =>
   new UsersRepository(source);
-const DEFAULT_DAILY_SESSIONS_FACTORY = (
-  source: RepositorySource,
-): DailySessionsRepositoryPort => new DailySessionsRepository(source);
+const DEFAULT_DAILY_SESSIONS_FACTORY = (source: RepositorySource): DailySessionsRepositoryPort =>
+  new DailySessionsRepository(source);
 
 /**
  * Generates one Daily Session (reading passage + comprehension items +
@@ -580,7 +579,15 @@ export class GenerateDailySessionService {
 
     try {
       return await this.dataSource.transaction((manager) =>
-        this.persist(manager, userId, sessionDate, timezone, targetLevel, generated, generationMetadata),
+        this.persist(
+          manager,
+          userId,
+          sessionDate,
+          timezone,
+          targetLevel,
+          generated,
+          generationMetadata,
+        ),
       );
     } catch (err: unknown) {
       // Two concurrent requests for the same (userId, sessionDate) can both

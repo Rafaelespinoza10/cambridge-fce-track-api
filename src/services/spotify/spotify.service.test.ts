@@ -4,7 +4,11 @@ import type { DataSource } from 'typeorm';
 import * as jwt from 'jsonwebtoken';
 
 import { SpotifyService, SpotifyError, SpotifyErrorCode } from './spotify.service';
-import type { SpotifyServiceDeps, SpotifyClientPort, ResourcesServicePort } from './spotify.service';
+import type {
+  SpotifyServiceDeps,
+  SpotifyClientPort,
+  ResourcesServicePort,
+} from './spotify.service';
 import type {
   UpsertSpotifyConnectionData,
   UpdateSpotifyConnectionTokensData,
@@ -97,7 +101,10 @@ function createWorld(overrides: Partial<World> = {}): World {
   };
 }
 
-function buildDeps(world: World, clientOverrides: Partial<SpotifyClientPort> = {}): SpotifyServiceDeps {
+function buildDeps(
+  world: World,
+  clientOverrides: Partial<SpotifyClientPort> = {},
+): SpotifyServiceDeps {
   const spotifyClient: SpotifyClientPort = {
     getAuthorizeUrl: (state) => `https://accounts.spotify.com/authorize?state=${state}`,
     exchangeCodeForTokens: async () => ({
@@ -137,7 +144,10 @@ function buildDeps(world: World, clientOverrides: Partial<SpotifyClientPort> = {
         world.connection !== null && world.connection.user_id === userId ? world.connection : null,
       upsert: async (data) => {
         world.upserted.push(data);
-        world.connection = makeConnection({ user_id: data.userId, spotify_user_id: data.spotifyUserId });
+        world.connection = makeConnection({
+          user_id: data.userId,
+          spotify_user_id: data.spotifyUserId,
+        });
       },
       updateTokens: async (userId, data) => {
         world.updatedTokens.push({ userId, data });
@@ -152,7 +162,10 @@ function buildDeps(world: World, clientOverrides: Partial<SpotifyClientPort> = {
   };
 }
 
-function setup(worldOverrides: Partial<World> = {}, clientOverrides: Partial<SpotifyClientPort> = {}) {
+function setup(
+  worldOverrides: Partial<World> = {},
+  clientOverrides: Partial<SpotifyClientPort> = {},
+) {
   const world = createWorld(worldOverrides);
   const deps = buildDeps(world, clientOverrides);
   const service = new SpotifyService({} as DataSource, deps);
@@ -193,7 +206,8 @@ describe('SpotifyService.handleCallback', () => {
 
     await assert.rejects(
       () => service.handleCallback('auth-code', state),
-      (error: unknown) => error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_STATE,
+      (error: unknown) =>
+        error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_STATE,
     );
   });
 
@@ -205,7 +219,8 @@ describe('SpotifyService.handleCallback', () => {
 
     await assert.rejects(
       () => service.handleCallback('auth-code', state),
-      (error: unknown) => error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_STATE,
+      (error: unknown) =>
+        error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_STATE,
     );
   });
 
@@ -217,7 +232,8 @@ describe('SpotifyService.handleCallback', () => {
 
     await assert.rejects(
       () => service.handleCallback('auth-code', state),
-      (error: unknown) => error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_STATE,
+      (error: unknown) =>
+        error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_STATE,
     );
   });
 });
@@ -266,7 +282,8 @@ describe('SpotifyService.listPlaylists / listShows', () => {
     const { service } = setup();
     await assert.rejects(
       () => service.listPlaylists(USER_ID),
-      (error: unknown) => error instanceof SpotifyError && error.code === SpotifyErrorCode.NOT_CONNECTED,
+      (error: unknown) =>
+        error instanceof SpotifyError && error.code === SpotifyErrorCode.NOT_CONNECTED,
     );
   });
 });
@@ -274,9 +291,15 @@ describe('SpotifyService.listPlaylists / listShows', () => {
 describe('SpotifyService.importItem', () => {
   it('imports a playlist as a PLAYLIST resource', async () => {
     const { world, service } = setup({ connection: makeConnection() });
-    const resource = await service.importItem(USER_ID, { spotifyId: 'playlist-1', itemType: 'playlist' });
+    const resource = await service.importItem(USER_ID, {
+      spotifyId: 'playlist-1',
+      itemType: 'playlist',
+    });
     assert.equal(resource.resourceType, ResourceType.PLAYLIST);
-    assert.equal(world.createdResources[0].input.url, 'https://open.spotify.com/playlist/playlist-1');
+    assert.equal(
+      world.createdResources[0].input.url,
+      'https://open.spotify.com/playlist/playlist-1',
+    );
   });
 
   it('imports a show as a PODCAST resource', async () => {
@@ -289,7 +312,8 @@ describe('SpotifyService.importItem', () => {
     const { service } = setup();
     await assert.rejects(
       () => service.importItem(USER_ID, { spotifyId: 'playlist-1', itemType: 'playlist' }),
-      (error: unknown) => error instanceof SpotifyError && error.code === SpotifyErrorCode.NOT_CONNECTED,
+      (error: unknown) =>
+        error instanceof SpotifyError && error.code === SpotifyErrorCode.NOT_CONNECTED,
     );
   });
 
@@ -297,7 +321,8 @@ describe('SpotifyService.importItem', () => {
     const { service } = setup({ connection: makeConnection() });
     await assert.rejects(
       () => service.importItem(USER_ID, { spotifyId: '  ', itemType: 'playlist' }),
-      (error: unknown) => error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_INPUT,
+      (error: unknown) =>
+        error instanceof SpotifyError && error.code === SpotifyErrorCode.INVALID_INPUT,
     );
   });
 });

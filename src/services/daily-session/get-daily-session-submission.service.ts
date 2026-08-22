@@ -46,7 +46,10 @@ export interface GetDailySessionSubmissionServiceDeps {
 export class GetDailySessionSubmissionService {
   constructor(private readonly deps: GetDailySessionSubmissionServiceDeps) {}
 
-  async getSubmission(userId: string, submissionId: string): Promise<DailySessionSubmissionViewDto> {
+  async getSubmission(
+    userId: string,
+    submissionId: string,
+  ): Promise<DailySessionSubmissionViewDto> {
     const submission = await this.deps.repository.findByIdForUser(submissionId, userId);
     if (submission === null) {
       throw new DailySessionSubmissionError(

@@ -2,10 +2,7 @@ import type { DataSource, Repository } from 'typeorm';
 import { ListeningSource } from '@models/ListeningSource';
 import { ListeningItem } from '@models/ListeningItem';
 import { ListeningSourceStatus, EnglishLevel } from '@models/enums';
-import type {
-  PracticeItemOption,
-  PracticeItemAnswerKey,
-} from '@models/practice-json-types';
+import type { PracticeItemOption, PracticeItemAnswerKey } from '@models/practice-json-types';
 
 export interface CreateListeningSourceData {
   examCode: string;
@@ -58,10 +55,7 @@ export interface ListeningSourceSafeWithItems {
   items: ListeningItemSafeDto[];
 }
 
-function toSafeSourceDto(
-  source: ListeningSource,
-  itemCount: number,
-): ListeningSourceSafeDto {
+function toSafeSourceDto(source: ListeningSource, itemCount: number): ListeningSourceSafeDto {
   return {
     id: source.id,
     examCode: source.exam_code,

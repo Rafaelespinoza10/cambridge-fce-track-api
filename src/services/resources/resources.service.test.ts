@@ -51,8 +51,7 @@ function buildFakeResourcesRepo(world: World): ResourcesRepositoryPort {
       world.resources.filter((r) => r.user_id === userId && !r.is_global && r.deleted_at === null),
     findByUserIdAndType: async (userId, resourceType) =>
       world.resources.filter(
-        (r) =>
-          r.user_id === userId && r.resource_type === resourceType && r.deleted_at === null,
+        (r) => r.user_id === userId && r.resource_type === resourceType && r.deleted_at === null,
       ),
     create: async (data) => {
       idCounter += 1;

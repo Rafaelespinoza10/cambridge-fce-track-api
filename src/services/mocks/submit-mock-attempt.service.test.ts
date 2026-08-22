@@ -7,7 +7,10 @@ import {
   SubmitMockAttemptError,
   SubmitMockAttemptErrorCode,
 } from './submit-mock-attempt.service';
-import type { MockAttemptsRepositoryPort, MocksRepositoryPort } from './submit-mock-attempt.service';
+import type {
+  MockAttemptsRepositoryPort,
+  MocksRepositoryPort,
+} from './submit-mock-attempt.service';
 import {
   ExamType,
   MockAttemptStatus,
@@ -126,13 +129,21 @@ describe('SubmitMockAttemptService.execute', () => {
 
     assert.equal(result.mockTestId, 'mock-test-1');
     assert.equal(createMockCalls.length, 1);
-    const mockData = createMockCalls[0] as { mockType: MockType; estimatedStandardizedScore: unknown };
+    const mockData = createMockCalls[0] as {
+      mockType: MockType;
+      estimatedStandardizedScore: unknown;
+    };
     assert.equal(mockData.mockType, MockType.FULL);
     // Never invents a Cambridge Scale Score — stays null, same as manual registration.
     assert.equal(mockData.estimatedStandardizedScore, null);
 
     assert.equal(createSectionsCalls.length, 1);
-    const sections = createSectionsCalls[0] as { sectionCode: string; rawScore: number; maxScore: number; percentage: number }[];
+    const sections = createSectionsCalls[0] as {
+      sectionCode: string;
+      rawScore: number;
+      maxScore: number;
+      percentage: number;
+    }[];
     assert.equal(sections.length, 4);
     const uoe = sections.find((s) => s.sectionCode === 'uoe-part-1');
     assert.equal(uoe?.rawScore, 6);
