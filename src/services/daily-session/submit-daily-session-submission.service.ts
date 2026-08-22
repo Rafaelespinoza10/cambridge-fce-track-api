@@ -33,6 +33,7 @@ import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-l
 import { createAiLinkedActivityScore } from '../planning/create-ai-linked-activity-score';
 import type { CreateAiLinkedActivityScoreInput } from '../planning/create-ai-linked-activity-score';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
+import { resolveUserLocalDayKey } from '../planning/resolve-user-local-day';
 import SYSTEM_PROMPT from '../../prompts/daily-session/grade-sentences.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/daily-session/grade-sentences.user.md';
 
@@ -113,6 +114,11 @@ export interface SubmitDailySessionSubmissionServiceDeps {
     input: CreateAiLinkedActivityScoreInput,
   ) => Promise<unknown>;
   resolvePlanDayId?: (manager: EntityManager, userId: string, dateKey: string) => Promise<string>;
+  resolveUserLocalDayKey?: (
+    manager: EntityManager,
+    userId: string,
+    instant: Date,
+  ) => Promise<string>;
 }
 
 const DEFAULT_DAILY_SESSIONS_FACTORY = (source: RepositorySource): DailySessionsRepositoryPort =>
@@ -605,13 +611,25 @@ export class SubmitDailySessionSubmissionService {
 
       // Register on the Plan/Home only once the submission is really graded
       // — never at start time. Unlike Practice/Writing there is no captured
-      // plan_day_id — a Daily Session always registers against the day it's
-      // FOR (session.session_date), resolved fresh here every time.
+      // plan_day_id to honour, so the day is always resolved here.
+      //
+      // It's the day the user FINISHED on (their local calendar day for
+      // submittedAt), not session.session_date, which is the day the lesson
+      // was generated FOR. Those differ whenever someone starts a lesson and
+      // submits it after midnight, and landing on the earlier day made a
+      // session the user had just completed absent from "today" on the Plan
+      // screen. Same rule Practice and Writing now use — see
+      // resolve-user-local-day.ts.
       {
         const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
         const scorer = this.deps.createAiLinkedActivityScore ?? createAiLinkedActivityScore;
         const resolveDay = this.deps.resolvePlanDayId ?? resolvePlanDayIdForDate;
-        const planDayId = await resolveDay(manager, userId, session.session_date);
+        const resolveLocalDayKey = this.deps.resolveUserLocalDayKey ?? resolveUserLocalDayKey;
+        const planDayId = await resolveDay(
+          manager,
+          userId,
+          await resolveLocalDayKey(manager, userId, submittedAt),
+        );
         const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
         const activity = await linker(manager, {
           planDayId,

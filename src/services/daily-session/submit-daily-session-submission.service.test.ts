@@ -94,6 +94,8 @@ const FAKE_DATA_SOURCE = {
 } as unknown as DataSource;
 
 interface MakeServiceOverrides {
+  /** The user's local calendar day for submittedAt — what resolveUserLocalDayKey would return. */
+  localDayKey?: string;
   session?: DailySessionWithAnswerKeysForEvaluation | null;
   submission?: DailySessionSubmission | null;
   lockedSubmission?: DailySessionSubmission | null;
@@ -104,6 +106,8 @@ interface RepoCalls {
   gradeSubmission: unknown[];
   createAiLinkedActivity: unknown[];
   createAiLinkedActivityScore: unknown[];
+  resolvePlanDayId: { userId: string; dateKey: string }[];
+  resolveUserLocalDayKey: { userId: string; instant: Date }[];
 }
 
 const LINKED_ACTIVITY_ID = 'planned-activity-id';
@@ -121,6 +125,8 @@ function makeService(
     gradeSubmission: [],
     createAiLinkedActivity: [],
     createAiLinkedActivityScore: [],
+    resolvePlanDayId: [],
+    resolveUserLocalDayKey: [],
   };
   let llmCalls = 0;
   const llm: LLMServicePort = {
@@ -169,7 +175,19 @@ function makeService(
       calls.createAiLinkedActivityScore.push(input);
       return {};
     },
-    resolvePlanDayId: async () => 'plan-day-id',
+    resolvePlanDayId: async (_manager, userId, dateKey) => {
+      calls.resolvePlanDayId.push({ userId, dateKey });
+      return 'plan-day-id';
+    },
+    // Stubbed because the real one hits the UserProfile repository, and this
+    // suite's EntityManager is `{}`. Returns the user's local day for
+    // submittedAt — deliberately DIFFERENT from the session's own
+    // session_date ('2026-08-21'), which is what the activity used to be
+    // placed on.
+    resolveUserLocalDayKey: async (_manager, userId, instant) => {
+      calls.resolveUserLocalDayKey.push({ userId, instant });
+      return overrides.localDayKey ?? '2026-08-22';
+    },
   });
 
   return { service, calls, llmCallCount: () => llmCalls };
@@ -212,6 +230,21 @@ describe('SubmitDailySessionSubmissionService.execute — happy path', () => {
     assert.equal(calls.createAiLinkedActivity.length, 1);
     const linked = calls.createAiLinkedActivity[0] as { dailySessionSubmissionId: string };
     assert.equal(linked.dailySessionSubmissionId, SUBMISSION_ID);
+  });
+
+  it('registers on the day the user FINISHED, not the day the lesson was for', async () => {
+    const { service, calls } = makeService(async () => validSentenceGradingResponse());
+    await service.execute(USER_ID, SUBMISSION_ID, validInput(), SUBMITTED_AT);
+
+    // The session was generated FOR 2026-08-21 (see makeSession) but finished
+    // after midnight, on the user's 2026-08-22. It belongs on the 22nd —
+    // placing it on the 21st made a session the user had just completed
+    // absent from "today" on the Plan screen.
+    assert.equal(calls.resolveUserLocalDayKey.length, 1);
+    assert.equal(calls.resolveUserLocalDayKey[0]!.instant, SUBMITTED_AT);
+    assert.equal(calls.resolvePlanDayId.length, 1);
+    assert.equal(calls.resolvePlanDayId[0]!.dateKey, '2026-08-22');
+    assert.notEqual(calls.resolvePlanDayId[0]!.dateKey, makeSession().session_date);
   });
 
   it('writes the activity_scores row the Progress metrics read, scored on comprehension only', async () => {
