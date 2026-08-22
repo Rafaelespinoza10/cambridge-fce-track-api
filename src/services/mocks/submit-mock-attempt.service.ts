@@ -1,0 +1,199 @@
+import type { DataSource } from 'typeorm';
+import { MockAttemptsRepository } from '@repositories/mocks/mock-attempts.repository';
+import { MocksRepository } from '@repositories/mocks/mocks.repository';
+import { MockAttemptStatus, MockAttemptSectionStatus, MockType } from '@models/enums';
+import type { MockAttempt } from '@models/MockAttempt';
+import type { MockAttemptSection } from '@models/MockAttemptSection';
+import { getMockExamCatalog } from '@lib/mocks/mock-exam-catalog';
+import { roundToTwoDecimals } from '@lib/practice/practice-attempt-grading';
+import { toMockAttemptSafeDto } from '@lib/mocks/mock-attempt-dto';
+import type { MockAttemptFinalResultDto } from '../../interfaces/mocks/mock-attempt.interface';
+
+export enum SubmitMockAttemptErrorCode {
+  INVALID_INPUT = 'invalid_input',
+  ATTEMPT_NOT_FOUND = 'attempt_not_found',
+  ATTEMPT_ABANDONED = 'attempt_abandoned',
+  SECTIONS_NOT_COMPLETE = 'sections_not_complete',
+  PERSISTENCE_INCONSISTENCY = 'persistence_inconsistency',
+}
+
+export class SubmitMockAttemptError extends Error {
+  constructor(
+    message: string,
+    readonly code: SubmitMockAttemptErrorCode,
+    readonly incompleteSectionCodes: string[] = [],
+  ) {
+    super(message);
+    this.name = 'SubmitMockAttemptError';
+  }
+}
+
+export interface MockAttemptsRepositoryPort {
+  findByIdForUser(attemptId: string, userId: string): Promise<MockAttempt | null>;
+  findSectionsByAttempt(attemptId: string): Promise<MockAttemptSection[]>;
+  completeAttempt(
+    attemptId: string,
+    data: { submittedAt: Date; resultMockTestId: string },
+  ): Promise<void>;
+}
+
+export interface MocksRepositoryPort {
+  createMock(data: Parameters<MocksRepository['createMock']>[0]): ReturnType<
+    MocksRepository['createMock']
+  >;
+  createSections(data: Parameters<MocksRepository['createSections']>[0]): ReturnType<
+    MocksRepository['createSections']
+  >;
+  resolveExamSectionIds(
+    ...args: Parameters<MocksRepository['resolveExamSectionIds']>
+  ): ReturnType<MocksRepository['resolveExamSectionIds']>;
+}
+
+export interface SubmitMockAttemptServiceDeps {
+  mockAttempts?: (dataSource: DataSource) => MockAttemptsRepositoryPort;
+  mocks?: (dataSource: DataSource) => MocksRepositoryPort;
+}
+
+const DEFAULT_MOCK_ATTEMPTS_FACTORY = (dataSource: DataSource): MockAttemptsRepositoryPort =>
+  new MockAttemptsRepository(dataSource);
+const DEFAULT_MOCKS_FACTORY = (dataSource: DataSource): MocksRepositoryPort =>
+  new MocksRepository(dataSource);
+
+function invalidInput(message: string): never {
+  throw new SubmitMockAttemptError(message, SubmitMockAttemptErrorCode.INVALID_INPUT);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/**
+ * Finalizes a mock attempt once every section has been submitted (see
+ * SubmitMockAttemptSectionService — including a client force-submitting a
+ * timed-out section). Aggregates each section's already-graded rawScore/
+ * maxScore into a real MockTest + MockSectionScore rows via the EXISTING
+ * MocksRepository — the same createMock/createSections calls
+ * MocksService.createMock already makes — so the finished attempt shows up
+ * in the ordinary Mocks history/charts/CSV export with zero changes to that
+ * module. section_code is deliberately kept identical between
+ * MOCK_ATTEMPT_SECTION_CATALOG and MOCK_EXAM_CATALOG, so no code translation
+ * is needed here.
+ *
+ * Deliberately never computes an estimatedStandardizedScore/estimatedLevel —
+ * no verified Cambridge Scale conversion table exists in this codebase (see
+ * the plan's "Deliberately out of scope" note); those stay null, exactly
+ * like today's manual mock registration, editable later via PATCH /mocks/{id}.
+ */
+export class SubmitMockAttemptService {
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly deps: SubmitMockAttemptServiceDeps = {},
+  ) {}
+
+  async execute(
+    userId: string,
+    attemptId: string,
+    submittedAt: Date,
+  ): Promise<MockAttemptFinalResultDto> {
+    if (!isNonEmptyString(userId)) invalidInput('userId is required');
+    if (!isNonEmptyString(attemptId)) invalidInput('attemptId is required');
+    if (!(submittedAt instanceof Date) || Number.isNaN(submittedAt.getTime())) {
+      invalidInput('submittedAt must be a valid Date');
+    }
+
+    const mockAttemptsFactory = this.deps.mockAttempts ?? DEFAULT_MOCK_ATTEMPTS_FACTORY;
+
+    const attempt = await mockAttemptsFactory(this.dataSource).findByIdForUser(attemptId, userId);
+    if (attempt === null) {
+      throw new SubmitMockAttemptError(
+        'Mock attempt not found',
+        SubmitMockAttemptErrorCode.ATTEMPT_NOT_FOUND,
+      );
+    }
+    if (attempt.status === MockAttemptStatus.COMPLETED) {
+      // Idempotent replay: nothing is recomputed.
+      const sections = await mockAttemptsFactory(this.dataSource).findSectionsByAttempt(attemptId);
+      return {
+        attempt: toMockAttemptSafeDto(attempt, sections),
+        mockTestId: attempt.result_mock_test_id ?? '',
+      };
+    }
+    if (attempt.status === MockAttemptStatus.ABANDONED) {
+      throw new SubmitMockAttemptError(
+        'This mock attempt was abandoned and cannot be submitted',
+        SubmitMockAttemptErrorCode.ATTEMPT_ABANDONED,
+      );
+    }
+
+    const sections = await mockAttemptsFactory(this.dataSource).findSectionsByAttempt(attemptId);
+    const incomplete = sections.filter((s) => s.status !== MockAttemptSectionStatus.COMPLETED);
+    if (incomplete.length > 0) {
+      throw new SubmitMockAttemptError(
+        'Every section must be submitted before the mock attempt can be finalized',
+        SubmitMockAttemptErrorCode.SECTIONS_NOT_COMPLETE,
+        incomplete.map((s) => s.section_code),
+      );
+    }
+
+    // Not wrapped in a single DB transaction across the Mocks repository and
+    // the MockAttempts repository — same atomicity level MocksService.createMock
+    // already has today (its own createMock/createSections calls are two
+    // sequential saves, not one transaction). A failure between creating the
+    // MockTest and marking the attempt completed would leave an orphaned
+    // MockTest but never a lost attempt result — retrying this endpoint is
+    // safe (see the idempotent-replay branch above once result_mock_test_id
+    // is set).
+    const mocksFactory = this.deps.mocks ?? DEFAULT_MOCKS_FACTORY;
+    const mocksRepo = mocksFactory(this.dataSource);
+    const mockAttemptsRepo = mockAttemptsFactory(this.dataSource);
+
+    const mockTest = await mocksRepo.createMock({
+      userId,
+      name: `Full Timed Mock — ${submittedAt.toISOString().slice(0, 10)}`,
+      examType: attempt.exam_type,
+      mockType: MockType.FULL,
+      takenAt: submittedAt,
+      estimatedStandardizedScore: null,
+      scoreScale: getMockExamCatalog(attempt.exam_type).scoreScale,
+      estimatedLevel: null,
+      notes: 'Generated automatically from a live timed mock attempt.',
+    });
+
+    const sectionCodes = sections.map((s) => s.section_code);
+    const examSectionIds = await mocksRepo.resolveExamSectionIds(attempt.exam_type, sectionCodes);
+
+    await mocksRepo.createSections(
+      sections.map((s) => {
+        const rawScore = s.raw_score !== null ? Number(s.raw_score) : null;
+        const maxScore = s.max_score !== null ? Number(s.max_score) : null;
+        const percentage =
+          rawScore !== null && maxScore !== null && maxScore > 0
+            ? roundToTwoDecimals((rawScore / maxScore) * 100)
+            : null;
+        return {
+          mockTestId: mockTest.id,
+          sectionCode: s.section_code,
+          examSectionId: examSectionIds.get(s.section_code) ?? null,
+          rawScore,
+          maxScore,
+          percentage,
+          standardizedScore: null,
+          notes: null,
+        };
+      }),
+    );
+
+    await mockAttemptsRepo.completeAttempt(attemptId, {
+      submittedAt,
+      resultMockTestId: mockTest.id,
+    });
+
+    const completedAttempt: MockAttempt = {
+      ...attempt,
+      status: MockAttemptStatus.COMPLETED,
+      submitted_at: submittedAt,
+      result_mock_test_id: mockTest.id,
+    };
+    return { attempt: toMockAttemptSafeDto(completedAttempt, sections), mockTestId: mockTest.id };
+  }
+}

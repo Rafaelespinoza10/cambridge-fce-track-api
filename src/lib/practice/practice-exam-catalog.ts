@@ -77,9 +77,14 @@ function deepFreeze<T>(value: T): T {
  * generate-practice-exercise.service.ts) — they mirror that seed's
  * `maxScore` (1 mark/item for parts 1-3, 2 marks/item for part 4) and
  * `defaultDurationMinutes` fields exactly. The catalog registering a part does NOT
- * mean it's AI-generatable yet — Reading 6-7 (shared-passage matching),
- * Writing (essay grading), Listening (audio) and Speaking (audio/human)
- * have no generation support in this PR; that gap is intentional, not a bug.
+ * mean it's AI-generatable yet. Reading 5-7 also has generation support now
+ * (grounded in the Cambridge Knowledge Base — see the `groundingRecommended`
+ * flag on GENERATABLE_PARTS in generate-practice-exercise.service.ts); its
+ * `defaultItemCount`/`defaultDurationMinutes` are this app's own practice
+ * defaults (Reading has no per-item Cambridge mark scheme to mirror the way
+ * Use of English does). Writing (rubric grading via a separate module),
+ * Listening (curated real audio, never generated — see ListeningSource) and
+ * Speaking (audio/human) still have no generation support here.
  */
 export const PRACTICE_EXAM_CATALOG: readonly PracticeExamCatalogEntry[] = deepFreeze([
   {
@@ -126,16 +131,25 @@ export const PRACTICE_EXAM_CATALOG: readonly PracticeExamCatalogEntry[] = deepFr
             code: 'READING_PART_5',
             label: 'Part 5 - Multiple Choice',
             taskTypes: [{ code: 'multiple_choice', label: 'Multiple Choice' }],
+            defaultItemCount: 6,
+            defaultDurationMinutes: 12,
+            generationSupported: true,
           },
           {
             code: 'READING_PART_6',
             label: 'Part 6 - Gapped Text',
             taskTypes: [{ code: 'gapped_text', label: 'Gapped Text' }],
+            defaultItemCount: 6,
+            defaultDurationMinutes: 12,
+            generationSupported: true,
           },
           {
             code: 'READING_PART_7',
             label: 'Part 7 - Multiple Matching',
             taskTypes: [{ code: 'multiple_matching', label: 'Multiple Matching' }],
+            defaultItemCount: 10,
+            defaultDurationMinutes: 15,
+            generationSupported: true,
           },
         ],
       },

@@ -18,6 +18,9 @@ provider:
     DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
     JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
     JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+    OPEN_AI_API_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPEN_AI_API_KEY}
+    OPENAI_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_MODEL, ''}
+    OPENAI_EMBEDDING_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_EMBEDDING_MODEL, ''}
 
 functions:
   mocksSectionCatalog:
@@ -74,6 +77,66 @@ functions:
     events:
       - httpApi:
           path: /mocks/import
+          method: POST
+
+  # ── Full timed mock attempts (live-taking, AI-generated + curated content) ──
+  # Section content is generated lazily, one section at a time (never all 13
+  # up front) — see StartMockAttemptSectionService's doc comment for why:
+  # bulk LLM work in one Lambda invocation risks the ~29s httpApi hard
+  # timeout this codebase already documents for the Cambridge Knowledge Base
+  # import endpoint. mockAttemptsStartSection/mockAttemptsSubmitSection get a
+  # longer function timeout for the one section that can call the LLM
+  # (writing) or search the Knowledge Base (grounded Reading generation).
+
+  mockAttemptsStart:
+    handler: src/controllers/mockAttemptsController.startMockAttempt
+    events:
+      - httpApi:
+          path: /mocks/attempts
+          method: POST
+
+  mockAttemptsGetActive:
+    handler: src/controllers/mockAttemptsController.getActiveMockAttempt
+    events:
+      - httpApi:
+          path: /mocks/attempts/active
+          method: GET
+
+  mockAttemptsGet:
+    handler: src/controllers/mockAttemptsController.getMockAttempt
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}
+          method: GET
+
+  mockAttemptsStartSection:
+    handler: src/controllers/mockAttemptsController.startMockAttemptSection
+    timeout: 29
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/sections/{sectionCode}/start
+          method: POST
+
+  mockAttemptsSubmitSection:
+    handler: src/controllers/mockAttemptsController.submitMockAttemptSection
+    timeout: 29
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/sections/{sectionCode}/submit
+          method: POST
+
+  mockAttemptsSubmit:
+    handler: src/controllers/mockAttemptsController.submitMockAttempt
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/submit
+          method: POST
+
+  mockAttemptsAbandon:
+    handler: src/controllers/mockAttemptsController.abandonMockAttempt
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/abandon
           method: POST
 
 package:

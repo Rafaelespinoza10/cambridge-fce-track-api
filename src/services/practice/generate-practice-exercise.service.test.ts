@@ -9,6 +9,7 @@ import {
 import type {
   LLMServicePort,
   PracticeExercisesRepositoryPort,
+  SearchKnowledgePort,
 } from './generate-practice-exercise.service';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.types';
@@ -62,6 +63,36 @@ function keyWordTransformationRequest(): GeneratePracticeExerciseRequest {
     paperCode: 'PAPER_1',
     partCode: 'UOE_PART_4',
     taskType: 'key_word_transformation',
+    idempotencyKey: IDEMPOTENCY_KEY,
+  };
+}
+
+function readingMultipleChoiceRequest(): GeneratePracticeExerciseRequest {
+  return {
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_1',
+    partCode: 'READING_PART_5',
+    taskType: 'multiple_choice',
+    idempotencyKey: IDEMPOTENCY_KEY,
+  };
+}
+
+function gappedTextRequest(): GeneratePracticeExerciseRequest {
+  return {
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_1',
+    partCode: 'READING_PART_6',
+    taskType: 'gapped_text',
+    idempotencyKey: IDEMPOTENCY_KEY,
+  };
+}
+
+function readingMultipleMatchingRequest(): GeneratePracticeExerciseRequest {
+  return {
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_1',
+    partCode: 'READING_PART_7',
+    taskType: 'multiple_matching',
     idempotencyKey: IDEMPOTENCY_KEY,
   };
 }
@@ -136,6 +167,63 @@ function validKeyWordTransformationResponse() {
   };
 }
 
+function letterOptions(letters: string[]) {
+  return letters.map((letter) => ({ id: letter, label: letter }));
+}
+
+function validReadingMultipleChoiceResponse() {
+  return {
+    title: 'Reading - Part 5',
+    instructions: 'Read the text and answer the questions.',
+    stimulus: 'A long article about a real topic, roughly 600 words.',
+    items: Array.from({ length: 6 }, (_, i) => ({
+      position: i + 1,
+      prompt: `What does the writer say in paragraph ${i + 1}?`,
+      options: [
+        { id: 'a', label: 'A full-sentence option A' },
+        { id: 'b', label: 'A full-sentence option B' },
+        { id: 'c', label: 'A full-sentence option C' },
+        { id: 'd', label: 'A full-sentence option D' },
+      ],
+      answerKey: { kind: 'single_choice', acceptedOptionIds: ['a'] },
+      explanation: 'Paragraph 1 states this directly.',
+      skillTags: ['detail'],
+    })),
+  };
+}
+
+function validGappedTextResponse() {
+  return {
+    title: 'Reading - Part 6',
+    instructions: 'Choose the paragraph that fits each gap.',
+    stimulus: 'Base text with gaps (1)-(6).\n\nRemoved paragraphs:\nA. ...\nB. ...',
+    items: Array.from({ length: 6 }, (_, i) => ({
+      position: i + 1,
+      prompt: `Which paragraph best fits gap (${i + 1})?`,
+      options: letterOptions(['A', 'B', 'C', 'D', 'E', 'F', 'G']),
+      answerKey: { kind: 'single_choice', acceptedOptionIds: [['A', 'B', 'C', 'D', 'E', 'F'][i]!] },
+      explanation: 'This paragraph continues the previous idea.',
+      skillTags: ['cohesion'],
+    })),
+  };
+}
+
+function validReadingMultipleMatchingResponse() {
+  return {
+    title: 'Reading - Part 7',
+    instructions: 'Match each statement to the correct text.',
+    stimulus: 'A. Text one.\nB. Text two.\nC. Text three.\nD. Text four.',
+    items: Array.from({ length: 10 }, (_, i) => ({
+      position: i + 1,
+      prompt: `Who mentions point number ${i + 1}?`,
+      options: letterOptions(['A', 'B', 'C', 'D']),
+      answerKey: { kind: 'single_choice', acceptedOptionIds: [['A', 'B', 'C', 'D'][i % 4]!] },
+      explanation: 'This person describes exactly that.',
+      skillTags: ['specific-information'],
+    })),
+  };
+}
+
 const SAFE_RESULT: PracticeExerciseSafeWithItems = {
   exercise: {
     id: 'exercise-id',
@@ -170,6 +258,7 @@ interface MakeServiceOverrides {
     idempotencyKey: string,
   ) => Promise<PracticeExercise | null>;
   createExercise?: (data: CreateExerciseData) => Promise<PracticeExercise>;
+  searchKnowledge?: SearchKnowledgePort;
 }
 
 function makeService(
@@ -178,7 +267,11 @@ function makeService(
     options: LLMStructuredCompletionOptions,
   ) => Promise<unknown>,
   overrides: MakeServiceOverrides = {},
-): { service: GeneratePracticeExerciseService; calls: RepoCalls; llmCallCount: () => number } {
+): {
+  service: GeneratePracticeExerciseService;
+  calls: RepoCalls;
+  llmCallCount: () => number;
+} {
   const calls: RepoCalls = { createExercise: [], createItems: [], findByIdempotencyKeyForUser: [] };
   let llmCalls = 0;
   const llm: LLMServicePort = {
@@ -212,6 +305,7 @@ function makeService(
     providerLabel: 'openai',
     modelLabel: 'gpt-4o-mini',
     practiceExercises,
+    searchKnowledge: overrides.searchKnowledge,
   });
   return { service, calls, llmCallCount: () => llmCalls };
 }
@@ -291,6 +385,104 @@ describe('GeneratePracticeExerciseService.execute — happy path', () => {
   });
 });
 
+// ── Reading generation (5-7) ────────────────────────────────────────────────
+
+describe('GeneratePracticeExerciseService.execute — Reading parts', () => {
+  it('generates and persists a Reading Part 5 (multiple_choice) exercise', async () => {
+    const { service, calls } = makeService(async () => validReadingMultipleChoiceResponse());
+    await service.execute(USER_ID, readingMultipleChoiceRequest());
+
+    assert.equal(calls.createExercise[0]?.partCode, 'READING_PART_5');
+    assert.equal(calls.createExercise[0]?.itemCount, 6);
+    assert.equal(calls.createExercise[0]?.timeLimitSeconds, 12 * 60);
+    assert.equal(calls.createItems[0]?.items.length, 6);
+  });
+
+  it('generates and persists a Reading Part 6 (gapped_text) exercise', async () => {
+    const { service, calls } = makeService(async () => validGappedTextResponse());
+    await service.execute(USER_ID, gappedTextRequest());
+
+    assert.equal(calls.createExercise[0]?.partCode, 'READING_PART_6');
+    assert.equal(calls.createItems[0]?.items.length, 6);
+    assert.equal(calls.createItems[0]?.items[0]?.options?.length, 7);
+  });
+
+  it('generates and persists a Reading Part 7 (multiple_matching) exercise', async () => {
+    const { service, calls } = makeService(async () => validReadingMultipleMatchingResponse());
+    await service.execute(USER_ID, readingMultipleMatchingRequest());
+
+    assert.equal(calls.createExercise[0]?.partCode, 'READING_PART_7');
+    assert.equal(calls.createItems[0]?.items.length, 10);
+    assert.equal(calls.createItems[0]?.items[0]?.options?.length, 4);
+  });
+
+  it('grounds Reading generation with Cambridge Knowledge Base chunks when available', async () => {
+    let capturedFilters: { skill?: string; topic?: string; limit?: number } | undefined;
+    const searchKnowledge: SearchKnowledgePort = {
+      execute: async (filters) => {
+        capturedFilters = filters;
+        return [{ content: 'Real Cambridge material about renewable energy.' }];
+      },
+    };
+    let capturedMessages: LLMChatMessage[] | undefined;
+    const { service } = makeService(
+      async (messages) => {
+        capturedMessages = messages;
+        return validReadingMultipleChoiceResponse();
+      },
+      { searchKnowledge },
+    );
+
+    await service.execute(USER_ID, readingMultipleChoiceRequest());
+
+    assert.equal(capturedFilters?.skill, 'reading');
+    assert.ok(capturedFilters?.topic);
+    assert.match(
+      capturedMessages?.[1]?.content ?? '',
+      /Real Cambridge material about renewable energy\./,
+    );
+  });
+
+  it('falls back to "no grounding material" when the Knowledge Base has no match', async () => {
+    const searchKnowledge: SearchKnowledgePort = { execute: async () => [] };
+    let capturedMessages: LLMChatMessage[] | undefined;
+    const { service } = makeService(
+      async (messages) => {
+        capturedMessages = messages;
+        return validReadingMultipleChoiceResponse();
+      },
+      { searchKnowledge },
+    );
+
+    await service.execute(USER_ID, readingMultipleChoiceRequest());
+
+    assert.match(capturedMessages?.[1]?.content ?? '', /No additional grounding material/);
+  });
+
+  it('never consults the Knowledge Base for a Use of English part', async () => {
+    let called = false;
+    const searchKnowledge: SearchKnowledgePort = {
+      execute: async () => {
+        called = true;
+        return [];
+      },
+    };
+    const { service } = makeService(async () => validMultipleChoiceClozeResponse(), {
+      searchKnowledge,
+    });
+
+    await service.execute(USER_ID, multipleChoiceClozeRequest());
+
+    assert.equal(called, false);
+  });
+
+  it('still generates successfully when no searchKnowledge dep is wired at all', async () => {
+    const { service, calls } = makeService(async () => validReadingMultipleChoiceResponse());
+    await service.execute(USER_ID, readingMultipleChoiceRequest());
+    assert.equal(calls.createExercise.length, 1);
+  });
+});
+
 // ── request validation ──────────────────────────────────────────────────────
 
 describe('GeneratePracticeExerciseService.execute — request validation', () => {
@@ -301,9 +493,9 @@ describe('GeneratePracticeExerciseService.execute — request validation', () =>
       () =>
         service.execute(USER_ID, {
           examCode: 'B2_FIRST',
-          paperCode: 'PAPER_1',
-          partCode: 'READING_PART_5',
-          taskType: 'multiple_choice',
+          paperCode: 'PAPER_2',
+          partCode: 'WRITING_PART_1',
+          taskType: 'essay',
           idempotencyKey: IDEMPOTENCY_KEY,
         }),
       (err: unknown) => assertGenErr(err, GeneratePracticeExerciseErrorCode.INVALID_INPUT),
@@ -353,9 +545,9 @@ describe('GeneratePracticeExerciseService.execute — request validation', () =>
           taskType: part.taskTypes[0]!.code,
         })),
     );
-    // Sanity: makes sure this actually covers every non-UoE part (see the
-    // matching count assertion in practice-exam-catalog.test.ts).
-    assert.equal(unsupportedParts.length, 13);
+    // Sanity: makes sure this actually covers every non-generatable part
+    // (see the matching count assertion in practice-exam-catalog.test.ts).
+    assert.equal(unsupportedParts.length, 10);
 
     for (const { paperCode, partCode, taskType } of unsupportedParts) {
       const { service, calls } = makeService(async () => validMultipleChoiceClozeResponse());
