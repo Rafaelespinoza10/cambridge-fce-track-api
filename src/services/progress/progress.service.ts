@@ -8,6 +8,7 @@ import {
   getLastNWeekStarts,
   roundTwo,
 } from '@lib/progress/progress-library';
+import { getUserTimeZone } from '../planning/resolve-user-local-day';
 import type {
   ExamGoalMetric,
   ExamPartMetricsResponse,
@@ -37,6 +38,10 @@ class ProgressService {
       return d.toISOString().split('T')[0]!;
     })();
 
+    // One lookup, shared by every query that buckets instants into days or
+    // weeks. Always a zone Postgres accepts — see getUserTimeZone.
+    const timeZone = await getUserTimeZone(ds, userId);
+
     const [
       activityStats,
       scoreStats,
@@ -51,12 +56,12 @@ class ProgressService {
       repo.getWeeklyActivityStats(userId, weekStart, weekEnd),
       repo.getWeeklyScoreStats(userId, weekStart, weekEnd),
       repo.getSkillAverages(userId, skillLookbackDate),
-      repo.getStudyDates(userId),
+      repo.getStudyDates(userId, timeZone),
       repo.getLastMock(userId),
-      repo.getMonthlySkillProgress(userId, weekStarts[0]!),
-      repo.getRecentActivities(userId, RECENT_ACTIVITIES_LIMIT),
+      repo.getMonthlySkillProgress(userId, weekStarts[0]!, timeZone),
+      repo.getRecentActivities(userId, RECENT_ACTIVITIES_LIMIT, timeZone),
       repo.getActiveGoal(userId),
-      repo.getOverallWeeklyScores(userId, weekStarts[0]!),
+      repo.getOverallWeeklyScores(userId, weekStarts[0]!, timeZone),
     ]);
 
     // ── Strongest / weakest skill ──────────────────────────────────────────────
