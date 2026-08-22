@@ -181,14 +181,14 @@ describe('PRACTICE_EXAM_CATALOG — B2 First (verified)', () => {
     assert.equal(findPartInCatalog(PRACTICE_EXAM_CATALOG, 'B2_FIRST', 'PAPER_1', 'UOE_PART_4')?.defaultItemCount, 6);
   });
 
-  it('recognizes Reading parts 5-7 as real (catalogued) even though nothing generates them yet', () => {
+  it('recognizes Reading parts 5-7 as real (catalogued) and generation-supported', () => {
     assert.equal(isPracticePartCode('B2_FIRST', 'PAPER_1', 'READING_PART_5'), true);
     assert.equal(isPracticePartCode('B2_FIRST', 'PAPER_1', 'READING_PART_6'), true);
     assert.equal(isPracticePartCode('B2_FIRST', 'PAPER_1', 'READING_PART_7'), true);
     assert.equal(
       findPartInCatalog(PRACTICE_EXAM_CATALOG, 'B2_FIRST', 'PAPER_1', 'READING_PART_5')
         ?.defaultItemCount,
-      undefined,
+      6,
     );
   });
 
@@ -210,10 +210,12 @@ describe('PRACTICE_EXAM_CATALOG — B2 First (verified)', () => {
 // ── generationSupported ──────────────────────────────────────────────────────
 
 const B2_FIRST_UOE_PARTS = ['UOE_PART_1', 'UOE_PART_2', 'UOE_PART_3', 'UOE_PART_4'];
+const B2_FIRST_READING_PARTS = ['READING_PART_5', 'READING_PART_6', 'READING_PART_7'];
+const B2_FIRST_GENERATABLE_PAPER_1_PARTS = [...B2_FIRST_UOE_PARTS, ...B2_FIRST_READING_PARTS];
 
 describe('isPracticeGenerationSupported', () => {
-  it('is true for exactly the 4 Use of English parts', () => {
-    for (const partCode of B2_FIRST_UOE_PARTS) {
+  it('is true for the 4 Use of English parts and the 3 Reading parts', () => {
+    for (const partCode of B2_FIRST_GENERATABLE_PAPER_1_PARTS) {
       assert.equal(
         isPracticeGenerationSupported('B2_FIRST', 'PAPER_1', partCode),
         true,
@@ -229,7 +231,9 @@ describe('isPracticeGenerationSupported', () => {
     let checked = 0;
     for (const paper of b2First.papers) {
       for (const part of paper.parts) {
-        if (paper.code === 'PAPER_1' && B2_FIRST_UOE_PARTS.includes(part.code)) continue;
+        if (paper.code === 'PAPER_1' && B2_FIRST_GENERATABLE_PAPER_1_PARTS.includes(part.code)) {
+          continue;
+        }
         checked += 1;
         assert.equal(
           isPracticeGenerationSupported('B2_FIRST', paper.code, part.code),
@@ -238,9 +242,9 @@ describe('isPracticeGenerationSupported', () => {
         );
       }
     }
-    // Sanity: makes sure this test actually exercised every non-UoE part
-    // (3 Reading + 2 Writing + 4 Listening + 4 Speaking = 13).
-    assert.equal(checked, 13);
+    // Sanity: makes sure this test actually exercised every non-generatable
+    // part (2 Writing + 4 Listening + 4 Speaking = 10).
+    assert.equal(checked, 10);
   });
 
   it('is false for an unknown exam/paper/part', () => {

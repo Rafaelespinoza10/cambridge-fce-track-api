@@ -42,6 +42,9 @@ import MULTIPLE_CHOICE_CLOZE_INSTRUCTIONS from '../../prompts/practice/task-type
 import OPEN_CLOZE_INSTRUCTIONS from '../../prompts/practice/task-types/open-cloze.md';
 import WORD_FORMATION_INSTRUCTIONS from '../../prompts/practice/task-types/word-formation.md';
 import KEY_WORD_TRANSFORMATION_INSTRUCTIONS from '../../prompts/practice/task-types/key-word-transformation.md';
+import MULTIPLE_CHOICE_READING_INSTRUCTIONS from '../../prompts/practice/task-types/multiple-choice-reading.md';
+import GAPPED_TEXT_INSTRUCTIONS from '../../prompts/practice/task-types/gapped-text.md';
+import MULTIPLE_MATCHING_INSTRUCTIONS from '../../prompts/practice/task-types/multiple-matching.md';
 
 const PROMPT_VERSION = 'practice-exercise-v2';
 
@@ -71,6 +74,15 @@ export interface LLMServicePort {
   ): Promise<unknown>;
 }
 
+/** Narrow port over SearchCambridgeKnowledgeService — grounding is optional, never required. */
+export interface SearchKnowledgePort {
+  execute(filters: {
+    skill?: string;
+    topic?: string;
+    limit?: number;
+  }): Promise<{ content: string }[]>;
+}
+
 type RepositorySource = DataSource | EntityManager;
 
 /** Narrow port over PracticeExercisesRepository — only the methods this service calls. */
@@ -95,6 +107,8 @@ export interface GeneratePracticeExerciseServiceDeps {
   providerLabel: string;
   modelLabel: string | null;
   practiceExercises?: (source: RepositorySource) => PracticeExercisesRepositoryPort;
+  /** Optional — only consulted for parts with `groundingRecommended: true`. */
+  searchKnowledge?: SearchKnowledgePort;
 }
 
 const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
@@ -122,7 +136,18 @@ interface GeneratablePart {
   partLabel: string;
   taskTypeInstructions: string;
   hasOptions: boolean;
+  /** Only meaningful when hasOptions is true. Defaults to 4 (every UoE/Reading-5/Reading-7 part); Reading Part 6 (gapped text) uses 7 (6 real paragraphs + 1 distractor). */
+  optionCount?: number;
   requiresStimulus: boolean;
+  /**
+   * True only for parts where grounding the generation in real Cambridge
+   * material (via SearchCambridgeKnowledgeService) meaningfully reduces
+   * invented content — Reading's longer passages, not the shorter Use of
+   * English cloze/transformation items. See docs/cambridge-knowledge-base.md
+   * §9. Never fails generation if the Knowledge Base has no match for the
+   * topic — grounding is a quality improvement, not a hard requirement.
+   */
+  groundingRecommended?: boolean;
 }
 
 // The only 4 B2 First parts this service knows how to generate — every
@@ -168,6 +193,40 @@ const GENERATABLE_PARTS: Record<string, GeneratablePart> = {
     taskTypeInstructions: KEY_WORD_TRANSFORMATION_INSTRUCTIONS.trim(),
     hasOptions: false,
     requiresStimulus: false,
+  },
+  multiple_choice: {
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_1',
+    partCode: 'READING_PART_5',
+    taskType: 'multiple_choice',
+    partLabel: 'Part 5 - Multiple Choice',
+    taskTypeInstructions: MULTIPLE_CHOICE_READING_INSTRUCTIONS.trim(),
+    hasOptions: true,
+    requiresStimulus: true,
+    groundingRecommended: true,
+  },
+  gapped_text: {
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_1',
+    partCode: 'READING_PART_6',
+    taskType: 'gapped_text',
+    partLabel: 'Part 6 - Gapped Text',
+    taskTypeInstructions: GAPPED_TEXT_INSTRUCTIONS.trim(),
+    hasOptions: true,
+    optionCount: 7,
+    requiresStimulus: true,
+    groundingRecommended: true,
+  },
+  multiple_matching: {
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_1',
+    partCode: 'READING_PART_7',
+    taskType: 'multiple_matching',
+    partLabel: 'Part 7 - Multiple Matching',
+    taskTypeInstructions: MULTIPLE_MATCHING_INSTRUCTIONS.trim(),
+    hasOptions: true,
+    requiresStimulus: true,
+    groundingRecommended: true,
   },
 };
 
@@ -234,13 +293,36 @@ function normalizeRequest(input: GeneratePracticeExerciseRequest): NormalizedReq
   return { part, targetLevel, itemCount, timeLimitSeconds };
 }
 
-function buildMessages(normalized: NormalizedRequest): LLMChatMessage[] {
+const GROUNDING_CHUNK_MAX_LENGTH = 1200;
+
+function buildGroundingContext(chunks: { content: string }[]): string {
+  if (chunks.length === 0) {
+    return 'No additional grounding material was found for this topic — write original material as usual.';
+  }
+  const excerpts = chunks
+    .map((chunk) => `- "${chunk.content.slice(0, GROUNDING_CHUNK_MAX_LENGTH).trim()}"`)
+    .join('\n');
+  return [
+    'Real Cambridge B2 First Reading material for this topic area, from the',
+    "Cambridge Knowledge Base. Use it only to keep the passage's vocabulary,",
+    'register and topic treatment authentic — never copy it verbatim, and',
+    'never present it as the passage itself:',
+    excerpts,
+  ].join('\n');
+}
+
+function buildMessages(
+  normalized: NormalizedRequest,
+  topicHint: string,
+  groundingContext: string,
+): LLMChatMessage[] {
   const userPrompt = renderPromptTemplate(USER_PROMPT_TEMPLATE, {
     partLabel: normalized.part.partLabel,
     itemCount: String(normalized.itemCount),
     targetLevel: normalized.targetLevel,
-    topicHint: pickRandomExamTopic(),
+    topicHint,
     taskTypeInstructions: normalized.part.taskTypeInstructions,
+    groundingContext,
   });
   return [
     { role: 'system', content: SYSTEM_PROMPT.trim() },
@@ -336,13 +418,17 @@ function validateText(value: unknown, field: string, maxLength: number): string 
   return trimmed;
 }
 
-function validateOptions(value: unknown, position: number): PracticeItemOption[] | null {
+function validateOptions(
+  value: unknown,
+  position: number,
+  expectedOptionCount: number,
+): PracticeItemOption[] | null {
   if (value === null) return null;
   if (!isPracticeItemOptionArray(value)) {
     invalidResponse(`item at position ${position} has invalid options`);
   }
-  if (value.length !== 4) {
-    invalidResponse(`item at position ${position} must have exactly 4 options`);
+  if (value.length !== expectedOptionCount) {
+    invalidResponse(`item at position ${position} must have exactly ${expectedOptionCount} options`);
   }
   for (const option of value) {
     if (option.label.length > OPTION_LABEL_MAX_LENGTH) {
@@ -409,7 +495,7 @@ function validateItems(
       PROMPT_MAX_LENGTH,
     );
     const options = part.hasOptions
-      ? validateOptions(raw.options, position)
+      ? validateOptions(raw.options, position, part.optionCount ?? 4)
       : raw.options === null
         ? null
         : invalidResponse(`item at position ${position} must have null options`);
@@ -559,7 +645,26 @@ export class GeneratePracticeExerciseService {
       return this.buildReplayResult(this.dataSource, userId, input.idempotencyKey);
     }
 
-    const messages = buildMessages(normalized);
+    const topicHint = pickRandomExamTopic();
+
+    let groundingContext = '';
+    if (normalized.part.groundingRecommended === true && this.deps.searchKnowledge !== undefined) {
+      // Grounding is a quality improvement, never a hard requirement — a
+      // Knowledge Base miss (or an empty corpus) still lets generation
+      // proceed with buildGroundingContext's "no material found" fallback,
+      // exactly like the rest of this method never fails generation over
+      // something optional.
+      const chunks = await this.deps.searchKnowledge.execute({
+        skill: 'reading',
+        topic: topicHint,
+        limit: 2,
+      });
+      groundingContext = buildGroundingContext(chunks);
+    } else if (normalized.part.groundingRecommended === true) {
+      groundingContext = buildGroundingContext([]);
+    }
+
+    const messages = buildMessages(normalized, topicHint, groundingContext);
 
     let raw: unknown;
     try {
