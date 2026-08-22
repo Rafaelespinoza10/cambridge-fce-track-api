@@ -35,6 +35,17 @@ functions:
           path: /daily-session
           method: POST
 
+  # Same path as dailySessionGenerate, different method — so there is no
+  # route-precedence question against /daily-session/{sessionId} below. Its own
+  # controller module keeps the OpenAI/Knowledge-Base graph out of this
+  # pure-DB read's bundle (no explicit timeout needed for the same reason).
+  dailySessionHistory:
+    handler: src/controllers/dailySessionHistoryController.listDailySessionHistory
+    events:
+      - httpApi:
+          path: /daily-session
+          method: GET
+
   dailySessionGet:
     handler: src/controllers/dailySessionController.getDailySession
     events:
