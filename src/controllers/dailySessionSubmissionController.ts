@@ -9,6 +9,7 @@ import type {
   DailySessionSubmissionStartResultDto,
   DailySessionSubmissionSubmitResultDto,
 } from '../interfaces/daily-session/daily-session.interface';
+import type { DailySessionSubmissionViewDto } from '../services/daily-session/get-daily-session-submission.service';
 
 type NowProvider = () => Date;
 
@@ -29,11 +30,16 @@ interface SubmitSubmissionPort {
   ): Promise<DailySessionSubmissionSubmitResultDto>;
 }
 
+interface GetSubmissionPort {
+  getSubmission(userId: string, submissionId: string): Promise<DailySessionSubmissionViewDto>;
+}
+
 interface DailySessionSubmissionControllerDeps {
   now: NowProvider;
   services: () => Promise<{
     startSubmission: StartSubmissionPort;
     submitSubmission: SubmitSubmissionPort;
+    getSubmission: GetSubmissionPort;
   }>;
 }
 
@@ -137,10 +143,42 @@ export async function submitDailySessionSubmission(
   return submitDailySessionSubmissionHandler(event, DEFAULT_DEPS);
 }
 
-export { startDailySessionSubmissionHandler, submitDailySessionSubmissionHandler };
+// ── GET /daily-session/submissions/{submissionId} ───────────────────────────────
+
+async function getDailySessionSubmissionHandler(
+  event: APIGatewayProxyEvent,
+  deps: DailySessionSubmissionControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const submissionId = getSubmissionIdParam(event);
+  if (submissionId === null) return errorResponse('Invalid or missing submissionId', 400);
+
+  try {
+    const { getSubmission } = await deps.services();
+    const view = await getSubmission.getSubmission(payload.sub, submissionId);
+    return successResponse({ success: true, data: view }, 200);
+  } catch (err: unknown) {
+    return handleError(mapDailySessionSubmissionError(err));
+  }
+}
+
+export async function getDailySessionSubmission(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return getDailySessionSubmissionHandler(event, DEFAULT_DEPS);
+}
+
+export {
+  startDailySessionSubmissionHandler,
+  submitDailySessionSubmissionHandler,
+  getDailySessionSubmissionHandler,
+};
 export type {
   DailySessionSubmissionControllerDeps,
   NowProvider,
   StartSubmissionPort,
   SubmitSubmissionPort,
+  GetSubmissionPort,
 };
