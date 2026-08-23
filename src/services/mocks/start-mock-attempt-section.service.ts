@@ -18,6 +18,7 @@ import {
   type MockAttemptSectionCatalogEntry,
 } from '@lib/mocks/mock-attempt-catalog';
 import { toMockAttemptSectionSafeDto } from '@lib/mocks/mock-attempt-dto';
+import type { MockAttemptSectionAnswers } from '@models/mock-attempt-json-types';
 import type {
   MockAttemptSectionContentDto,
   StartMockAttemptSectionResultDto,
@@ -131,6 +132,21 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
 }
 
+/**
+ * Only ever returns a value for a section still 'in_progress' — a
+ * 'completed' section's grading result belongs to
+ * GetMockAttemptSectionResultService, not here, and a 'pending' section has
+ * never had anything saved. `answers` defaults to `[]` (an empty array) at
+ * seed time (see MockAttemptsRepository.createAttemptWithSections), never a
+ * real MockAttemptSectionAnswers object, so that default is never mistaken
+ * for a saved draft.
+ */
+function toDraftAnswersDto(section: MockAttemptSection): MockAttemptSectionAnswers | null {
+  if (section.status !== MockAttemptSectionStatus.IN_PROGRESS) return null;
+  if (Array.isArray(section.answers)) return null;
+  return section.answers;
+}
+
 function toListeningContentDto(
   result: ListeningSourceSafeWithItems,
 ): Extract<MockAttemptSectionContentDto, { contentType: 'listening' }> {
@@ -214,7 +230,11 @@ export class StartMockAttemptSectionService {
     }
 
     const content = await this.loadContent(userId, contentSection, catalogEntry);
-    return { section: toMockAttemptSectionSafeDto(contentSection), content };
+    return {
+      section: toMockAttemptSectionSafeDto(contentSection),
+      content,
+      draftAnswers: toDraftAnswersDto(contentSection),
+    };
   }
 
   private async provisionContent(

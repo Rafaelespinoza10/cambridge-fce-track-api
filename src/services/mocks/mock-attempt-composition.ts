@@ -9,12 +9,17 @@ import { buildWritingTaskServices } from '../writing/generate-writing-task-compo
 import { MockAttemptsRepository } from '@repositories/mocks/mock-attempts.repository';
 import { StartMockAttemptService } from './start-mock-attempt.service';
 import { StartMockAttemptSectionService } from './start-mock-attempt-section.service';
+import { SaveMockAttemptSectionDraftService } from './save-mock-attempt-section-draft.service';
 import { SubmitMockAttemptSectionService } from './submit-mock-attempt-section.service';
 import { SubmitMockAttemptService } from './submit-mock-attempt.service';
 import { AbandonMockAttemptService } from './abandon-mock-attempt.service';
 import { GetActiveMockAttemptService } from './get-active-mock-attempt.service';
 import { GetMockAttemptService } from './get-mock-attempt.service';
 import { GetMockAttemptSectionResultService } from './get-mock-attempt-section-result.service';
+import { GetMockAttemptResultService } from './get-mock-attempt-result.service';
+import { GenerateMockAttemptItemFlashcardDraftService } from './generate-mock-attempt-item-flashcard-draft.service';
+import { GenerateMockAttemptCorrectionFlashcardDraftService } from './generate-mock-attempt-correction-flashcard-draft.service';
+import { FlashcardDraftGenerator } from '../flashcards/flashcard-draft-generator';
 
 const DEFAULT_TEMPERATURE = 0.5;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2500;
@@ -37,12 +42,16 @@ function getOpenAIClient(): OpenAI {
 interface MockAttemptServices {
   startAttempt: StartMockAttemptService;
   startSection: StartMockAttemptSectionService;
+  saveSectionDraft: SaveMockAttemptSectionDraftService;
   submitSection: SubmitMockAttemptSectionService;
   submitAttempt: SubmitMockAttemptService;
   abandonAttempt: AbandonMockAttemptService;
   getActiveAttempt: GetActiveMockAttemptService;
   getAttempt: GetMockAttemptService;
   getSectionResult: GetMockAttemptSectionResultService;
+  getResult: GetMockAttemptResultService;
+  generateItemFlashcardDraft: GenerateMockAttemptItemFlashcardDraftService;
+  generateCorrectionFlashcardDraft: GenerateMockAttemptCorrectionFlashcardDraftService;
 }
 
 async function buildMockAttemptServices(): Promise<MockAttemptServices> {
@@ -64,12 +73,15 @@ async function buildMockAttemptServices(): Promise<MockAttemptServices> {
 
   const mockAttemptsRepository = new MockAttemptsRepository(dataSource);
 
+  const flashcardGenerator = new FlashcardDraftGenerator({ llm });
+
   return {
     startAttempt: new StartMockAttemptService(dataSource),
     startSection: new StartMockAttemptSectionService(dataSource, {
       generatePracticeExercise: generateExercise,
       generateWritingTask: generateTask,
     }),
+    saveSectionDraft: new SaveMockAttemptSectionDraftService(dataSource),
     submitSection: new SubmitMockAttemptSectionService(dataSource, { llm }),
     submitAttempt: new SubmitMockAttemptService(dataSource),
     abandonAttempt: new AbandonMockAttemptService({ repository: mockAttemptsRepository }),
@@ -78,6 +90,14 @@ async function buildMockAttemptServices(): Promise<MockAttemptServices> {
     getSectionResult: new GetMockAttemptSectionResultService({
       repository: mockAttemptsRepository,
     }),
+    getResult: new GetMockAttemptResultService(dataSource),
+    generateItemFlashcardDraft: new GenerateMockAttemptItemFlashcardDraftService(dataSource, {
+      generator: flashcardGenerator,
+    }),
+    generateCorrectionFlashcardDraft: new GenerateMockAttemptCorrectionFlashcardDraftService(
+      dataSource,
+      { generator: flashcardGenerator },
+    ),
   };
 }
 

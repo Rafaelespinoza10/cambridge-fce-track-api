@@ -32,6 +32,7 @@ export interface WritingGradingLLMPort {
 }
 
 export enum WritingGradingErrorCode {
+  INVALID_INPUT = 'invalid_input',
   AI_CONFIGURATION_ERROR = 'ai_configuration_error',
   AI_PROVIDER_UNAVAILABLE = 'ai_provider_unavailable',
   AI_INVALID_RESPONSE = 'ai_invalid_response',
@@ -158,6 +159,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function invalidResponse(message: string): never {
   throw new WritingGradingError(message, WritingGradingErrorCode.AI_INVALID_RESPONSE);
+}
+
+function invalidInput(message: string): never {
+  throw new WritingGradingError(message, WritingGradingErrorCode.INVALID_INPUT);
 }
 
 function validateText(value: unknown, field: string, maxLength: number): string {
@@ -350,7 +355,7 @@ export async function gradeWritingSubmission(
   submittedText: string,
 ): Promise<{ feedback: WritingFeedback; wordCount: number }> {
   if (submittedText.length > SUBMITTED_TEXT_MAX_LENGTH) {
-    invalidResponse(`submittedText exceeds ${SUBMITTED_TEXT_MAX_LENGTH} characters`);
+    invalidInput(`submittedText exceeds ${SUBMITTED_TEXT_MAX_LENGTH} characters`);
   }
   const wordCount = countWords(submittedText);
   const messages = buildWritingGradingMessages(task, submittedText, wordCount);
@@ -362,6 +367,13 @@ export async function gradeWritingSubmission(
       timeoutMs: REQUEST_TIMEOUT_MS,
       temperature: RESPONSE_TEMPERATURE,
       maxOutputTokens: RESPONSE_MAX_OUTPUT_TOKENS,
+      // Reasoning-tier models default to 'medium' effort, which regularly
+      // exceeds the ~29s httpApi hard integration timeout the section-submit
+      // Lambda that calls this from a live mock attempt has to fit inside
+      // (see StartMockAttemptSectionService's doc comment for the same
+      // constraint on generation). 'low' trades some reasoning depth for
+      // reliably staying inside that budget; ignored by non-reasoning models.
+      reasoningEffort: 'low',
     });
   } catch (err: unknown) {
     throw mapWritingGradingLLMError(err);

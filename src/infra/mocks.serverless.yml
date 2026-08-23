@@ -84,9 +84,22 @@ functions:
   # up front) — see StartMockAttemptSectionService's doc comment for why:
   # bulk LLM work in one Lambda invocation risks the ~29s httpApi hard
   # timeout this codebase already documents for the Cambridge Knowledge Base
-  # import endpoint. mockAttemptsStartSection/mockAttemptsSubmitSection get a
-  # longer function timeout for the one section that can call the LLM
-  # (writing) or search the Knowledge Base (grounded Reading generation).
+  # import endpoint. mockAttemptsStartSection gets that same ~29s function
+  # timeout for the one section that can call the LLM (writing) or search
+  # the Knowledge Base (grounded Reading generation) — its own internal LLM
+  # timeouts (25s, see GeneratePracticeExerciseService/GenerateWritingTaskService)
+  # stay safely under it.
+  #
+  # mockAttemptsSubmitSection gets a longer 35s function timeout instead,
+  # matching writing.serverless.yml's writingSubmitSubmission precedent:
+  # Writing-section grading (gradeWritingSubmission, lib/writing/writing-grading.ts)
+  # gives the LLM up to 30s internally, which is already past httpApi's own
+  # ~29s hard response ceiling — API Gateway will still return the client a
+  # timeout at ~29s if the LLM runs long, but giving the Lambda itself extra
+  # room past that means the grading/persistence keeps completing in the
+  # background instead of being killed mid-flight, so a client retry finds
+  # the section already graded and completed (idempotent replay) rather than
+  # losing the (paid-for) grading result outright.
 
   mockAttemptsStart:
     handler: src/controllers/mockAttemptsController.startMockAttempt
@@ -119,11 +132,22 @@ functions:
 
   mockAttemptsSubmitSection:
     handler: src/controllers/mockAttemptsController.submitMockAttemptSection
-    timeout: 29
+    timeout: 35
     events:
       - httpApi:
           path: /mocks/attempts/{attemptId}/sections/{sectionCode}/submit
           method: POST
+
+  # Autosaves whatever the student has typed so far in a still-open section —
+  # never graded, never marks it completed. DB-only, no explicit timeout
+  # needed. Short key: AWS Lambda names are {service}-{stage}-{key} and must
+  # be ≤ 64 chars.
+  mockAttemptsSaveDraft:
+    handler: src/controllers/mockAttemptsController.saveMockAttemptSectionDraft
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/sections/{sectionCode}/draft
+          method: PATCH
 
   # Re-serves an already-submitted section's grading result — submitting a
   # section returns it once, transiently, so a client that reloads before
@@ -148,6 +172,34 @@ functions:
     events:
       - httpApi:
           path: /mocks/attempts/{attemptId}/abandon
+          method: POST
+
+  # Full, answer-revealing detail of one finished attempt: every section's
+  # feedback plus a per-item review and the 4 paper-level score rollups.
+  # DB-only, no explicit timeout needed.
+  mockAttemptsGetResult:
+    handler: src/controllers/mockAttemptsController.getMockAttemptResult
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/result
+          method: GET
+
+  # Short key: AWS Lambda names are {service}-{stage}-{key} and must be ≤ 64 chars.
+  mockAttemptsItemFcDraft:
+    handler: src/controllers/mockAttemptsController.generateMockAttemptItemFlashcardDraft
+    timeout: 25
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/sections/{sectionCode}/items/{itemId}/flashcard-draft
+          method: POST
+
+  # Short key: AWS Lambda names are {service}-{stage}-{key} and must be ≤ 64 chars.
+  mockAttemptsCorrectionFcDraft:
+    handler: src/controllers/mockAttemptsController.generateMockAttemptCorrectionFlashcardDraft
+    timeout: 25
+    events:
+      - httpApi:
+          path: /mocks/attempts/{attemptId}/sections/{sectionCode}/corrections/{correctionId}/flashcard-draft
           method: POST
 
 package:
