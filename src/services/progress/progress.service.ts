@@ -8,7 +8,11 @@ import {
   getLastNWeekStarts,
   roundTwo,
 } from '@lib/progress/progress-library';
-import { CAMBRIDGE_SCALE_MAX, CAMBRIDGE_SCALE_MIN, LEVEL_BANDS } from '@lib/mocks/estimate-mock-level';
+import {
+  CAMBRIDGE_SCALE_MAX,
+  CAMBRIDGE_SCALE_MIN,
+  LEVEL_BANDS,
+} from '@lib/mocks/estimate-mock-level';
 import { getUserTimeZone } from '../planning/resolve-user-local-day';
 import type {
   ActivityHeatmapResponse,

@@ -273,7 +273,11 @@ export class StartMockAttemptSectionService {
       });
       const timeLimitSecondsOverride =
         catalogEntry.scoreGroup === 'useOfEnglish'
-          ? await this.computeUseOfEnglishTimeLimitSeconds(mockAttemptsRepo, attemptId, catalogEntry)
+          ? await this.computeUseOfEnglishTimeLimitSeconds(
+              mockAttemptsRepo,
+              attemptId,
+              catalogEntry,
+            )
           : undefined;
       await mockAttemptsRepo.startSectionContent(section.id, {
         practiceExerciseId: exercise.exercise.id,
@@ -399,9 +403,7 @@ export class StartMockAttemptSectionService {
       const otherEntry = findMockAttemptSectionCatalogEntry(s.section_code);
       if (otherEntry?.scoreGroup !== 'useOfEnglish') return sum;
 
-      const elapsedSeconds = Math.floor(
-        (s.completed_at.getTime() - s.started_at.getTime()) / 1000,
-      );
+      const elapsedSeconds = Math.floor((s.completed_at.getTime() - s.started_at.getTime()) / 1000);
       return sum + Math.max(0, s.time_limit_seconds - elapsedSeconds);
     }, 0);
 

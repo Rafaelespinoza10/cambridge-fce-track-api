@@ -20,10 +20,7 @@ import {
 } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
-import {
-  computeMockAttemptPaperScores,
-  PAPER_GROUPS,
-} from '@lib/mocks/mock-attempt-paper-scores';
+import { computeMockAttemptPaperScores, PAPER_GROUPS } from '@lib/mocks/mock-attempt-paper-scores';
 import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';

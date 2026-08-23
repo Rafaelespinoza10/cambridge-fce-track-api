@@ -30,7 +30,10 @@ import { MockTest } from '../src/models/MockTest';
 import { MockAttempt } from '../src/models/MockAttempt';
 import { MockAttemptSection } from '../src/models/MockAttemptSection';
 import { MockAttemptStatus, MockType, ExamType } from '../src/models/enums';
-import { computeMockAttemptPaperScores, PAPER_GROUPS } from '../src/lib/mocks/mock-attempt-paper-scores';
+import {
+  computeMockAttemptPaperScores,
+  PAPER_GROUPS,
+} from '../src/lib/mocks/mock-attempt-paper-scores';
 import { estimateB2FirstResult } from '../src/lib/mocks/estimate-mock-level';
 
 const ROOT = path.resolve(__dirname, '..');
@@ -118,12 +121,16 @@ async function main(): Promise<void> {
       });
       if (attempt === null) {
         skippedNoAttempt++;
-        console.log(`  skip   ${mockTest.id}  "${mockTest.name}"  (no completed live attempt found)`);
+        console.log(
+          `  skip   ${mockTest.id}  "${mockTest.name}"  (no completed live attempt found)`,
+        );
         continue;
       }
       if (attempt.exam_type !== ExamType.B2_FIRST) {
         skippedNotB2First++;
-        console.log(`  skip   ${mockTest.id}  "${mockTest.name}"  (exam_type=${attempt.exam_type})`);
+        console.log(
+          `  skip   ${mockTest.id}  "${mockTest.name}"  (exam_type=${attempt.exam_type})`,
+        );
         continue;
       }
 
@@ -150,7 +157,9 @@ async function main(): Promise<void> {
     console.log('');
     console.log('---');
     console.log(`${updated} row(s) ${APPLY ? 'updated' : 'would be updated'}.`);
-    console.log(`${skippedNoAttempt} row(s) skipped (no matching completed attempt — manual entry).`);
+    console.log(
+      `${skippedNoAttempt} row(s) skipped (no matching completed attempt — manual entry).`,
+    );
     console.log(`${skippedNotB2First} row(s) skipped (not B2 First).`);
     if (!APPLY && updated > 0) {
       console.log('\nRe-run with --apply to write these changes.');

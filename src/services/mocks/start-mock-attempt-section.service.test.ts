@@ -84,7 +84,8 @@ function makeHarness(opts: {
   const mockAttempts: MockAttemptsRepositoryPort = {
     findByIdForUser: async () => (opts.attempt === undefined ? makeAttempt() : opts.attempt),
     findSectionByCodeForUser: async () => currentSection,
-    findSectionsByAttempt: async () => opts.otherSections ?? (currentSection ? [currentSection] : []),
+    findSectionsByAttempt: async () =>
+      opts.otherSections ?? (currentSection ? [currentSection] : []),
     startSectionContent: async (sectionId, data) => {
       startCalls.push({ sectionId, data });
       if (currentSection !== null) {
