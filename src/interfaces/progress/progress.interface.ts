@@ -96,6 +96,45 @@ export interface ScoreEvolutionResponse {
   scores: ScoreEvolutionEntry[];
 }
 
+/**
+ * One completed, graded B2 First mock's estimated Cambridge Scale Score —
+ * powers the Progress screen's mock score trend line chart. Only ever
+ * populated for mocks with a computed estimate (see
+ * StartMockAttemptService/SubmitMockAttemptService and
+ * estimate-mock-level.ts); mocks logged before that feature shipped, or for
+ * exam types the estimate doesn't cover, are excluded rather than shown
+ * with a null score.
+ */
+export interface MockScoreTrendPoint {
+  takenAt: string;
+  standardizedScore: number;
+  level: string;
+}
+
+/** One CEFR level's score range on the Cambridge Scale (100-190) — see LEVEL_BANDS. */
+export interface MockScoreTrendBand {
+  level: string;
+  minScore: number;
+  maxScore: number;
+}
+
+export interface MockScoreTrendResponse {
+  points: MockScoreTrendPoint[];
+  bands: MockScoreTrendBand[];
+  scoreScaleMin: number;
+  scoreScaleMax: number;
+}
+
+/** One calendar day's activity count, in the user's own timezone — powers the GitHub-style activity heatmap. Days with zero activity are simply absent. */
+export interface ActivityHeatmapDay {
+  date: string;
+  count: number;
+}
+
+export interface ActivityHeatmapResponse {
+  days: ActivityHeatmapDay[];
+}
+
 export interface MetricsResponse {
   weeklyActivities: WeeklyActivitiesMetric;
   studyMinutes: number;

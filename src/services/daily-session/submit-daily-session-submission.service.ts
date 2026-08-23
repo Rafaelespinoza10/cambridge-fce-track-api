@@ -30,7 +30,10 @@ import { DailySessionSubmissionsRepository } from '@repositories/daily-session/d
 import type { GradeSubmissionData } from '@repositories/daily-session/daily-session-submissions.repository';
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
+import { createAiLinkedActivityScore } from '../planning/create-ai-linked-activity-score';
+import type { CreateAiLinkedActivityScoreInput } from '../planning/create-ai-linked-activity-score';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
+import { resolveUserLocalDayKey } from '../planning/resolve-user-local-day';
 import SYSTEM_PROMPT from '../../prompts/daily-session/grade-sentences.system.md';
 import USER_PROMPT_TEMPLATE from '../../prompts/daily-session/grade-sentences.user.md';
 
@@ -87,16 +90,35 @@ export interface DailySessionSubmissionsRepositoryPort {
   ): Promise<{ affected?: number | null }>;
 }
 
+/** The subset of the created PlannedActivity that the follow-up score row needs. */
+interface CreatedPlannedActivityRef {
+  id: string;
+  skill_id: string | null;
+  exam_section_id: string | null;
+}
+
 export interface SubmitDailySessionSubmissionServiceDeps {
   llm: LLMServicePort;
   dailySessions?: (source: RepositorySource) => DailySessionsRepositoryPort;
   dailySessionSubmissions?: (source: RepositorySource) => DailySessionSubmissionsRepositoryPort;
   // Injectable seam for tests — see SubmitWritingSubmissionServiceDeps.createAiLinkedActivity.
+  // Narrower than Writing's `Promise<unknown>` on purpose: the score row created
+  // right after needs the new activity's id (and its resolved skill/exam-section
+  // ids, so we don't look up by slug a second time).
   createAiLinkedActivity?: (
     manager: EntityManager,
     input: CreateAiLinkedPlannedActivityInput,
+  ) => Promise<CreatedPlannedActivityRef>;
+  createAiLinkedActivityScore?: (
+    manager: EntityManager,
+    input: CreateAiLinkedActivityScoreInput,
   ) => Promise<unknown>;
   resolvePlanDayId?: (manager: EntityManager, userId: string, dateKey: string) => Promise<string>;
+  resolveUserLocalDayKey?: (
+    manager: EntityManager,
+    userId: string,
+    instant: Date,
+  ) => Promise<string>;
 }
 
 const DEFAULT_DAILY_SESSIONS_FACTORY = (source: RepositorySource): DailySessionsRepositoryPort =>
@@ -589,20 +611,55 @@ export class SubmitDailySessionSubmissionService {
 
       // Register on the Plan/Home only once the submission is really graded
       // — never at start time. Unlike Practice/Writing there is no captured
-      // plan_day_id — a Daily Session always registers against the day it's
-      // FOR (session.session_date), resolved fresh here every time.
+      // plan_day_id to honour, so the day is always resolved here.
+      //
+      // It's the day the user FINISHED on (their local calendar day for
+      // submittedAt), not session.session_date, which is the day the lesson
+      // was generated FOR. Those differ whenever someone starts a lesson and
+      // submits it after midnight, and landing on the earlier day made a
+      // session the user had just completed absent from "today" on the Plan
+      // screen. Same rule Practice and Writing now use — see
+      // resolve-user-local-day.ts.
       {
         const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
+        const scorer = this.deps.createAiLinkedActivityScore ?? createAiLinkedActivityScore;
         const resolveDay = this.deps.resolvePlanDayId ?? resolvePlanDayIdForDate;
-        const planDayId = await resolveDay(manager, userId, session.session_date);
-        await linker(manager, {
+        const resolveLocalDayKey = this.deps.resolveUserLocalDayKey ?? resolveUserLocalDayKey;
+        const planDayId = await resolveDay(
+          manager,
+          userId,
+          await resolveLocalDayKey(manager, userId, submittedAt),
+        );
+        const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
+        const activity = await linker(manager, {
           planDayId,
           title: `Daily Session — ${session.reading_title}`,
           skillSlug: 'reading',
           examSectionSlug: 'reading-part-5',
-          estimatedDurationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
+          estimatedDurationMinutes: durationMinutes,
           completedAt: submittedAt,
           dailySessionSubmissionId: submissionId,
+        });
+
+        // The activity row alone only reaches Home's week view and the
+        // "weekly activities" counter; the score row is what the Progress
+        // metrics actually read. See create-ai-linked-activity-score.ts.
+        //
+        // Comprehension only, deliberately: the activity is tagged
+        // reading/reading-part-5, and comprehension is the purely-Reading,
+        // deterministically-graded half of the session. The sentence task is
+        // production, graded qualitatively by the LLM, and stays feedback-only
+        // rather than being averaged into a Reading score.
+        await scorer(manager, {
+          userId,
+          plannedActivityId: activity.id,
+          skillId: activity.skill_id,
+          examSectionId: activity.exam_section_id,
+          percentage: comprehensionPercentage,
+          correctAnswers: comprehensionCorrectCount,
+          totalQuestions: comprehensionTotalCount,
+          timeSpentMinutes: durationMinutes,
+          attemptedAt: submittedAt,
         });
       }
 

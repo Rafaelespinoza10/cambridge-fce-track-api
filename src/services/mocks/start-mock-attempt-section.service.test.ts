@@ -24,6 +24,7 @@ import {
 } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
+import { deterministicUuidFrom } from '@lib/shared/deterministic-uuid';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ATTEMPT_ID = 'attempt-1';
@@ -72,6 +73,8 @@ function makeHarness(opts: {
   section: MockAttemptSection | null;
   attempt?: MockAttempt | null;
   listeningPick?: unknown;
+  otherSections?: MockAttemptSection[];
+  listeningPickForPartAndVideo?: unknown;
 }) {
   let currentSection = opts.section;
   const startCalls: unknown[] = [];
@@ -81,6 +84,8 @@ function makeHarness(opts: {
   const mockAttempts: MockAttemptsRepositoryPort = {
     findByIdForUser: async () => (opts.attempt === undefined ? makeAttempt() : opts.attempt),
     findSectionByCodeForUser: async () => currentSection,
+    findSectionsByAttempt: async () =>
+      opts.otherSections ?? (currentSection ? [currentSection] : []),
     startSectionContent: async (sectionId, data) => {
       startCalls.push({ sectionId, data });
       if (currentSection !== null) {
@@ -91,6 +96,9 @@ function makeHarness(opts: {
           listening_source_id: data.listeningSourceId ?? null,
           status: MockAttemptSectionStatus.IN_PROGRESS,
           started_at: data.startedAt,
+          ...(data.timeLimitSecondsOverride !== undefined
+            ? { time_limit_seconds: data.timeLimitSecondsOverride }
+            : {}),
         } as MockAttemptSection;
       }
     },
@@ -119,6 +127,8 @@ function makeHarness(opts: {
   };
   const listeningSources: ListeningSourcesRepositoryPort = {
     findRandomActiveSourceWithItemsForPart: async () => (opts.listeningPick ?? null) as never,
+    findActiveSourceWithItemsForPartAndVideo: async () =>
+      (opts.listeningPickForPartAndVideo ?? null) as never,
     findByIdWithItems: async () => (opts.listeningPick ?? null) as never,
   };
 
@@ -150,7 +160,14 @@ describe('StartMockAttemptSectionService.execute', () => {
       request: { partCode: string; idempotencyKey: string };
     };
     assert.equal(call.request.partCode, 'UOE_PART_1');
-    assert.equal(call.request.idempotencyKey, `${ATTEMPT_ID}:uoe-part-1`);
+    // Must be a valid uuid (practice_exercises.idempotency_key's column type)
+    // and deterministic — the exact hash of attemptId+sectionCode, so a
+    // retry replays instead of erroring on `invalid input syntax for type uuid`.
+    assert.equal(call.request.idempotencyKey, deterministicUuidFrom(`${ATTEMPT_ID}:uoe-part-1`));
+    assert.match(
+      call.request.idempotencyKey,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
     assert.equal(startCalls.length, 1);
   });
 
@@ -256,6 +273,135 @@ describe('StartMockAttemptSectionService.execute', () => {
 
     assert.equal(generateExerciseCalls.length, 0);
     assert.equal(result.content.contentType, 'practice_exercise');
+  });
+
+  it('reuses the same curated video across all 4 Listening parts of one attempt', async () => {
+    const existingListeningSection = makeSection({
+      section_code: 'listening-part-1',
+      content_type: MockAttemptSectionContentType.LISTENING,
+      status: MockAttemptSectionStatus.IN_PROGRESS,
+      listening_source_id: 'listening-source-1',
+      started_at: NOW,
+    });
+    const pendingSection = makeSection({
+      section_code: 'listening-part-2',
+      content_type: MockAttemptSectionContentType.LISTENING,
+    });
+
+    const { service, startCalls } = makeHarness({
+      section: pendingSection,
+      otherSections: [existingListeningSection, pendingSection],
+      listeningPick: {
+        source: {
+          id: 'listening-source-1',
+          title: 't1',
+          instructions: 'i1',
+          videoProvider: 'youtube',
+          videoExternalId: 'vid-abc',
+          videoStartSeconds: 0,
+          videoEndSeconds: 690,
+        },
+        items: [],
+      },
+      listeningPickForPartAndVideo: {
+        source: {
+          id: 'listening-source-2-matched',
+          title: 't2',
+          instructions: 'i2',
+          videoProvider: 'youtube',
+          videoExternalId: 'vid-abc',
+          videoStartSeconds: 700,
+          videoEndSeconds: 1400,
+        },
+        items: [],
+      },
+    });
+
+    await service.execute(USER_ID, ATTEMPT_ID, 'listening-part-2');
+
+    const startData = (startCalls[0] as { data: { listeningSourceId: string } }).data;
+    assert.equal(startData.listeningSourceId, 'listening-source-2-matched');
+  });
+
+  it('falls back to a random pick if no source shares the already-picked video for this part', async () => {
+    const existingListeningSection = makeSection({
+      section_code: 'listening-part-1',
+      content_type: MockAttemptSectionContentType.LISTENING,
+      status: MockAttemptSectionStatus.IN_PROGRESS,
+      listening_source_id: 'listening-source-1',
+      started_at: NOW,
+    });
+    const pendingSection = makeSection({
+      section_code: 'listening-part-2',
+      content_type: MockAttemptSectionContentType.LISTENING,
+    });
+
+    const { service, startCalls } = makeHarness({
+      section: pendingSection,
+      otherSections: [existingListeningSection, pendingSection],
+      listeningPick: {
+        source: {
+          id: 'listening-source-1',
+          title: 't1',
+          instructions: 'i1',
+          videoProvider: 'youtube',
+          videoExternalId: 'vid-abc',
+          videoStartSeconds: 0,
+          videoEndSeconds: 690,
+        },
+        items: [],
+      },
+      listeningPickForPartAndVideo: null,
+    });
+
+    await service.execute(USER_ID, ATTEMPT_ID, 'listening-part-2');
+
+    const startData = (startCalls[0] as { data: { listeningSourceId: string } }).data;
+    // Falls back to opts.listeningPick, which findRandomActiveSourceWithItemsForPart returns.
+    assert.equal(startData.listeningSourceId, 'listening-source-1');
+  });
+
+  it('pools unused time from a completed UoE part into the next UoE part', async () => {
+    const completedPart1 = makeSection({
+      section_code: 'uoe-part-1',
+      status: MockAttemptSectionStatus.COMPLETED,
+      time_limit_seconds: 900,
+      started_at: new Date('2026-01-01T09:00:00Z'),
+      completed_at: new Date('2026-01-01T09:10:00Z'),
+    });
+    const pendingPart2 = makeSection({ section_code: 'uoe-part-2', time_limit_seconds: 900 });
+
+    const { service, startCalls } = makeHarness({
+      section: pendingPart2,
+      otherSections: [completedPart1, pendingPart2],
+    });
+
+    await service.execute(USER_ID, ATTEMPT_ID, 'uoe-part-2');
+
+    const startData = (startCalls[0] as { data: { timeLimitSecondsOverride?: number } }).data;
+    // uoe-part-2 base is 900s (15 min) + 300s leftover from part 1 (used 10 of 15 min).
+    assert.equal(startData.timeLimitSecondsOverride, 1200);
+  });
+
+  it('does not pool time from Reading sections into Use of English', async () => {
+    const completedReading = makeSection({
+      section_code: 'reading-part-5',
+      status: MockAttemptSectionStatus.COMPLETED,
+      time_limit_seconds: 720,
+      started_at: new Date('2026-01-01T09:00:00Z'),
+      completed_at: new Date('2026-01-01T09:01:00Z'),
+    });
+    const pendingUoe = makeSection({ section_code: 'uoe-part-1', time_limit_seconds: 900 });
+
+    const { service, startCalls } = makeHarness({
+      section: pendingUoe,
+      otherSections: [completedReading, pendingUoe],
+    });
+
+    await service.execute(USER_ID, ATTEMPT_ID, 'uoe-part-1');
+
+    const startData = (startCalls[0] as { data: { timeLimitSecondsOverride?: number } }).data;
+    assert.equal(startData.timeLimitSecondsOverride, 900);
   });
 
   it('rejects when the attempt is not in progress', async () => {

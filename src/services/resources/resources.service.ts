@@ -1,18 +1,23 @@
 import type { DataSource, UpdateResult } from 'typeorm';
 
 import { ResourcesRepository } from '@repositories/resources/resources.repository';
-import type { CreateResourceData } from '@repositories/resources/resources.repository';
+import type {
+  CreateResourceData,
+  UpdateResourceData,
+} from '@repositories/resources/resources.repository';
 import type { Resource } from '../../models/Resource';
 import type { ResourceType } from '../../models/enums';
 import type {
   CreateResourceRequestBody,
   ResourceDto,
+  UpdateResourceRequestBody,
 } from '../../interfaces/resources/resources.interface';
 
 export enum ResourceErrorCode {
   INVALID_INPUT = 'invalid_input',
   RESOURCE_NOT_FOUND = 'resource_not_found',
   RESOURCE_NOT_DELETABLE = 'resource_not_deletable',
+  RESOURCE_NOT_EDITABLE = 'resource_not_editable',
 }
 
 export class ResourceError extends Error {
@@ -32,6 +37,7 @@ interface ResourcesRepositoryPort {
   create(data: CreateResourceData): Promise<Resource>;
   findActiveById(resourceId: string): Promise<Resource | null>;
   softDelete(resourceId: string, userId: string): Promise<UpdateResult>;
+  update(resourceId: string, userId: string, data: UpdateResourceData): Promise<UpdateResult>;
 }
 
 interface ResourcesServiceDeps {
@@ -197,6 +203,47 @@ class ResourcesService {
     if (result.affected !== 1) {
       throw new ResourceError('Resource not found', ResourceErrorCode.RESOURCE_NOT_FOUND);
     }
+  }
+
+  async updateResource(
+    userId: string,
+    resourceId: string,
+    input: UpdateResourceRequestBody,
+  ): Promise<ResourceDto> {
+    const resource = await this.resourcesRepo().findActiveById(resourceId);
+    if (resource === null) {
+      throw new ResourceError('Resource not found', ResourceErrorCode.RESOURCE_NOT_FOUND);
+    }
+    if (resource.is_global || resource.user_id !== userId) {
+      throw new ResourceError(
+        'You cannot edit this resource',
+        ResourceErrorCode.RESOURCE_NOT_EDITABLE,
+      );
+    }
+
+    const data: UpdateResourceData = {
+      ...(input.title !== undefined && { title: normalizeTitle(input.title) }),
+      ...(input.description !== undefined && {
+        description: normalizeDescription(input.description),
+      }),
+      ...(input.url !== undefined && { url: normalizeUrl(input.url) }),
+      ...(input.imageUrl !== undefined && { imageUrl: normalizeImageUrl(input.imageUrl) }),
+    };
+
+    if (Object.keys(data).length === 0) {
+      throw new ResourceError('No fields to update', ResourceErrorCode.INVALID_INPUT);
+    }
+
+    const result = await this.resourcesRepo().update(resourceId, userId, data);
+    if (result.affected !== 1) {
+      throw new ResourceError('Resource not found', ResourceErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    const updated = await this.resourcesRepo().findActiveById(resourceId);
+    if (updated === null) {
+      throw new ResourceError('Resource not found', ResourceErrorCode.RESOURCE_NOT_FOUND);
+    }
+    return toResourceDto(updated);
   }
 }
 

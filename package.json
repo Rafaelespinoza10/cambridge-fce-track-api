@@ -19,7 +19,9 @@
     "db:migration:revert": "node scripts/db.js migration:revert -d src/config/database.ts",
     "db:migration:show": "node scripts/db.js migration:show -d src/config/database.ts",
     "db:seed": "node scripts/seed.js",
-    "db:backfill-ai-activities": "node scripts/backfill-ai-activities.js"
+    "db:backfill-ai-activities": "node scripts/backfill-ai-activities.js",
+    "db:backfill-daily-session-scores": "node scripts/backfill-daily-session-scores.js",
+    "db:backfill-ai-activity-plan-days": "node scripts/backfill-ai-activity-plan-days.js"
   },
   "engines": {
     "node": ">=22.0.0"

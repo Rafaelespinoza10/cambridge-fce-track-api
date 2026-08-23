@@ -7,7 +7,7 @@ import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 import { GenerateDailySessionService } from './generate-daily-session.service';
 import { DailySessionsService } from './daily-sessions.service';
 import { DailySessionsRepository } from '@repositories/daily-session/daily-sessions.repository';
-import { buildCambridgeKnowledgeServices } from '../cambridge-knowledge/cambridge-knowledge-composition';
+import { buildCambridgeKnowledgeSearchServices } from '../cambridge-knowledge/cambridge-knowledge-search-composition';
 
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
@@ -45,12 +45,12 @@ async function buildDailySessionServices(): Promise<DailySessionServices> {
     defaultMaxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
   });
 
-  // Grounding is best-effort: the Cambridge Knowledge Base search service
-  // reuses the same OpenAI client/model, so wiring it costs nothing extra
-  // here — GenerateDailySessionService degrades gracefully to "no grounding
-  // material" if the Knowledge Base has nothing for the topic. Same reuse
-  // as generate-practice-exercise-composition.ts.
-  const { searchKnowledge } = await buildCambridgeKnowledgeServices();
+  // Grounding is best-effort: GenerateDailySessionService degrades gracefully
+  // to "no grounding material" if the Knowledge Base has nothing for the
+  // topic. Uses the SEARCH-ONLY composition on purpose — the full one pulls
+  // the admin PDF-import pipeline (and `pdf-parse`, which crashes a bundled
+  // Lambda on cold start) into this function's graph for no reason.
+  const { searchKnowledge } = await buildCambridgeKnowledgeSearchServices();
 
   return {
     generateSession: new GenerateDailySessionService(dataSource, {

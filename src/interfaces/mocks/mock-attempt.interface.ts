@@ -3,7 +3,10 @@ import type { MockAttemptSectionContentType } from '@models/enums';
 import type { PracticeExerciseSafeWithItems } from '../practice/practice-exercise.interface';
 import type { WritingTaskSafeDto } from '../writing/writing-task.interface';
 import type { ListeningItemSafeDto } from '@repositories/mocks/listening-sources.repository';
-import type { MockAttemptSectionGradingFeedback } from '@models/mock-attempt-json-types';
+import type {
+  MockAttemptSectionAnswers,
+  MockAttemptSectionGradingFeedback,
+} from '@models/mock-attempt-json-types';
 
 /** Never carries userId, answer keys, or any content's answerKey/explanation. */
 export interface MockAttemptSectionSafeDto {
@@ -54,6 +57,15 @@ export type MockAttemptSectionContentDto =
 export interface StartMockAttemptSectionResultDto {
   section: MockAttemptSectionSafeDto;
   content: MockAttemptSectionContentDto;
+  /**
+   * Whatever was last saved via PATCH .../draft (or, if the section was
+   * fully submitted before, its final submitted answers) — null when
+   * nothing has been saved yet. Lets a client that re-enters a section
+   * (fresh page load, browser crash mid-timer) restore what the student had
+   * already typed instead of starting from a blank form. Only ever
+   * populated for a section past 'pending' — see toDraftAnswersDto.
+   */
+  draftAnswers: MockAttemptSectionAnswers | null;
 }
 
 export interface SubmitObjectiveSectionAnswerInput {
@@ -65,6 +77,13 @@ export interface SubmitObjectiveSectionAnswerInput {
 export type SubmitMockAttemptSectionRequest =
   | { answers: SubmitObjectiveSectionAnswerInput[] }
   | { content: string };
+
+/** Same request shape as a final submit, but partial/incomplete answers are expected and never graded. */
+export type SaveMockAttemptSectionDraftRequest = SubmitMockAttemptSectionRequest;
+
+export interface SaveMockAttemptSectionDraftResultDto {
+  saved: true;
+}
 
 export interface MockAttemptSectionResultDto {
   section: MockAttemptSectionSafeDto;

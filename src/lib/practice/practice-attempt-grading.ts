@@ -1,5 +1,6 @@
 import type {
   PracticeItemAnswerKey,
+  PracticeItemOption,
   PracticeAnswerPayload,
   PracticeAttemptFeedbackSummary,
   PracticeAttemptSkillBreakdownEntry,
@@ -122,7 +123,19 @@ export function computeFeedbackSummary(items: FeedbackInputItem[]): PracticeAtte
   };
 }
 
-export function formatAcceptedAnswers(item: PracticeItem): string[] {
+/**
+ * Structural, not `PracticeItem`-specific — `ListeningItem` mirrors these
+ * same two columns (see its own doc comment on why) and satisfies this
+ * shape without a cast, so mock-attempt review/flashcard-draft code can
+ * reuse this and formatUserAnswer for a Listening item exactly like a
+ * Practice one.
+ */
+export interface GradableItemLike {
+  answer_key: PracticeItemAnswerKey;
+  options: PracticeItemOption[] | null;
+}
+
+export function formatAcceptedAnswers(item: GradableItemLike): string[] {
   const key = item.answer_key;
   if (key.kind === 'single_choice') {
     const optionsById = new Map((item.options ?? []).map((option) => [option.id, option.label]));
@@ -138,7 +151,7 @@ export function formatAcceptedAnswers(item: PracticeItem): string[] {
  * used as-is, and `unanswered` renders as an explicit placeholder rather
  * than an empty string.
  */
-export function formatUserAnswer(item: PracticeItem, payload: PracticeAnswerPayload): string {
+export function formatUserAnswer(item: GradableItemLike, payload: PracticeAnswerPayload): string {
   if (payload.kind === 'unanswered') return '(no answer given)';
   if (payload.kind === 'single_choice') {
     const optionsById = new Map((item.options ?? []).map((option) => [option.id, option.label]));

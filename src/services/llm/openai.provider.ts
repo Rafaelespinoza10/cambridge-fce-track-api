@@ -29,6 +29,8 @@ export interface OpenAIClientPort {
 }
 
 const UNSUPPORTED_TEMPERATURE_PATTERN = /'temperature'\s+is not supported/i;
+const UNSUPPORTED_REASONING_PATTERN =
+  /'reasoning'\s+is not supported|unknown parameter.*reasoning/i;
 
 /**
  * Some models (reasoning-tier: o1/o3, gpt-5-thinking family, and others)
@@ -48,6 +50,48 @@ async function withTemperatureFallback<T>(
       UNSUPPORTED_TEMPERATURE_PATTERN.test(err.message);
     if (!isUnsupportedTemperature) throw err;
     return attempt(false);
+  }
+}
+
+interface StructuredAttemptFlags {
+  includeTemperature: boolean;
+  includeReasoning: boolean;
+}
+
+/**
+ * Same idea as withTemperatureFallback, generalized to a second parameter:
+ * `reasoning.effort` is only meaningful for reasoning-tier models, so if a
+ * caller (or a future model swap) sends it to one that doesn't support it,
+ * drop it and retry rather than failing generation outright.
+ */
+async function withStructuredCompletionFallback<T>(
+  attempt: (flags: StructuredAttemptFlags) => Promise<T>,
+): Promise<T> {
+  const flags: StructuredAttemptFlags = { includeTemperature: true, includeReasoning: true };
+  for (;;) {
+    try {
+      return await attempt(flags);
+    } catch (err: unknown) {
+      if (
+        flags.includeTemperature &&
+        err instanceof APIError &&
+        err.status === 400 &&
+        UNSUPPORTED_TEMPERATURE_PATTERN.test(err.message)
+      ) {
+        flags.includeTemperature = false;
+        continue;
+      }
+      if (
+        flags.includeReasoning &&
+        err instanceof APIError &&
+        err.status === 400 &&
+        UNSUPPORTED_REASONING_PATTERN.test(err.message)
+      ) {
+        flags.includeReasoning = false;
+        continue;
+      }
+      throw err;
+    }
   }
 }
 
@@ -114,27 +158,31 @@ export class OpenAIProvider implements LLMProvider {
 
     let response: OpenAI.Responses.Response;
     try {
-      response = await withTemperatureFallback((includeTemperature) =>
-        this.client.responses.create(
-          {
-            model: params.model,
-            input: params.messages.map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
-            max_output_tokens: params.maxOutputTokens,
-            ...(includeTemperature ? { temperature: params.temperature } : {}),
-            text: {
-              format: {
-                type: 'json_schema',
-                name: params.responseSchema.name,
-                schema: params.responseSchema.schema,
-                strict: params.responseSchema.strict ?? true,
+      response = await withStructuredCompletionFallback(
+        ({ includeTemperature, includeReasoning }) =>
+          this.client.responses.create(
+            {
+              model: params.model,
+              input: params.messages.map((message) => ({
+                role: message.role,
+                content: message.content,
+              })),
+              max_output_tokens: params.maxOutputTokens,
+              ...(includeTemperature ? { temperature: params.temperature } : {}),
+              ...(includeReasoning && params.reasoningEffort !== undefined
+                ? { reasoning: { effort: params.reasoningEffort } }
+                : {}),
+              text: {
+                format: {
+                  type: 'json_schema',
+                  name: params.responseSchema.name,
+                  schema: params.responseSchema.schema,
+                  strict: params.responseSchema.strict ?? true,
+                },
               },
             },
-          },
-          requestOptions,
-        ),
+            requestOptions,
+          ),
       );
     } catch (err: unknown) {
       throw mapOpenAIError(err);

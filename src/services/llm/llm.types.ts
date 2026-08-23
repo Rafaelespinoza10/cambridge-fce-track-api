@@ -5,6 +5,13 @@ export interface LLMChatMessage {
   content: string;
 }
 
+/**
+ * Constrains effort on reasoning for reasoning-tier models (e.g. gpt-5.6).
+ * Lower effort trades response quality for latency — matters for endpoints
+ * running behind API Gateway's ~29s hard integration timeout.
+ */
+export type LLMReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface LLMCompletionOptions {
   model?: string;
   temperature?: number;
@@ -34,6 +41,8 @@ export interface LLMStructuredCompletionOptions extends LLMCompletionOptions {
   responseSchema: LLMJsonSchema;
   /** Aborts the request if the provider hasn't responded within this many ms. */
   timeoutMs?: number;
+  /** Ignored by providers/models that don't support reasoning effort. */
+  reasoningEffort?: LLMReasoningEffort;
 }
 
 export interface LLMProviderStructuredCompletionParams {
@@ -43,6 +52,7 @@ export interface LLMProviderStructuredCompletionParams {
   maxOutputTokens: number;
   responseSchema: LLMJsonSchema;
   timeoutMs?: number;
+  reasoningEffort?: LLMReasoningEffort;
 }
 
 export interface LLMProviderStructuredResult {

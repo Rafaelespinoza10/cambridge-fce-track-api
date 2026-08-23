@@ -41,6 +41,13 @@ functions:
           path: /resources/{resourceId}
           method: DELETE
 
+  resourcesUpdate:
+    handler: src/controllers/resourceController.updateResource
+    events:
+      - httpApi:
+          path: /resources/{resourceId}
+          method: PATCH
+
 package:
   individually: true
 

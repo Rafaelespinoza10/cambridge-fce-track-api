@@ -4,6 +4,7 @@ import { PlanDay } from '@models/PlanDay';
 import { WeeklyPlan } from '@models/WeeklyPlan';
 import { MockTest } from '@models/MockTest';
 import { UserGoal } from '@models/UserGoal';
+import { ExamType, EnglishLevel } from '@models/enums';
 
 interface WeeklyActivityStats {
   total: number;
@@ -67,6 +68,17 @@ interface WritingMetricsSummaryRow {
   completedCount: number;
   overallAverageBand: number | null;
   lastAttemptAt: Date | null;
+}
+
+interface MockScoreTrendRow {
+  takenAt: Date;
+  standardizedScore: number;
+  level: EnglishLevel;
+}
+
+interface ActivityHeatmapRow {
+  date: string;
+  count: number;
 }
 
 /**
@@ -160,13 +172,16 @@ class ProgressRepository {
     userId: string,
     weekStart: string,
     weekEnd: string,
+    timeZone: string,
   ): Promise<WeeklyScoreStats> {
     const rows = await this.ds.query<{ avg_score: string | null; study_minutes: string }[]>(
       `${UNIFIED_SCORES_CTE}
        SELECT AVG(percentage) AS avg_score, COALESCE(SUM(duration_minutes), 0) AS study_minutes
        FROM unified_scores
-       WHERE user_id = $1 AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')`,
-      [userId, weekStart, weekEnd],
+       WHERE user_id = $1
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)`,
+      [userId, weekStart, weekEnd, timeZone],
     );
     const row = rows[0];
 
@@ -178,15 +193,23 @@ class ProgressRepository {
     };
   }
 
-  async getSkillAverages(userId: string, since: string): Promise<SkillAverage[]> {
+  /**
+   * from/to are the USER's calendar days (the client builds them from local
+   * components), so the window has to be opened in the user's zone too.
+   * `$n::date` alone is midnight UTC: with a local 'to' of the 21st that cuts
+   * the window at 18:00 local, silently dropping every activity done that
+   * evening.
+   */
+  async getSkillAverages(userId: string, since: string, timeZone: string): Promise<SkillAverage[]> {
     const rows = await this.ds.query<{ skillName: string; avgScore: string }[]>(
       `${UNIFIED_SCORES_CTE}
        SELECT skill_name AS "skillName", AVG(percentage) AS "avgScore"
        FROM unified_scores
-       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL AND occurred_at >= $2::date
+       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $3)
        GROUP BY skill_name
        ORDER BY skill_name ASC`,
-      [userId, since],
+      [userId, since, timeZone],
     );
 
     return rows.map((r) => ({
@@ -195,15 +218,22 @@ class ProgressRepository {
     }));
   }
 
-  async getStudyDates(userId: string): Promise<string[]> {
+  /**
+   * Distinct days the user studied, in THEIR timezone — this is what the
+   * study streak counts. Bucketing by the UTC day (as this used to) both
+   * broke and inflated streaks west of Greenwich: an evening session and the
+   * next morning's collapse into one UTC day, while a single Friday-evening
+   * session registers as Saturday.
+   */
+  async getStudyDates(userId: string, timeZone: string): Promise<string[]> {
     const rows = await this.ds.query<{ study_date: string }[]>(
       `${UNIFIED_SCORES_CTE}
-       SELECT TO_CHAR(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS study_date
+       SELECT TO_CHAR(occurred_at AT TIME ZONE $2, 'YYYY-MM-DD') AS study_date
        FROM unified_scores
        WHERE user_id = $1
        GROUP BY study_date
        ORDER BY study_date DESC`,
-      [userId],
+      [userId, timeZone],
     );
 
     return rows.map((r) => r.study_date);
@@ -219,16 +249,27 @@ class ProgressRepository {
       .getOne();
   }
 
-  async getMonthlySkillProgress(userId: string, since: string): Promise<SkillWeekRow[]> {
+  /**
+   * Weeks are the user's weeks. A bare DATE_TRUNC('week', occurred_at) on a
+   * timestamptz truncates in the CONNECTION's timezone (UTC here), so a
+   * Sunday-evening session fell into the following week's bucket.
+   */
+  async getMonthlySkillProgress(
+    userId: string,
+    since: string,
+    timeZone: string,
+  ): Promise<SkillWeekRow[]> {
     const rows = await this.ds.query<{ skillName: string; weekStart: string; avgScore: string }[]>(
       `${UNIFIED_SCORES_CTE}
-       SELECT skill_name AS "skillName", TO_CHAR(DATE_TRUNC('week', occurred_at), 'YYYY-MM-DD') AS "weekStart",
+       SELECT skill_name AS "skillName",
+              TO_CHAR(DATE_TRUNC('week', occurred_at AT TIME ZONE $3), 'YYYY-MM-DD') AS "weekStart",
               AVG(percentage) AS "avgScore"
        FROM unified_scores
-       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL AND occurred_at >= $2::date
-       GROUP BY skill_name, DATE_TRUNC('week', occurred_at)
-       ORDER BY skill_name ASC, DATE_TRUNC('week', occurred_at) ASC`,
-      [userId, since],
+       WHERE user_id = $1 AND skill_name IS NOT NULL AND percentage IS NOT NULL
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $3)
+       GROUP BY skill_name, DATE_TRUNC('week', occurred_at AT TIME ZONE $3)
+       ORDER BY skill_name ASC, DATE_TRUNC('week', occurred_at AT TIME ZONE $3) ASC`,
+      [userId, since, timeZone],
     );
 
     return rows.map((r) => ({
@@ -238,18 +279,28 @@ class ProgressRepository {
     }));
   }
 
-  async getRecentActivities(userId: string, limit: number): Promise<RecentActivityRow[]> {
+  /**
+   * `date` is a display value the client renders as a weekday ("Vie", "Hoy"),
+   * so it has to be the user's calendar day. Formatting the instant in UTC
+   * made anything finished after ~18:00 west of Greenwich show up as the
+   * following day.
+   */
+  async getRecentActivities(
+    userId: string,
+    limit: number,
+    timeZone: string,
+  ): Promise<RecentActivityRow[]> {
     const rows = await this.ds.query<
       { id: string; title: string; skillName: string | null; score: string | null; date: string }[]
     >(
       `${UNIFIED_SCORES_CTE}
        SELECT id, title, skill_name AS "skillName", percentage AS score,
-              TO_CHAR(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date
+              TO_CHAR(occurred_at AT TIME ZONE $3, 'YYYY-MM-DD') AS date
        FROM unified_scores
        WHERE user_id = $1
        ORDER BY occurred_at DESC
        LIMIT $2`,
-      [userId, limit],
+      [userId, limit, timeZone],
     );
 
     return rows.map((r) => ({
@@ -283,7 +334,19 @@ class ProgressRepository {
    * doesn't map to a single skill and is left NULL, same as any other
    * unmapped row.
    */
-  async getScoreEvolution(userId: string, from: string, to: string): Promise<ScoreEvolutionRow[]> {
+  /**
+   * from/to are the USER's calendar days (the client builds them from local
+   * components), so the window has to be opened in the user's zone too.
+   * `$n::date` alone is midnight UTC: with a local 'to' of the 21st that cuts
+   * the window at 18:00 local, silently dropping every activity done that
+   * evening.
+   */
+  async getScoreEvolution(
+    userId: string,
+    from: string,
+    to: string,
+    timeZone: string,
+  ): Promise<ScoreEvolutionRow[]> {
     const rows = await this.ds.query<
       { occurredAt: Date; skillSlug: string | null; skillName: string | null; percentage: string }[]
     >(
@@ -321,17 +384,19 @@ class ProgressRepository {
        SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
        FROM unified_scores
        WHERE user_id = $1 AND skill_slug IS NOT NULL AND percentage IS NOT NULL
-         AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)
 
        UNION ALL
 
        SELECT occurred_at AS "occurredAt", skill_slug AS "skillSlug", skill_name AS "skillName", percentage
        FROM mock_scores
        WHERE skill_slug IS NOT NULL
-         AND occurred_at >= $2::date AND occurred_at < ($3::date + INTERVAL '1 day')
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)
 
        ORDER BY "occurredAt" ASC`,
-      [userId, from, to],
+      [userId, from, to, timeZone],
     );
 
     return rows
@@ -356,16 +421,22 @@ class ProgressRepository {
       .getOne();
   }
 
-  async getOverallWeeklyScores(userId: string, since: string): Promise<OverallWeekRow[]> {
+  /** Same user-week bucketing as getMonthlySkillProgress — see the note there. */
+  async getOverallWeeklyScores(
+    userId: string,
+    since: string,
+    timeZone: string,
+  ): Promise<OverallWeekRow[]> {
     const rows = await this.ds.query<{ weekStart: string; avgScore: string }[]>(
       `${UNIFIED_SCORES_CTE}
-       SELECT TO_CHAR(DATE_TRUNC('week', occurred_at), 'YYYY-MM-DD') AS "weekStart",
+       SELECT TO_CHAR(DATE_TRUNC('week', occurred_at AT TIME ZONE $3), 'YYYY-MM-DD') AS "weekStart",
               AVG(percentage) AS "avgScore"
        FROM unified_scores
-       WHERE user_id = $1 AND percentage IS NOT NULL AND occurred_at >= $2::date
-       GROUP BY DATE_TRUNC('week', occurred_at)
-       ORDER BY DATE_TRUNC('week', occurred_at) ASC`,
-      [userId, since],
+       WHERE user_id = $1 AND percentage IS NOT NULL
+         AND occurred_at >= ($2::timestamp AT TIME ZONE $3)
+       GROUP BY DATE_TRUNC('week', occurred_at AT TIME ZONE $3)
+       ORDER BY DATE_TRUNC('week', occurred_at AT TIME ZONE $3) ASC`,
+      [userId, since, timeZone],
     );
 
     return rows.map((r) => ({
@@ -477,6 +548,76 @@ class ProgressRepository {
   }
 
   /**
+   * One point per completed, graded B2 First mock with a computed estimate
+   * — chronological, for the Progress screen's mock score trend chart.
+   * Scoped to B2_FIRST/non-null estimates only: that's the only exam type
+   * StartMockAttemptService/estimate-mock-level.ts support today, so older
+   * or other-exam-type mocks (estimated_standardized_score/estimated_level
+   * both null) would otherwise plot as a broken 0 on a 100-190 scale.
+   */
+  async getMockScoreTrend(userId: string): Promise<MockScoreTrendRow[]> {
+    const rows = await this.ds
+      .createQueryBuilder(MockTest, 'mt')
+      .select('COALESCE(mt.taken_at, mt.created_at)', 'takenAt')
+      .addSelect('mt.estimated_standardized_score', 'standardizedScore')
+      .addSelect('mt.estimated_level', 'level')
+      .where('mt.user_id = :userId', { userId })
+      .andWhere('mt.deleted_at IS NULL')
+      .andWhere('mt.exam_type = :examType', { examType: ExamType.B2_FIRST })
+      .andWhere('mt.estimated_standardized_score IS NOT NULL')
+      .andWhere('mt.estimated_level IS NOT NULL')
+      .orderBy('COALESCE(mt.taken_at, mt.created_at)', 'ASC')
+      .getRawMany<{ takenAt: Date; standardizedScore: string; level: EnglishLevel }>();
+
+    return rows.map((row) => ({
+      takenAt: row.takenAt,
+      standardizedScore: parseFloat(row.standardizedScore),
+      level: row.level,
+    }));
+  }
+
+  /**
+   * Per-day activity counts in the user's own timezone, for the Progress
+   * screen's GitHub-style contribution heatmap. Unions the same
+   * UNIFIED_SCORES_CTE sources (a logged activity, a completed Practice
+   * attempt, a graded Writing submission) with one row per completed mock —
+   * mocks are deliberately not part of UNIFIED_SCORES_CTE itself (see that
+   * CTE's own doc comment), so they're added here directly rather than by
+   * widening a CTE three other methods also depend on. Only days with at
+   * least one activity are returned; the frontend fills in zero-activity
+   * days itself.
+   */
+  async getActivityHeatmap(
+    userId: string,
+    from: string,
+    to: string,
+    timeZone: string,
+  ): Promise<ActivityHeatmapRow[]> {
+    const rows = await this.ds.query<{ date: string; count: string }[]>(
+      `${UNIFIED_SCORES_CTE},
+       mock_days AS (
+         SELECT COALESCE(mt.taken_at, mt.created_at) AS occurred_at
+         FROM mock_tests mt
+         WHERE mt.user_id = $1 AND mt.deleted_at IS NULL
+       ),
+       all_activity AS (
+         SELECT occurred_at FROM unified_scores WHERE user_id = $1
+         UNION ALL
+         SELECT occurred_at FROM mock_days
+       )
+       SELECT TO_CHAR(occurred_at AT TIME ZONE $4, 'YYYY-MM-DD') AS date, COUNT(*) AS count
+       FROM all_activity
+       WHERE occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)
+       GROUP BY date
+       ORDER BY date ASC`,
+      [userId, from, to, timeZone],
+    );
+
+    return rows.map((row) => ({ date: row.date, count: parseInt(row.count, 10) }));
+  }
+
+  /**
    * Average band per Cambridge Writing criterion across all graded
    * submissions, plus a summary row — mirrors getExamPartMetrics'
    * shape/intent, just grouping by criterion (from the feedback JSONB)
@@ -537,4 +678,6 @@ export type {
   ExamPartMetricRow,
   WritingCriterionMetricRow,
   WritingMetricsSummaryRow,
+  MockScoreTrendRow,
+  ActivityHeatmapRow,
 };

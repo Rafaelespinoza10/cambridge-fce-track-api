@@ -172,6 +172,38 @@ class ListeningSourcesRepository {
     };
   }
 
+  /**
+   * Same part, same curated video — used to keep all 4 Listening parts of one
+   * mock attempt drawn from the same real test rather than 4 independently
+   * randomized ones (see StartMockAttemptSectionService.pickListeningSource).
+   */
+  async findActiveSourceWithItemsForPartAndVideo(
+    examCode: string,
+    paperCode: string,
+    partCode: string,
+    videoExternalId: string,
+  ): Promise<ListeningSourceSafeWithItems | null> {
+    const source = await this.sourceRepo
+      .createQueryBuilder('source')
+      .where('source.exam_code = :examCode', { examCode })
+      .andWhere('source.paper_code = :paperCode', { paperCode })
+      .andWhere('source.part_code = :partCode', { partCode })
+      .andWhere('source.status = :status', { status: ListeningSourceStatus.ACTIVE })
+      .andWhere('source.video_external_id = :videoExternalId', { videoExternalId })
+      .getOne();
+    if (source === null) return null;
+
+    const items = await this.itemRepo.find({
+      where: { source_id: source.id },
+      order: { position: 'ASC' },
+    });
+
+    return {
+      source: toSafeSourceDto(source, items.length),
+      items: items.map(toSafeItemDto),
+    };
+  }
+
   async findByIdWithItems(sourceId: string): Promise<ListeningSourceSafeWithItems | null> {
     const source = await this.sourceRepo.findOne({ where: { id: sourceId } });
     if (source === null) return null;

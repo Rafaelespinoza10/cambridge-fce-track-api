@@ -1,12 +1,14 @@
 import type { DataSource } from 'typeorm';
 import { MockAttemptsRepository } from '@repositories/mocks/mock-attempts.repository';
 import { MocksRepository } from '@repositories/mocks/mocks.repository';
-import { MockAttemptStatus, MockAttemptSectionStatus, MockType } from '@models/enums';
+import { MockAttemptStatus, MockAttemptSectionStatus, MockType, ExamType } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
 import { getMockExamCatalog } from '@lib/mocks/mock-exam-catalog';
 import { roundToTwoDecimals } from '@lib/practice/practice-attempt-grading';
 import { toMockAttemptSafeDto } from '@lib/mocks/mock-attempt-dto';
+import { computeMockAttemptPaperScores, PAPER_GROUPS } from '@lib/mocks/mock-attempt-paper-scores';
+import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 import type { MockAttemptFinalResultDto } from '../../interfaces/mocks/mock-attempt.interface';
 
 export enum SubmitMockAttemptErrorCode {
@@ -79,10 +81,11 @@ function isNonEmptyString(value: unknown): value is string {
  * MOCK_ATTEMPT_SECTION_CATALOG and MOCK_EXAM_CATALOG, so no code translation
  * is needed here.
  *
- * Deliberately never computes an estimatedStandardizedScore/estimatedLevel —
- * no verified Cambridge Scale conversion table exists in this codebase (see
- * the plan's "Deliberately out of scope" note); those stay null, exactly
- * like today's manual mock registration, editable later via PATCH /mocks/{id}.
+ * estimatedStandardizedScore/estimatedLevel are filled in with
+ * estimateB2FirstResult's approximation (see lib/mocks/estimate-mock-level.ts
+ * for why it can only ever be an estimate, never the real Cambridge Scale
+ * Score) — same as today's manual mock registration, still editable
+ * afterwards via PATCH /mocks/{id} if the student later sits the real exam.
  */
 export class SubmitMockAttemptService {
   constructor(
@@ -147,16 +150,32 @@ export class SubmitMockAttemptService {
     const mocksRepo = mocksFactory(this.dataSource);
     const mockAttemptsRepo = mockAttemptsFactory(this.dataSource);
 
+    // Only B2 First has a published-boundary approximation to interpolate
+    // (see estimateB2FirstResult) — every other exam type stays null, same
+    // as before. All 4 groups are guaranteed non-null percentages here since
+    // every section is already confirmed 'completed' above.
+    let estimatedStandardizedScore: number | null = null;
+    let estimatedLevel: ReturnType<typeof estimateB2FirstResult>['estimatedLevel'] | null = null;
+    if (attempt.exam_type === ExamType.B2_FIRST) {
+      const paperScores = computeMockAttemptPaperScores(sections);
+      const percentages = PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0);
+      const overallPercentage = percentages.reduce((sum, p) => sum + p, 0) / percentages.length;
+      const estimate = estimateB2FirstResult(overallPercentage);
+      estimatedStandardizedScore = estimate.estimatedScore;
+      estimatedLevel = estimate.estimatedLevel;
+    }
+
     const mockTest = await mocksRepo.createMock({
       userId,
       name: `Full Timed Mock — ${submittedAt.toISOString().slice(0, 10)}`,
       examType: attempt.exam_type,
       mockType: MockType.FULL,
       takenAt: submittedAt,
-      estimatedStandardizedScore: null,
+      estimatedStandardizedScore,
       scoreScale: getMockExamCatalog(attempt.exam_type).scoreScale,
-      estimatedLevel: null,
-      notes: 'Generated automatically from a live timed mock attempt.',
+      estimatedLevel,
+      notes:
+        'Generated automatically from a live timed mock attempt. Score and level are an approximation, not an official Cambridge result.',
     });
 
     const sectionCodes = sections.map((s) => s.section_code);

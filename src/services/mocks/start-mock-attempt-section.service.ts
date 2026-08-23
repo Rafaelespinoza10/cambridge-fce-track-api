@@ -18,6 +18,8 @@ import {
   type MockAttemptSectionCatalogEntry,
 } from '@lib/mocks/mock-attempt-catalog';
 import { toMockAttemptSectionSafeDto } from '@lib/mocks/mock-attempt-dto';
+import { deterministicUuidFrom } from '@lib/shared/deterministic-uuid';
+import type { MockAttemptSectionAnswers } from '@models/mock-attempt-json-types';
 import type {
   MockAttemptSectionContentDto,
   StartMockAttemptSectionResultDto,
@@ -69,6 +71,7 @@ export interface MockAttemptsRepositoryPort {
     sectionCode: string,
     userId: string,
   ): Promise<MockAttemptSection | null>;
+  findSectionsByAttempt(attemptId: string): Promise<MockAttemptSection[]>;
   startSectionContent(
     sectionId: string,
     data: {
@@ -76,6 +79,7 @@ export interface MockAttemptsRepositoryPort {
       writingTaskId?: string | null;
       listeningSourceId?: string | null;
       startedAt: Date;
+      timeLimitSecondsOverride?: number;
     },
   ): Promise<void>;
 }
@@ -96,6 +100,12 @@ export interface ListeningSourcesRepositoryPort {
     examCode: string,
     paperCode: string,
     partCode: string,
+  ): Promise<ListeningSourceSafeWithItems | null>;
+  findActiveSourceWithItemsForPartAndVideo(
+    examCode: string,
+    paperCode: string,
+    partCode: string,
+    videoExternalId: string,
   ): Promise<ListeningSourceSafeWithItems | null>;
   findByIdWithItems(sourceId: string): Promise<ListeningSourceSafeWithItems | null>;
 }
@@ -129,6 +139,21 @@ function invalidInput(message: string): never {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
+}
+
+/**
+ * Only ever returns a value for a section still 'in_progress' — a
+ * 'completed' section's grading result belongs to
+ * GetMockAttemptSectionResultService, not here, and a 'pending' section has
+ * never had anything saved. `answers` defaults to `[]` (an empty array) at
+ * seed time (see MockAttemptsRepository.createAttemptWithSections), never a
+ * real MockAttemptSectionAnswers object, so that default is never mistaken
+ * for a saved draft.
+ */
+function toDraftAnswersDto(section: MockAttemptSection): MockAttemptSectionAnswers | null {
+  if (section.status !== MockAttemptSectionStatus.IN_PROGRESS) return null;
+  if (Array.isArray(section.answers)) return null;
+  return section.answers;
 }
 
 function toListeningContentDto(
@@ -214,7 +239,11 @@ export class StartMockAttemptSectionService {
     }
 
     const content = await this.loadContent(userId, contentSection, catalogEntry);
-    return { section: toMockAttemptSectionSafeDto(contentSection), content };
+    return {
+      section: toMockAttemptSectionSafeDto(contentSection),
+      content,
+      draftAnswers: toDraftAnswersDto(contentSection),
+    };
   }
 
   private async provisionContent(
@@ -226,7 +255,13 @@ export class StartMockAttemptSectionService {
     const now = this.deps.now ?? (() => new Date());
     const mockAttemptsFactory = this.deps.mockAttempts ?? DEFAULT_MOCK_ATTEMPTS_FACTORY;
     const mockAttemptsRepo = mockAttemptsFactory(this.dataSource);
-    const idempotencyKey = `${attemptId}:${section.section_code}`;
+    // practice_exercises.idempotency_key / writing_tasks.idempotency_key are
+    // both typed `uuid` — a compound string like `${attemptId}:${sectionCode}`
+    // is never valid Postgres uuid input on its own, so it's hashed into a
+    // deterministic one first (same attemptId+sectionCode always maps to the
+    // same UUID, so idempotent re-entry into this section still replays the
+    // already-generated content instead of erroring or regenerating).
+    const idempotencyKey = deterministicUuidFrom(`${attemptId}:${section.section_code}`);
 
     if (catalogEntry.contentType === MockAttemptSectionContentType.PRACTICE_EXERCISE) {
       const exercise = await this.deps.generatePracticeExercise.execute(userId, {
@@ -236,9 +271,18 @@ export class StartMockAttemptSectionService {
         taskType: catalogEntry.taskType ?? invalidInput('taskType is required for this section'),
         idempotencyKey,
       });
+      const timeLimitSecondsOverride =
+        catalogEntry.scoreGroup === 'useOfEnglish'
+          ? await this.computeUseOfEnglishTimeLimitSeconds(
+              mockAttemptsRepo,
+              attemptId,
+              catalogEntry,
+            )
+          : undefined;
       await mockAttemptsRepo.startSectionContent(section.id, {
         practiceExerciseId: exercise.exercise.id,
         startedAt: now(),
+        timeLimitSecondsOverride,
       });
     } else if (catalogEntry.contentType === MockAttemptSectionContentType.WRITING_TASK) {
       const pool = catalogEntry.writingTaskTypes ?? [];
@@ -255,10 +299,12 @@ export class StartMockAttemptSectionService {
       });
     } else {
       const listeningFactory = this.deps.listeningSources ?? DEFAULT_LISTENING_SOURCES_FACTORY;
-      const picked = await listeningFactory(this.dataSource).findRandomActiveSourceWithItemsForPart(
-        catalogEntry.examCode,
-        catalogEntry.paperCode,
-        catalogEntry.partCode,
+      const listeningRepo = listeningFactory(this.dataSource);
+      const picked = await this.pickListeningSource(
+        mockAttemptsRepo,
+        listeningRepo,
+        attemptId,
+        catalogEntry,
       );
       if (picked === null) {
         throw new StartMockAttemptSectionError(
@@ -284,6 +330,84 @@ export class StartMockAttemptSectionService {
       );
     }
     return updated;
+  }
+
+  /**
+   * The 4 Listening parts of one real Cambridge test all come from the SAME
+   * source video (a single ~40-minute recording split into part-specific
+   * start/end windows — see scripts/fixtures/listening-tests/*.json, every
+   * part in one file shares one videoExternalId). Once this attempt has
+   * already provisioned one Listening part, every subsequent part must reuse
+   * that same video rather than independently randomizing — otherwise a
+   * student's "mock" could stitch together parts from 4 unrelated tests.
+   * Falls back to the old random pick if no matching part exists for that
+   * video (defensive only; the curated fixtures always provide all 4).
+   */
+  private async pickListeningSource(
+    mockAttemptsRepo: MockAttemptsRepositoryPort,
+    listeningRepo: ListeningSourcesRepositoryPort,
+    attemptId: string,
+    catalogEntry: MockAttemptSectionCatalogEntry,
+  ): Promise<ListeningSourceSafeWithItems | null> {
+    const sections = await mockAttemptsRepo.findSectionsByAttempt(attemptId);
+    const alreadyProvisioned = sections.find(
+      (s) =>
+        s.content_type === MockAttemptSectionContentType.LISTENING &&
+        s.listening_source_id !== null,
+    );
+
+    if (alreadyProvisioned?.listening_source_id) {
+      const existingSource = await listeningRepo.findByIdWithItems(
+        alreadyProvisioned.listening_source_id,
+      );
+      if (existingSource !== null) {
+        const matched = await listeningRepo.findActiveSourceWithItemsForPartAndVideo(
+          catalogEntry.examCode,
+          catalogEntry.paperCode,
+          catalogEntry.partCode,
+          existingSource.source.videoExternalId,
+        );
+        if (matched !== null) return matched;
+      }
+    }
+
+    return listeningRepo.findRandomActiveSourceWithItemsForPart(
+      catalogEntry.examCode,
+      catalogEntry.paperCode,
+      catalogEntry.partCode,
+    );
+  }
+
+  /**
+   * Pools unused time across the 4 Use of English parts only (scoreGroup ===
+   * 'useOfEnglish') — Reading and Writing keep their own fixed timers. A part
+   * finished early carries its leftover seconds forward into the next
+   * not-yet-started UoE part's limit, cascading across all 4: leftover is the
+   * sum, across every already-completed UoE section in this attempt, of
+   * (that section's own time_limit_seconds — the time it actually took), so
+   * a boost inherited by part 2 that goes unused there keeps compounding
+   * into part 3, etc.
+   */
+  private async computeUseOfEnglishTimeLimitSeconds(
+    mockAttemptsRepo: MockAttemptsRepositoryPort,
+    attemptId: string,
+    catalogEntry: MockAttemptSectionCatalogEntry,
+  ): Promise<number> {
+    const baseSeconds = catalogEntry.defaultDurationMinutes * 60;
+    const sections = await mockAttemptsRepo.findSectionsByAttempt(attemptId);
+
+    const bankedSeconds = sections.reduce((sum, s) => {
+      if (s.section_code === catalogEntry.sectionCode) return sum;
+      if (s.status !== MockAttemptSectionStatus.COMPLETED) return sum;
+      if (s.started_at === null || s.completed_at === null) return sum;
+      const otherEntry = findMockAttemptSectionCatalogEntry(s.section_code);
+      if (otherEntry?.scoreGroup !== 'useOfEnglish') return sum;
+
+      const elapsedSeconds = Math.floor((s.completed_at.getTime() - s.started_at.getTime()) / 1000);
+      return sum + Math.max(0, s.time_limit_seconds - elapsedSeconds);
+    }, 0);
+
+    return baseSeconds + bankedSeconds;
   }
 
   private async loadContent(

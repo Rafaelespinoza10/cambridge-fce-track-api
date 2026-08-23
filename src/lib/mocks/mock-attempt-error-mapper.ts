@@ -26,6 +26,26 @@ import {
   ImportListeningSourceError,
   ImportListeningSourceErrorCode,
 } from '../../services/mocks/import-listening-source.service';
+import {
+  GetMockAttemptSectionResultError,
+  GetMockAttemptSectionResultErrorCode,
+} from '../../services/mocks/get-mock-attempt-section-result.service';
+import {
+  SaveMockAttemptSectionDraftError,
+  SaveMockAttemptSectionDraftErrorCode,
+} from '../../services/mocks/save-mock-attempt-section-draft.service';
+import {
+  GetMockAttemptResultError,
+  GetMockAttemptResultErrorCode,
+} from '../../services/mocks/get-mock-attempt-result.service';
+import {
+  GenerateMockAttemptItemFlashcardDraftError,
+  GenerateMockAttemptItemFlashcardDraftErrorCode,
+} from '../../services/mocks/generate-mock-attempt-item-flashcard-draft.service';
+import {
+  GenerateMockAttemptCorrectionFlashcardDraftError,
+  GenerateMockAttemptCorrectionFlashcardDraftErrorCode,
+} from '../../services/mocks/generate-mock-attempt-correction-flashcard-draft.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -80,6 +100,59 @@ const IMPORT_LISTENING_SOURCE_STATUS_BY_CODE: Record<ImportListeningSourceErrorC
   [ImportListeningSourceErrorCode.INVALID_INPUT]: 400,
 };
 
+const GET_SECTION_RESULT_STATUS_BY_CODE: Record<GetMockAttemptSectionResultErrorCode, number> = {
+  [GetMockAttemptSectionResultErrorCode.SECTION_NOT_FOUND]: 404,
+};
+
+const SAVE_SECTION_DRAFT_STATUS_BY_CODE: Record<SaveMockAttemptSectionDraftErrorCode, number> = {
+  [SaveMockAttemptSectionDraftErrorCode.INVALID_INPUT]: 400,
+  [SaveMockAttemptSectionDraftErrorCode.ATTEMPT_NOT_FOUND]: 404,
+  [SaveMockAttemptSectionDraftErrorCode.SECTION_NOT_FOUND]: 404,
+  [SaveMockAttemptSectionDraftErrorCode.ATTEMPT_NOT_ACTIVE]: 409,
+  [SaveMockAttemptSectionDraftErrorCode.SECTION_NOT_STARTED]: 409,
+  [SaveMockAttemptSectionDraftErrorCode.SECTION_ALREADY_COMPLETED]: 409,
+  [SaveMockAttemptSectionDraftErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
+};
+
+const GET_RESULT_STATUS_BY_CODE: Record<GetMockAttemptResultErrorCode, number> = {
+  [GetMockAttemptResultErrorCode.ATTEMPT_NOT_FOUND]: 404,
+  [GetMockAttemptResultErrorCode.ATTEMPT_NOT_FINISHED]: 409,
+  [GetMockAttemptResultErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
+};
+
+const GENERATE_ITEM_FLASHCARD_DRAFT_STATUS_BY_CODE: Record<
+  GenerateMockAttemptItemFlashcardDraftErrorCode,
+  number
+> = {
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.INVALID_INPUT]: 400,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.SECTION_NOT_FOUND]: 404,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.ITEM_NOT_FOUND]: 404,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.SECTION_NOT_COMPLETED]: 409,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.ITEM_NOT_INCORRECT]: 409,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.AI_RATE_LIMITED]: 429,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.AI_INVALID_RESPONSE]: 502,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE]: 503,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.AI_REQUEST_TIMEOUT]: 504,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.AI_CONFIGURATION_ERROR]: 500,
+  [GenerateMockAttemptItemFlashcardDraftErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
+};
+
+const GENERATE_CORRECTION_FLASHCARD_DRAFT_STATUS_BY_CODE: Record<
+  GenerateMockAttemptCorrectionFlashcardDraftErrorCode,
+  number
+> = {
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.INVALID_INPUT]: 400,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.SECTION_NOT_FOUND]: 404,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.CORRECTION_NOT_FOUND]: 404,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.SECTION_NOT_GRADED]: 409,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.AI_RATE_LIMITED]: 429,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.AI_INVALID_RESPONSE]: 502,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.AI_PROVIDER_UNAVAILABLE]: 503,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.AI_REQUEST_TIMEOUT]: 504,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.AI_CONFIGURATION_ERROR]: 500,
+  [GenerateMockAttemptCorrectionFlashcardDraftErrorCode.PERSISTENCE_INCONSISTENCY]: 500,
+};
+
 /**
  * Translates every full-mock-attempt-domain error (start/start-section/
  * submit-section/submit/abandon/get, plus the admin Listening import) into
@@ -112,6 +185,24 @@ function mapMockAttemptError(error: unknown): unknown {
   }
   if (error instanceof ImportListeningSourceError) {
     return httpError(error.message, IMPORT_LISTENING_SOURCE_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof GetMockAttemptSectionResultError) {
+    return httpError(error.message, GET_SECTION_RESULT_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof SaveMockAttemptSectionDraftError) {
+    return httpError(error.message, SAVE_SECTION_DRAFT_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof GetMockAttemptResultError) {
+    return httpError(error.message, GET_RESULT_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof GenerateMockAttemptItemFlashcardDraftError) {
+    return httpError(error.message, GENERATE_ITEM_FLASHCARD_DRAFT_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof GenerateMockAttemptCorrectionFlashcardDraftError) {
+    return httpError(
+      error.message,
+      GENERATE_CORRECTION_FLASHCARD_DRAFT_STATUS_BY_CODE[error.code],
+    );
   }
   return error;
 }

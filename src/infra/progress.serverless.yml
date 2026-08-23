@@ -48,6 +48,20 @@ functions:
           path: /metrics/score-evolution
           method: GET
 
+  progressMockScoreTrend:
+    handler: src/controllers/progressController.getMockScoreTrend
+    events:
+      - httpApi:
+          path: /metrics/mock-score-trend
+          method: GET
+
+  progressActivityHeatmap:
+    handler: src/controllers/progressController.getActivityHeatmap
+    events:
+      - httpApi:
+          path: /metrics/activity-heatmap
+          method: GET
+
 package:
   individually: true
 

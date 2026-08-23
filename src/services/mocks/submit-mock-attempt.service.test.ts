@@ -20,6 +20,8 @@ import {
 } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
+import { computeMockAttemptPaperScores, PAPER_GROUPS } from '@lib/mocks/mock-attempt-paper-scores';
+import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ATTEMPT_ID = 'attempt-1';
@@ -131,11 +133,20 @@ describe('SubmitMockAttemptService.execute', () => {
     assert.equal(createMockCalls.length, 1);
     const mockData = createMockCalls[0] as {
       mockType: MockType;
-      estimatedStandardizedScore: unknown;
+      estimatedStandardizedScore: number | null;
+      estimatedLevel: string | null;
     };
     assert.equal(mockData.mockType, MockType.FULL);
-    // Never invents a Cambridge Scale Score — stays null, same as manual registration.
-    assert.equal(mockData.estimatedStandardizedScore, null);
+    // Estimated (not official) — derived the exact same way
+    // estimateB2FirstResult itself computes it, so this stays correct
+    // regardless of the fixture's own numbers.
+    const paperScores = computeMockAttemptPaperScores(makeCompletedSections());
+    const overallPercentage =
+      PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0).reduce((a, b) => a + b, 0) /
+      PAPER_GROUPS.length;
+    const expectedEstimate = estimateB2FirstResult(overallPercentage);
+    assert.equal(mockData.estimatedStandardizedScore, expectedEstimate.estimatedScore);
+    assert.equal(mockData.estimatedLevel, expectedEstimate.estimatedLevel);
 
     assert.equal(createSectionsCalls.length, 1);
     const sections = createSectionsCalls[0] as {

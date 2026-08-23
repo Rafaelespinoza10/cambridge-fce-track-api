@@ -66,3 +66,36 @@ export async function getScoreEvolution(
     return handleError(err);
   }
 }
+
+export async function getMockScoreTrend(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const result = await service.getMockScoreTrend(payload.sub);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}
+
+export async function getActivityHeatmap(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const params = event.queryStringParameters ?? {};
+  if (!params.from || !params.to) {
+    return errorResponse('from and to query params are required', 400);
+  }
+
+  try {
+    const result = await service.getActivityHeatmap(payload.sub, params.from, params.to);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(err);
+  }
+}

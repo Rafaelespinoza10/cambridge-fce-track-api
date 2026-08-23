@@ -8,11 +8,19 @@ import {
   getLastNWeekStarts,
   roundTwo,
 } from '@lib/progress/progress-library';
+import {
+  CAMBRIDGE_SCALE_MAX,
+  CAMBRIDGE_SCALE_MIN,
+  LEVEL_BANDS,
+} from '@lib/mocks/estimate-mock-level';
+import { getUserTimeZone } from '../planning/resolve-user-local-day';
 import type {
+  ActivityHeatmapResponse,
   ExamGoalMetric,
   ExamPartMetricsResponse,
   LastMockMetric,
   MetricsResponse,
+  MockScoreTrendResponse,
   RecentActivityMetric,
   ScoreEvolutionResponse,
   SkillMetric,
@@ -37,6 +45,10 @@ class ProgressService {
       return d.toISOString().split('T')[0]!;
     })();
 
+    // One lookup, shared by every query that buckets instants into days or
+    // weeks. Always a zone Postgres accepts — see getUserTimeZone.
+    const timeZone = await getUserTimeZone(ds, userId);
+
     const [
       activityStats,
       scoreStats,
@@ -49,14 +61,14 @@ class ProgressService {
       overallRows,
     ] = await Promise.all([
       repo.getWeeklyActivityStats(userId, weekStart, weekEnd),
-      repo.getWeeklyScoreStats(userId, weekStart, weekEnd),
-      repo.getSkillAverages(userId, skillLookbackDate),
-      repo.getStudyDates(userId),
+      repo.getWeeklyScoreStats(userId, weekStart, weekEnd, timeZone),
+      repo.getSkillAverages(userId, skillLookbackDate, timeZone),
+      repo.getStudyDates(userId, timeZone),
       repo.getLastMock(userId),
-      repo.getMonthlySkillProgress(userId, weekStarts[0]!),
-      repo.getRecentActivities(userId, RECENT_ACTIVITIES_LIMIT),
+      repo.getMonthlySkillProgress(userId, weekStarts[0]!, timeZone),
+      repo.getRecentActivities(userId, RECENT_ACTIVITIES_LIMIT, timeZone),
       repo.getActiveGoal(userId),
-      repo.getOverallWeeklyScores(userId, weekStarts[0]!),
+      repo.getOverallWeeklyScores(userId, weekStarts[0]!, timeZone),
     ]);
 
     // ── Strongest / weakest skill ──────────────────────────────────────────────
@@ -199,7 +211,8 @@ class ProgressService {
 
     const ds = await getDatabaseConnection();
     const repo = new ProgressRepository(ds);
-    const rows = await repo.getScoreEvolution(userId, from, to);
+    const timeZone = await getUserTimeZone(ds, userId);
+    const rows = await repo.getScoreEvolution(userId, from, to, timeZone);
 
     return {
       scores: rows.map((row) => ({
@@ -212,6 +225,41 @@ class ProgressService {
         percentage: roundTwo(row.percentage),
       })),
     };
+  }
+
+  async getMockScoreTrend(userId: string): Promise<MockScoreTrendResponse> {
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const rows = await repo.getMockScoreTrend(userId);
+
+    return {
+      points: rows.map((row) => ({
+        takenAt: row.takenAt.toISOString(),
+        standardizedScore: roundTwo(row.standardizedScore),
+        level: row.level,
+      })),
+      bands: [...LEVEL_BANDS],
+      scoreScaleMin: CAMBRIDGE_SCALE_MIN,
+      scoreScaleMax: CAMBRIDGE_SCALE_MAX,
+    };
+  }
+
+  async getActivityHeatmap(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<ActivityHeatmapResponse> {
+    const fromDate = new Date(from);
+    if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    const toDate = new Date(to);
+    if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const timeZone = await getUserTimeZone(ds, userId);
+    const days = await repo.getActivityHeatmap(userId, from, to, timeZone);
+
+    return { days };
   }
 }
 

@@ -11,6 +11,7 @@ import { PracticeAttemptStatus } from '../../models/enums';
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
+import { resolveUserLocalDayKey } from '../planning/resolve-user-local-day';
 import type { PracticeAnswerPayload } from '../../models/practice-json-types';
 import { isPracticeAnswerPayload } from '@lib/practice/practice-jsonb-validators';
 import {
@@ -82,6 +83,11 @@ export interface SubmitPracticeAttemptServiceDeps {
   // Injectable seam for tests — the default is the real, transaction-scoped
   // helper (see resolve-plan-day-for-date.ts).
   resolvePlanDayId?: (manager: EntityManager, userId: string, dateKey: string) => Promise<string>;
+  resolveUserLocalDayKey?: (
+    manager: EntityManager,
+    userId: string,
+    instant: Date,
+  ) => Promise<string>;
 }
 
 const DEFAULT_PRACTICE_ATTEMPTS_FACTORY = (
@@ -288,9 +294,13 @@ export class SubmitPracticeAttemptService {
     {
       const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
       const resolveDay = this.deps.resolvePlanDayId ?? resolvePlanDayIdForDate;
+      const resolveLocalDayKey = this.deps.resolveUserLocalDayKey ?? resolveUserLocalDayKey;
+      // The user's OWN calendar day, not submittedAt's UTC day — see
+      // resolve-user-local-day.ts. Only reached when start time didn't
+      // already capture a plan day.
       const planDayId =
         attempt.plan_day_id ??
-        (await resolveDay(manager, userId, submittedAt.toISOString().slice(0, 10)));
+        (await resolveDay(manager, userId, await resolveLocalDayKey(manager, userId, submittedAt)));
       const examSectionSlug = withKeys.exercise.part_code.toLowerCase().replace(/_/g, '-');
       await linker(manager, {
         planDayId,
