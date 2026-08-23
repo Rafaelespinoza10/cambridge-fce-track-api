@@ -108,6 +108,12 @@ function toSafeSessionDto(session: DailySession): DailySessionSafeDto {
     sentenceTaskInstructions: session.sentence_task_instructions,
     sentenceTargets: session.sentence_targets,
     createdAt: session.created_at,
+    // Read straight off generation_metadata rather than adding columns: it is
+    // already validated on write by isSafeGenerationMetadata, and only these
+    // three fields are surfaced — never the prompt or the raw chunk text.
+    knowledgeSourceNames: session.generation_metadata?.knowledgeSourceNames ?? [],
+    focusSectionSlug: session.generation_metadata?.focusSectionSlug ?? null,
+    focusSectionName: session.generation_metadata?.focusSectionName ?? null,
   };
 }
 

@@ -24,6 +24,9 @@ export interface DailySessionGenerationMetadata {
   provider?: string;
   topic?: string;
   knowledgeSourceNames?: string[];
+  /** Cambridge part this session was aimed at, when one was weak enough to target. */
+  focusSectionSlug?: string;
+  focusSectionName?: string;
   inputTokens?: number;
   outputTokens?: number;
   requestId?: string;

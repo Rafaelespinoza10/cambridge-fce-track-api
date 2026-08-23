@@ -1,0 +1,84 @@
+service: cambridge-tracker-daily-session
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${file(serverless.env.yml):${opt:stage, 'dev'}.REGION, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1'
+    NODE_OPTIONS: '--stack-trace-limit=1000'
+    DATABASE_URL: ${file(serverless.env.yml):${opt:stage, 'dev'}.DATABASE_URL}
+    JWT_SECRET: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_SECRET}
+    JWT_EXPIRES_IN: ${file(serverless.env.yml):${opt:stage, 'dev'}.JWT_EXPIRES_IN}
+    OPEN_AI_API_KEY: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPEN_AI_API_KEY}
+    OPENAI_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_MODEL, ''}
+    OPENAI_EMBEDDING_MODEL: ${file(serverless.env.yml):${opt:stage, 'dev'}.OPENAI_EMBEDDING_MODEL, ''}
+
+functions:
+  # Function keys kept short — AWS Lambda names are {service}-{stage}-{key}
+  # and must be ≤ 64 chars (same constraint noted on practiceErrorFcDraft in
+  # practice.serverless.yml); "dailySessionStartSubmission" alone pushed the
+  # prod-stage name to exactly 64, no margin, so it's "dailySessionStart" here.
+  dailySessionGenerate:
+    handler: src/controllers/dailySessionController.generateDailySession
+    timeout: 29
+    events:
+      - httpApi:
+          path: /daily-session
+          method: POST
+
+  # Same path as dailySessionGenerate, different method — so there is no
+  # route-precedence question against /daily-session/{sessionId} below. Its own
+  # controller module keeps the OpenAI/Knowledge-Base graph out of this
+  # pure-DB read's bundle (no explicit timeout needed for the same reason).
+  dailySessionHistory:
+    handler: src/controllers/dailySessionHistoryController.listDailySessionHistory
+    events:
+      - httpApi:
+          path: /daily-session
+          method: GET
+
+  dailySessionGet:
+    handler: src/controllers/dailySessionController.getDailySession
+    events:
+      - httpApi:
+          path: /daily-session/{sessionId}
+          method: GET
+
+  dailySessionStart:
+    handler: src/controllers/dailySessionSubmissionController.startDailySessionSubmission
+    events:
+      - httpApi:
+          path: /daily-session/{sessionId}/submissions
+          method: POST
+
+  dailySessionSubmit:
+    handler: src/controllers/dailySessionSubmissionController.submitDailySessionSubmission
+    timeout: 33
+    events:
+      - httpApi:
+          path: /daily-session/submissions/{submissionId}/submit
+          method: POST
+
+  # "dailySessionSubGet" (not "dailySessionSubmissionGet") for the same
+  # 64-char margin reason as dailySessionStart above.
+  dailySessionSubGet:
+    handler: src/controllers/dailySessionSubmissionController.getDailySessionSubmission
+    events:
+      - httpApi:
+          path: /daily-session/submissions/{submissionId}
+          method: GET
+
+package:
+  individually: true
+
+custom:
+  esbuild: ${file(main.serverless.yml):custom.esbuild}
