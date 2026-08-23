@@ -4,7 +4,12 @@ import type { CreateAttemptSectionSeed } from '@repositories/mocks/mock-attempts
 import { ExamType } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
-import { MOCK_ATTEMPT_SECTION_CATALOG } from '@lib/mocks/mock-attempt-catalog';
+import {
+  getMockAttemptSectionCatalogForScope,
+  isMockAttemptScope,
+  MOCK_ATTEMPT_SCOPES,
+} from '@lib/mocks/mock-attempt-catalog';
+import type { MockAttemptScope } from '@lib/mocks/mock-attempt-catalog';
 import { toMockAttemptSafeDto } from '@lib/mocks/mock-attempt-dto';
 import type { MockAttemptStartResultDto } from '../../interfaces/mocks/mock-attempt.interface';
 
@@ -68,7 +73,7 @@ function invalidInput(message: string): never {
  * Starts a new full-mock attempt or resumes the user's existing in-progress
  * one — a mock attempt has no separate "which exercise" concept to compare
  * against the way Practice does, so any active attempt is always resumable.
- * Pre-creates one 'pending' MockAttemptSection per MOCK_ATTEMPT_SECTION_CATALOG
+ * Pre-creates one 'pending' MockAttemptSection per catalog entry in scope
  * entry (13 for B2_FIRST); section content is generated lazily, on first
  * entry into each section (see StartMockAttemptSectionService) — never all
  * 13 up front, to stay well under the httpApi ~29s hard timeout.
@@ -83,32 +88,37 @@ export class StartMockAttemptService {
     userId: string,
     examType: ExamType,
     startedAt: Date,
+    scope: MockAttemptScope = 'full',
   ): Promise<MockAttemptStartResultDto> {
     if (typeof userId !== 'string' || userId.trim() === '') invalidInput('userId is required');
     if (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime())) {
       invalidInput('startedAt must be a valid Date');
     }
     if (examType !== ExamType.B2_FIRST) {
-      invalidInput('Only B2_FIRST full timed mocks are supported today');
+      invalidInput('Only B2_FIRST timed mocks are supported today');
+    }
+    if (!isMockAttemptScope(scope)) {
+      invalidInput(`scope must be one of: ${MOCK_ATTEMPT_SCOPES.join(', ')}`);
     }
 
-    return this.executeWithRetry(userId, examType, startedAt, 0);
+    return this.executeWithRetry(userId, examType, startedAt, scope, 0);
   }
 
   private async executeWithRetry(
     userId: string,
     examType: ExamType,
     startedAt: Date,
+    scope: MockAttemptScope,
     attempt: number,
   ): Promise<MockAttemptStartResultDto> {
     try {
       return await this.dataSource.transaction((manager) =>
-        this.runInTransaction(manager, userId, examType, startedAt),
+        this.runInTransaction(manager, userId, examType, startedAt, scope),
       );
     } catch (error) {
       if (isActiveAttemptConstraintViolation(error)) {
         if (attempt < MAX_RACE_RETRIES) {
-          return this.executeWithRetry(userId, examType, startedAt, attempt + 1);
+          return this.executeWithRetry(userId, examType, startedAt, scope, attempt + 1);
         }
         throw new StartMockAttemptError(
           'Could not resolve the active mock attempt after a race retry',
@@ -124,6 +134,7 @@ export class StartMockAttemptService {
     userId: string,
     examType: ExamType,
     startedAt: Date,
+    scope: MockAttemptScope,
   ): Promise<MockAttemptStartResultDto> {
     const factory = this.deps.mockAttempts ?? DEFAULT_MOCK_ATTEMPTS_FACTORY;
     const repo = factory(manager);
@@ -133,11 +144,17 @@ export class StartMockAttemptService {
       return this.buildResult(manager, active, true);
     }
 
-    const sections: CreateAttemptSectionSeed[] = MOCK_ATTEMPT_SECTION_CATALOG.map((entry) => ({
-      sectionCode: entry.sectionCode,
-      contentType: entry.contentType,
-      timeLimitSeconds: entry.defaultDurationMinutes * 60,
-    }));
+    // An already-active attempt wins regardless of the scope asked for — the
+    // client is told `resumed: true` and can read the real shape off the
+    // sections it gets back. Starting a second, differently-scoped attempt
+    // while one is live is exactly what the active-attempt constraint forbids.
+    const sections: CreateAttemptSectionSeed[] = getMockAttemptSectionCatalogForScope(scope).map(
+      (entry) => ({
+        sectionCode: entry.sectionCode,
+        contentType: entry.contentType,
+        timeLimitSeconds: entry.defaultDurationMinutes * 60,
+      }),
+    );
     const created = await repo.createAttemptWithSections({
       userId,
       examType,

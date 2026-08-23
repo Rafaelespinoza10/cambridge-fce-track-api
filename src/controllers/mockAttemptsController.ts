@@ -5,6 +5,7 @@ import { getAuthenticatedPayload } from '@lib/shared/jwt';
 import { mapMockAttemptError } from '@lib/mocks/mock-attempt-error-mapper';
 import { buildMockAttemptServices } from '../services/mocks/mock-attempt-composition';
 import { ExamType } from '../models/enums';
+import type { MockAttemptScope } from '@lib/mocks/mock-attempt-catalog';
 import type {
   MockAttemptSafeDto,
   MockAttemptStartResultDto,
@@ -24,7 +25,12 @@ import type { WritingCorrectionFlashcardDraftResponse } from '../interfaces/writ
 type NowProvider = () => Date;
 
 interface StartAttemptPort {
-  execute(userId: string, examType: ExamType, startedAt: Date): Promise<MockAttemptStartResultDto>;
+  execute(
+    userId: string,
+    examType: ExamType,
+    startedAt: Date,
+    scope?: MockAttemptScope,
+  ): Promise<MockAttemptStartResultDto>;
 }
 interface GetActiveAttemptPort {
   execute(userId: string): Promise<{ attempt: MockAttemptSafeDto | null }>;
@@ -150,9 +156,9 @@ async function startMockAttemptHandler(
   const payload = getAuthenticatedPayload(event);
   if (payload === null) return errorResponse('Unauthorized', 401);
 
-  let body: { examType?: unknown };
+  let body: { examType?: unknown; scope?: unknown };
   try {
-    body = JSON.parse(event.body ?? '{}') as { examType?: unknown };
+    body = JSON.parse(event.body ?? '{}') as { examType?: unknown; scope?: unknown };
   } catch {
     return errorResponse('Invalid request body', 400);
   }
@@ -161,10 +167,20 @@ async function startMockAttemptHandler(
     (Object.values(ExamType) as string[]).includes(body.examType)
       ? (body.examType as ExamType)
       : ExamType.B2_FIRST;
+  // Omitted means the whole exam, so every existing client keeps working
+  // unchanged. An unrecognised value is rejected by the service rather than
+  // silently widened to 'full' — asking for Listening and quietly getting all
+  // 13 sections would be a nasty surprise.
+  const scope = body.scope === undefined ? undefined : body.scope;
 
   try {
     const { startAttempt } = await deps.services();
-    const { attempt, resumed } = await startAttempt.execute(payload.sub, examType, deps.now());
+    const { attempt, resumed } = await startAttempt.execute(
+      payload.sub,
+      examType,
+      deps.now(),
+      scope as MockAttemptScope | undefined,
+    );
     return successResponse({ success: true, data: { attempt, resumed } }, resumed ? 200 : 201);
   } catch (err: unknown) {
     return handleError(mapMockAttemptError(err));

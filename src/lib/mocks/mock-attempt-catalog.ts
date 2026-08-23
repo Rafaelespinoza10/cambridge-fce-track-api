@@ -179,3 +179,57 @@ export function findMockAttemptSectionCatalogEntry(
 ): MockAttemptSectionCatalogEntry | undefined {
   return MOCK_ATTEMPT_SECTION_CATALOG.find((entry) => entry.sectionCode === sectionCode);
 }
+
+/**
+ * What a learner can sit in one go. `full` is the whole 13-section paper set;
+ * the rest are the four score groups the catalog already tags every section
+ * with, so scoping needs no new taxonomy and no migration.
+ *
+ * Reading and Use of English are separate options even though Cambridge ships
+ * them as one paper (PAPER_1): they are distinct skills, they are scored
+ * separately here, and practising one without the other is exactly the point
+ * of this feature.
+ */
+export type MockAttemptScope =
+  | 'full'
+  | 'reading'
+  | 'use_of_english'
+  | 'writing'
+  | 'listening';
+
+export const MOCK_ATTEMPT_SCOPES: readonly MockAttemptScope[] = [
+  'full',
+  'reading',
+  'use_of_english',
+  'writing',
+  'listening',
+] as const;
+
+/** The API speaks snake_case; the catalog's scoreGroup is camelCase. */
+const SCORE_GROUP_BY_SCOPE: Record<
+  Exclude<MockAttemptScope, 'full'>,
+  MockAttemptSectionCatalogEntry['scoreGroup']
+> = {
+  reading: 'reading',
+  use_of_english: 'useOfEnglish',
+  writing: 'writing',
+  listening: 'listening',
+};
+
+export function isMockAttemptScope(value: unknown): value is MockAttemptScope {
+  return (
+    typeof value === 'string' && MOCK_ATTEMPT_SCOPES.includes(value as MockAttemptScope)
+  );
+}
+
+/**
+ * The sections a given scope sits, in catalog order — which is exam order, and
+ * which the runner relies on to walk sections one at a time.
+ */
+export function getMockAttemptSectionCatalogForScope(
+  scope: MockAttemptScope,
+): readonly MockAttemptSectionCatalogEntry[] {
+  if (scope === 'full') return MOCK_ATTEMPT_SECTION_CATALOG;
+  const group = SCORE_GROUP_BY_SCOPE[scope];
+  return MOCK_ATTEMPT_SECTION_CATALOG.filter((entry) => entry.scoreGroup === group);
+}
