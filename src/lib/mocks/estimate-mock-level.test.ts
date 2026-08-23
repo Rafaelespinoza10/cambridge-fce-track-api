@@ -3,6 +3,9 @@ import * as assert from 'node:assert/strict';
 
 import { EnglishLevel } from '@models/enums';
 import {
+  CAMBRIDGE_SCALE_MAX,
+  CAMBRIDGE_SCALE_MIN,
+  LEVEL_BANDS,
   estimateCambridgeScaleScore,
   estimateLevelFromScore,
   estimateB2FirstResult,
@@ -39,6 +42,25 @@ describe('estimateLevelFromScore', () => {
     assert.equal(estimateLevelFromScore(140), EnglishLevel.B1);
     assert.equal(estimateLevelFromScore(139), EnglishLevel.A2);
     assert.equal(estimateLevelFromScore(0), EnglishLevel.A2);
+  });
+});
+
+describe('LEVEL_BANDS', () => {
+  it('covers the whole 100-190 scale with no gaps or overlaps', () => {
+    assert.equal(LEVEL_BANDS[0]!.minScore, CAMBRIDGE_SCALE_MIN);
+    assert.equal(LEVEL_BANDS[LEVEL_BANDS.length - 1]!.maxScore, CAMBRIDGE_SCALE_MAX);
+    for (let i = 0; i < LEVEL_BANDS.length - 1; i += 1) {
+      assert.equal(LEVEL_BANDS[i]!.maxScore + 1, LEVEL_BANDS[i + 1]!.minScore);
+    }
+  });
+
+  it('stays in lockstep with estimateLevelFromScore for every score on the scale', () => {
+    for (let score = CAMBRIDGE_SCALE_MIN; score <= CAMBRIDGE_SCALE_MAX; score += 1) {
+      const expectedLevel = estimateLevelFromScore(score);
+      const band = LEVEL_BANDS.find((b) => score >= b.minScore && score <= b.maxScore);
+      assert.ok(band, `no band covers score ${score}`);
+      assert.equal(band!.level, expectedLevel, `band mismatch at score ${score}`);
+    }
   });
 });
 

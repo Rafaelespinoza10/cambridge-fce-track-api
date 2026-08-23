@@ -4,6 +4,7 @@ import { PlanDay } from '@models/PlanDay';
 import { WeeklyPlan } from '@models/WeeklyPlan';
 import { MockTest } from '@models/MockTest';
 import { UserGoal } from '@models/UserGoal';
+import { ExamType, EnglishLevel } from '@models/enums';
 
 interface WeeklyActivityStats {
   total: number;
@@ -67,6 +68,17 @@ interface WritingMetricsSummaryRow {
   completedCount: number;
   overallAverageBand: number | null;
   lastAttemptAt: Date | null;
+}
+
+interface MockScoreTrendRow {
+  takenAt: Date;
+  standardizedScore: number;
+  level: EnglishLevel;
+}
+
+interface ActivityHeatmapRow {
+  date: string;
+  count: number;
 }
 
 /**
@@ -536,6 +548,76 @@ class ProgressRepository {
   }
 
   /**
+   * One point per completed, graded B2 First mock with a computed estimate
+   * — chronological, for the Progress screen's mock score trend chart.
+   * Scoped to B2_FIRST/non-null estimates only: that's the only exam type
+   * StartMockAttemptService/estimate-mock-level.ts support today, so older
+   * or other-exam-type mocks (estimated_standardized_score/estimated_level
+   * both null) would otherwise plot as a broken 0 on a 100-190 scale.
+   */
+  async getMockScoreTrend(userId: string): Promise<MockScoreTrendRow[]> {
+    const rows = await this.ds
+      .createQueryBuilder(MockTest, 'mt')
+      .select('COALESCE(mt.taken_at, mt.created_at)', 'takenAt')
+      .addSelect('mt.estimated_standardized_score', 'standardizedScore')
+      .addSelect('mt.estimated_level', 'level')
+      .where('mt.user_id = :userId', { userId })
+      .andWhere('mt.deleted_at IS NULL')
+      .andWhere('mt.exam_type = :examType', { examType: ExamType.B2_FIRST })
+      .andWhere('mt.estimated_standardized_score IS NOT NULL')
+      .andWhere('mt.estimated_level IS NOT NULL')
+      .orderBy('COALESCE(mt.taken_at, mt.created_at)', 'ASC')
+      .getRawMany<{ takenAt: Date; standardizedScore: string; level: EnglishLevel }>();
+
+    return rows.map((row) => ({
+      takenAt: row.takenAt,
+      standardizedScore: parseFloat(row.standardizedScore),
+      level: row.level,
+    }));
+  }
+
+  /**
+   * Per-day activity counts in the user's own timezone, for the Progress
+   * screen's GitHub-style contribution heatmap. Unions the same
+   * UNIFIED_SCORES_CTE sources (a logged activity, a completed Practice
+   * attempt, a graded Writing submission) with one row per completed mock —
+   * mocks are deliberately not part of UNIFIED_SCORES_CTE itself (see that
+   * CTE's own doc comment), so they're added here directly rather than by
+   * widening a CTE three other methods also depend on. Only days with at
+   * least one activity are returned; the frontend fills in zero-activity
+   * days itself.
+   */
+  async getActivityHeatmap(
+    userId: string,
+    from: string,
+    to: string,
+    timeZone: string,
+  ): Promise<ActivityHeatmapRow[]> {
+    const rows = await this.ds.query<{ date: string; count: string }[]>(
+      `${UNIFIED_SCORES_CTE},
+       mock_days AS (
+         SELECT COALESCE(mt.taken_at, mt.created_at) AS occurred_at
+         FROM mock_tests mt
+         WHERE mt.user_id = $1 AND mt.deleted_at IS NULL
+       ),
+       all_activity AS (
+         SELECT occurred_at FROM unified_scores WHERE user_id = $1
+         UNION ALL
+         SELECT occurred_at FROM mock_days
+       )
+       SELECT TO_CHAR(occurred_at AT TIME ZONE $4, 'YYYY-MM-DD') AS date, COUNT(*) AS count
+       FROM all_activity
+       WHERE occurred_at >= ($2::timestamp AT TIME ZONE $4)
+         AND occurred_at < (($3::timestamp + INTERVAL '1 day') AT TIME ZONE $4)
+       GROUP BY date
+       ORDER BY date ASC`,
+      [userId, from, to, timeZone],
+    );
+
+    return rows.map((row) => ({ date: row.date, count: parseInt(row.count, 10) }));
+  }
+
+  /**
    * Average band per Cambridge Writing criterion across all graded
    * submissions, plus a summary row — mirrors getExamPartMetrics'
    * shape/intent, just grouping by criterion (from the feedback JSONB)
@@ -596,4 +678,6 @@ export type {
   ExamPartMetricRow,
   WritingCriterionMetricRow,
   WritingMetricsSummaryRow,
+  MockScoreTrendRow,
+  ActivityHeatmapRow,
 };

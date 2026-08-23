@@ -36,6 +36,28 @@ export interface EstimatedMockResult {
   estimatedLevel: EnglishLevel;
 }
 
+export const CAMBRIDGE_SCALE_MIN = 100;
+export const CAMBRIDGE_SCALE_MAX = 190;
+
+export interface LevelBand {
+  level: EnglishLevel;
+  minScore: number;
+  maxScore: number;
+}
+
+/**
+ * The same public grade boundaries estimateLevelFromScore checks against,
+ * exposed as ranges instead of a lookup function — for rendering reference
+ * bands on the mock-score-trend chart (Progress screen). Kept in lockstep
+ * with estimateLevelFromScore on purpose: update both together.
+ */
+export const LEVEL_BANDS: readonly LevelBand[] = [
+  { level: EnglishLevel.A2, minScore: CAMBRIDGE_SCALE_MIN, maxScore: 139 },
+  { level: EnglishLevel.B1, minScore: 140, maxScore: 159 },
+  { level: EnglishLevel.B2, minScore: 160, maxScore: 179 },
+  { level: EnglishLevel.C1, minScore: 180, maxScore: CAMBRIDGE_SCALE_MAX },
+];
+
 export function estimateCambridgeScaleScore(overallPercentage: number): number {
   const p = Math.max(0, Math.min(100, overallPercentage));
   for (let i = 0; i < B2_FIRST_ANCHORS.length - 1; i += 1) {

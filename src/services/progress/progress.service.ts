@@ -8,12 +8,15 @@ import {
   getLastNWeekStarts,
   roundTwo,
 } from '@lib/progress/progress-library';
+import { CAMBRIDGE_SCALE_MAX, CAMBRIDGE_SCALE_MIN, LEVEL_BANDS } from '@lib/mocks/estimate-mock-level';
 import { getUserTimeZone } from '../planning/resolve-user-local-day';
 import type {
+  ActivityHeatmapResponse,
   ExamGoalMetric,
   ExamPartMetricsResponse,
   LastMockMetric,
   MetricsResponse,
+  MockScoreTrendResponse,
   RecentActivityMetric,
   ScoreEvolutionResponse,
   SkillMetric,
@@ -218,6 +221,41 @@ class ProgressService {
         percentage: roundTwo(row.percentage),
       })),
     };
+  }
+
+  async getMockScoreTrend(userId: string): Promise<MockScoreTrendResponse> {
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const rows = await repo.getMockScoreTrend(userId);
+
+    return {
+      points: rows.map((row) => ({
+        takenAt: row.takenAt.toISOString(),
+        standardizedScore: roundTwo(row.standardizedScore),
+        level: row.level,
+      })),
+      bands: [...LEVEL_BANDS],
+      scoreScaleMin: CAMBRIDGE_SCALE_MIN,
+      scoreScaleMax: CAMBRIDGE_SCALE_MAX,
+    };
+  }
+
+  async getActivityHeatmap(
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<ActivityHeatmapResponse> {
+    const fromDate = new Date(from);
+    if (isNaN(fromDate.getTime())) throw createError('from must be a valid date', 400);
+    const toDate = new Date(to);
+    if (isNaN(toDate.getTime())) throw createError('to must be a valid date', 400);
+
+    const ds = await getDatabaseConnection();
+    const repo = new ProgressRepository(ds);
+    const timeZone = await getUserTimeZone(ds, userId);
+    const days = await repo.getActivityHeatmap(userId, from, to, timeZone);
+
+    return { days };
   }
 }
 
