@@ -18,6 +18,7 @@ import {
   type MockAttemptSectionCatalogEntry,
 } from '@lib/mocks/mock-attempt-catalog';
 import { toMockAttemptSectionSafeDto } from '@lib/mocks/mock-attempt-dto';
+import { deterministicUuidFrom } from '@lib/shared/deterministic-uuid';
 import type { MockAttemptSectionAnswers } from '@models/mock-attempt-json-types';
 import type {
   MockAttemptSectionContentDto,
@@ -246,7 +247,13 @@ export class StartMockAttemptSectionService {
     const now = this.deps.now ?? (() => new Date());
     const mockAttemptsFactory = this.deps.mockAttempts ?? DEFAULT_MOCK_ATTEMPTS_FACTORY;
     const mockAttemptsRepo = mockAttemptsFactory(this.dataSource);
-    const idempotencyKey = `${attemptId}:${section.section_code}`;
+    // practice_exercises.idempotency_key / writing_tasks.idempotency_key are
+    // both typed `uuid` — a compound string like `${attemptId}:${sectionCode}`
+    // is never valid Postgres uuid input on its own, so it's hashed into a
+    // deterministic one first (same attemptId+sectionCode always maps to the
+    // same UUID, so idempotent re-entry into this section still replays the
+    // already-generated content instead of erroring or regenerating).
+    const idempotencyKey = deterministicUuidFrom(`${attemptId}:${section.section_code}`);
 
     if (catalogEntry.contentType === MockAttemptSectionContentType.PRACTICE_EXERCISE) {
       const exercise = await this.deps.generatePracticeExercise.execute(userId, {

@@ -24,6 +24,7 @@ import {
 } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
+import { deterministicUuidFrom } from '@lib/shared/deterministic-uuid';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ATTEMPT_ID = 'attempt-1';
@@ -150,7 +151,14 @@ describe('StartMockAttemptSectionService.execute', () => {
       request: { partCode: string; idempotencyKey: string };
     };
     assert.equal(call.request.partCode, 'UOE_PART_1');
-    assert.equal(call.request.idempotencyKey, `${ATTEMPT_ID}:uoe-part-1`);
+    // Must be a valid uuid (practice_exercises.idempotency_key's column type)
+    // and deterministic — the exact hash of attemptId+sectionCode, so a
+    // retry replays instead of erroring on `invalid input syntax for type uuid`.
+    assert.equal(call.request.idempotencyKey, deterministicUuidFrom(`${ATTEMPT_ID}:uoe-part-1`));
+    assert.match(
+      call.request.idempotencyKey,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
     assert.equal(startCalls.length, 1);
   });
 
