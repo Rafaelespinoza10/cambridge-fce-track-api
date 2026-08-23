@@ -29,6 +29,8 @@ export interface StartSectionContentData {
   writingTaskId?: string | null;
   listeningSourceId?: string | null;
   startedAt: Date;
+  /** UoE-only time-banking override — see StartMockAttemptSectionService.computeUseOfEnglishTimeLimitSeconds. */
+  timeLimitSecondsOverride?: number;
 }
 
 export interface CompleteSectionData {
@@ -134,6 +136,9 @@ class MockAttemptsRepository {
         listening_source_id: data.listeningSourceId ?? null,
         status: MockAttemptSectionStatus.IN_PROGRESS,
         started_at: data.startedAt,
+        ...(data.timeLimitSecondsOverride !== undefined
+          ? { time_limit_seconds: data.timeLimitSecondsOverride }
+          : {}),
       },
     );
   }
