@@ -46,6 +46,17 @@ export interface WordFamilyDto {
   derivatives: FlashcardDto[];
 }
 
+export interface PhrasalVerbGroupDto {
+  verbTag: string;
+  baseVerb: string;
+  cards: FlashcardDto[];
+}
+
+export interface OrganizePhrasalVerbsResultDto {
+  updatedCount: number;
+  groups: PhrasalVerbGroupDto[];
+}
+
 export interface FlashcardDto {
   id: string;
   deckId: string;

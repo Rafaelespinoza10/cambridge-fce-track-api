@@ -17,7 +17,14 @@ import type {
   FlashcardListStatus,
   FlashcardDto,
   WordFamilyDto,
+  PhrasalVerbGroupDto,
+  OrganizePhrasalVerbsResultDto,
 } from '../../interfaces/flashcards/flashcards.interface';
+import {
+  ensureVerbTag,
+  resolveVerbGroupKey,
+  stripVerbTags,
+} from '@lib/flashcards/phrasal-verb-base';
 
 export enum FlashcardErrorCode {
   INVALID_INPUT = 'invalid_input',
@@ -389,7 +396,11 @@ class FlashcardsService {
     const sourceUrl =
       input.sourceUrl === undefined ? null : normalizeSourceUrlValue(input.sourceUrl);
     const level = input.level === undefined ? null : normalizeLevelValue(input.level);
-    const tags = input.tags === undefined ? [] : normalizeTags(input.tags);
+    let tags = input.tags === undefined ? [] : normalizeTags(input.tags);
+    if (type === FlashcardType.PHRASAL_VERB) {
+      const withVerb = ensureVerbTag(tags, front);
+      if (withVerb !== null) tags = withVerb;
+    }
 
     const deck = await this.decksRepo().findActiveByIdAndUser(deckId, userId);
     if (deck === null) {
@@ -538,6 +549,84 @@ class FlashcardsService {
     }));
   }
 
+  private groupPhrasalVerbs(flashcards: Flashcard[]): PhrasalVerbGroupDto[] {
+    const groups = new Map<string, { baseVerb: string; cards: Flashcard[] }>();
+    for (const flashcard of flashcards) {
+      const key = resolveVerbGroupKey(flashcard.tags, flashcard.front);
+      if (key === null) continue;
+      const existing = groups.get(key.verbTag);
+      if (existing !== undefined) {
+        existing.cards.push(flashcard);
+      } else {
+        groups.set(key.verbTag, { baseVerb: key.baseVerb, cards: [flashcard] });
+      }
+    }
+
+    return Array.from(groups.entries())
+      .map(([verbTag, group]) => ({
+        verbTag,
+        baseVerb: group.baseVerb,
+        cards: group.cards
+          .map(toFlashcardDto)
+          .sort((a, b) => a.front.localeCompare(b.front) || a.id.localeCompare(b.id)),
+      }))
+      .sort((a, b) => a.baseVerb.localeCompare(b.baseVerb) || a.verbTag.localeCompare(b.verbTag));
+  }
+
+  async listPhrasalVerbGroups(userId: string, deckId: string): Promise<PhrasalVerbGroupDto[]> {
+    const deck = await this.decksRepo().findActiveByIdAndUser(deckId, userId);
+    if (deck === null) {
+      throw new FlashcardError('Deck not found', FlashcardErrorCode.DECK_NOT_FOUND);
+    }
+
+    const flashcards = await this.flashcardsRepo().findByDeckForUser(deckId, userId, {
+      status: 'all',
+      type: FlashcardType.PHRASAL_VERB,
+    });
+    return this.groupPhrasalVerbs(flashcards);
+  }
+
+  async organizePhrasalVerbsByBaseVerb(
+    userId: string,
+    deckId: string,
+  ): Promise<OrganizePhrasalVerbsResultDto> {
+    const deck = await this.decksRepo().findActiveByIdAndUser(deckId, userId);
+    if (deck === null) {
+      throw new FlashcardError('Deck not found', FlashcardErrorCode.DECK_NOT_FOUND);
+    }
+    if (deck.is_archived) {
+      throw new FlashcardError(
+        'Cannot organize flashcards in an archived deck',
+        FlashcardErrorCode.DECK_UNAVAILABLE,
+      );
+    }
+
+    const flashcards = await this.flashcardsRepo().findByDeckForUser(deckId, userId, {
+      status: 'all',
+      type: FlashcardType.PHRASAL_VERB,
+    });
+
+    let updatedCount = 0;
+    for (const flashcard of flashcards) {
+      const nextTags = ensureVerbTag(flashcard.tags, flashcard.front);
+      if (nextTags === null) continue;
+      const unchanged =
+        nextTags.length === flashcard.tags.length &&
+        nextTags.every((tag, index) => tag === flashcard.tags[index]);
+      if (unchanged) continue;
+
+      const result = await this.flashcardsRepo().updateContent(flashcard.id, userId, {
+        tags: nextTags,
+      });
+      if (result.affected === 1) {
+        flashcard.tags = nextTags;
+        updatedCount += 1;
+      }
+    }
+
+    return { updatedCount, groups: this.groupPhrasalVerbs(flashcards) };
+  }
+
   async listFlashcards(
     userId: string,
     deckId: string,
@@ -620,18 +709,33 @@ class FlashcardsService {
       updateData.tags = normalizeTags(input.tags);
     }
 
+    const existing = await this.getFlashcardWithAvailableDeck(userId, flashcardId);
+
+    const nextType = updateData.type ?? existing.type;
+    const nextFront = updateData.front ?? existing.front;
+    const nextBack = updateData.back ?? existing.back;
+    let nextTags = updateData.tags ?? existing.tags;
+
+    if (nextType === FlashcardType.PHRASAL_VERB) {
+      const withVerb = ensureVerbTag(nextTags, nextFront);
+      if (withVerb !== null) nextTags = withVerb;
+    } else if (existing.type === FlashcardType.PHRASAL_VERB) {
+      nextTags = stripVerbTags(nextTags);
+    }
+
+    const tagsChanged =
+      nextTags.length !== existing.tags.length ||
+      nextTags.some((tag, index) => tag !== existing.tags[index]);
+    if (tagsChanged) {
+      updateData.tags = nextTags;
+    }
+
     if (Object.keys(updateData).length === 0) {
       throw new FlashcardError(
         'At least one field must be provided',
         FlashcardErrorCode.INVALID_INPUT,
       );
     }
-
-    const existing = await this.getFlashcardWithAvailableDeck(userId, flashcardId);
-
-    const nextType = updateData.type ?? existing.type;
-    const nextFront = updateData.front ?? existing.front;
-    const nextBack = updateData.back ?? existing.back;
 
     const duplicate = await this.flashcardsRepo().findDuplicate(
       existing.deck_id,

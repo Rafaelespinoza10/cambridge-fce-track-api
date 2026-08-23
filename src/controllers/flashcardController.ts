@@ -12,6 +12,8 @@ import type {
   FlashcardListStatus,
   FlashcardDto,
   WordFamilyDto,
+  PhrasalVerbGroupDto,
+  OrganizePhrasalVerbsResultDto,
 } from '../interfaces/flashcards/flashcards.interface';
 
 type NowProvider = () => Date;
@@ -36,6 +38,11 @@ interface FlashcardsServicePort {
     input: CreateWordFamilyRequestBody,
   ): Promise<WordFamilyDto>;
   listWordFamilies(userId: string, deckId: string): Promise<WordFamilyDto[]>;
+  listPhrasalVerbGroups(userId: string, deckId: string): Promise<PhrasalVerbGroupDto[]>;
+  organizePhrasalVerbsByBaseVerb(
+    userId: string,
+    deckId: string,
+  ): Promise<OrganizePhrasalVerbsResultDto>;
   getFlashcard(userId: string, flashcardId: string): Promise<FlashcardDto>;
   updateFlashcard(
     userId: string,
@@ -202,6 +209,56 @@ export async function listWordFamilies(
   return listWordFamiliesHandler(event, DEFAULT_DEPS);
 }
 
+async function listPhrasalVerbGroupsHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const deckId = getDeckIdParam(event);
+  if (deckId === null) return errorResponse('Invalid or missing deckId', 400);
+
+  try {
+    const { flashcards } = await deps.services();
+    const groups = await flashcards.listPhrasalVerbGroups(payload.sub, deckId);
+    return successResponse({ success: true, data: groups }, 200);
+  } catch (err: unknown) {
+    return handleError(mapFlashcardError(err));
+  }
+}
+
+export async function listPhrasalVerbGroups(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return listPhrasalVerbGroupsHandler(event, DEFAULT_DEPS);
+}
+
+async function organizePhrasalVerbsHandler(
+  event: APIGatewayProxyEvent,
+  deps: FlashcardControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const deckId = getDeckIdParam(event);
+  if (deckId === null) return errorResponse('Invalid or missing deckId', 400);
+
+  try {
+    const { flashcards } = await deps.services();
+    const result = await flashcards.organizePhrasalVerbsByBaseVerb(payload.sub, deckId);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapFlashcardError(err));
+  }
+}
+
+export async function organizePhrasalVerbs(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return organizePhrasalVerbsHandler(event, DEFAULT_DEPS);
+}
+
 async function getFlashcardHandler(
   event: APIGatewayProxyEvent,
   deps: FlashcardControllerDeps,
@@ -333,6 +390,8 @@ export {
   listFlashcardsHandler,
   createWordFamilyHandler,
   listWordFamiliesHandler,
+  listPhrasalVerbGroupsHandler,
+  organizePhrasalVerbsHandler,
   getFlashcardHandler,
   updateFlashcardHandler,
   suspendFlashcardHandler,
