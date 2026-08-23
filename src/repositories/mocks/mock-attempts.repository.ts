@@ -7,6 +7,7 @@ import type {
   MockAttemptSectionAnswers,
   MockAttemptSectionGradingFeedback,
 } from '@models/mock-attempt-json-types';
+import { MOCK_ATTEMPT_SECTION_CATALOG } from '@lib/mocks/mock-attempt-catalog';
 
 type RepositorySource = DataSource | EntityManager;
 
@@ -88,11 +89,25 @@ class MockAttemptsRepository {
       .getOne();
   }
 
+  /**
+   * Ordered by real exam progression (MOCK_ATTEMPT_SECTION_CATALOG's own
+   * order — UoE 1-4, Reading 5-7, Writing 1-2, Listening 1-4), never by
+   * `section_code` alphabetically ('listening-part-1' would otherwise sort
+   * before 'uoe-part-1'). The frontend relies on this array order both to
+   * label "Part X of 13" and to derive which section the student is on
+   * (the first non-'completed' entry), so a wrong order here silently
+   * reshuffles the whole exam sequence.
+   */
   async findSectionsByAttempt(attemptId: string): Promise<MockAttemptSection[]> {
-    return this.sectionRepo.find({
-      where: { mock_attempt_id: attemptId },
-      order: { section_code: 'ASC' },
-    });
+    const sections = await this.sectionRepo.find({ where: { mock_attempt_id: attemptId } });
+    const orderIndex = new Map(
+      MOCK_ATTEMPT_SECTION_CATALOG.map((entry, index) => [entry.sectionCode, index]),
+    );
+    return [...sections].sort(
+      (a, b) =>
+        (orderIndex.get(a.section_code) ?? Number.MAX_SAFE_INTEGER) -
+        (orderIndex.get(b.section_code) ?? Number.MAX_SAFE_INTEGER),
+    );
   }
 
   /** Scoped through the parent attempt's owner — never trusts a bare sectionId/attemptId pair without also checking userId. */
