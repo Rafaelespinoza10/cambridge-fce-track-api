@@ -47,3 +47,5 @@ Thumbs.db
 scripts/fixtures/
 
 .scripts/
+# Temp config copies made by deploy.sh (removed on success, left behind if killed)
+_*_tmp.serverless.yml
