@@ -120,6 +120,20 @@ functions:
           path: /flashcards/decks/{deckId}/word-families
           method: GET
 
+  flashcardsListPhrasalVerbGroups:
+    handler: src/controllers/flashcardController.listPhrasalVerbGroups
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/phrasal-verb-groups
+          method: GET
+
+  flashcardsOrganizePhrasalVerbs:
+    handler: src/controllers/flashcardController.organizePhrasalVerbs
+    events:
+      - httpApi:
+          path: /flashcards/decks/{deckId}/phrasal-verb-groups/organize
+          method: POST
+
   flashcardsGetFlashcard:
     handler: src/controllers/flashcardController.getFlashcard
     events:

@@ -10,6 +10,8 @@ import {
   listFlashcardsHandler,
   createWordFamilyHandler,
   listWordFamiliesHandler,
+  listPhrasalVerbGroupsHandler,
+  organizePhrasalVerbsHandler,
   getFlashcardHandler,
   updateFlashcardHandler,
   suspendFlashcardHandler,
@@ -19,7 +21,11 @@ import {
 import type { FlashcardControllerDeps, FlashcardsServicePort } from './flashcardController';
 import { JwtService } from '@lib/shared/jwt';
 import { FlashcardError, FlashcardErrorCode } from '../services/flashcards/flashcards.service';
-import type { FlashcardDto, WordFamilyDto } from '../interfaces/flashcards/flashcards.interface';
+import type {
+  FlashcardDto,
+  WordFamilyDto,
+  PhrasalVerbGroupDto,
+} from '../interfaces/flashcards/flashcards.interface';
 import { FlashcardType, FlashcardStatus } from '../models/enums';
 
 const USER_ID = 'user-1';
@@ -73,12 +79,22 @@ const WORD_FAMILY_DTO: WordFamilyDto = {
   derivatives: [FLASHCARD_DTO],
 };
 
+const PHRASAL_GROUP_DTO: PhrasalVerbGroupDto = {
+  verbTag: 'verb:give',
+  baseVerb: 'give',
+  cards: [FLASHCARD_DTO],
+};
+
 interface FakeService extends FlashcardsServicePort {
   calls: {
     createFlashcard: Parameters<FlashcardsServicePort['createFlashcard']>[];
     listFlashcards: Parameters<FlashcardsServicePort['listFlashcards']>[];
     createWordFamily: Parameters<FlashcardsServicePort['createWordFamily']>[];
     listWordFamilies: Parameters<FlashcardsServicePort['listWordFamilies']>[];
+    listPhrasalVerbGroups: Parameters<FlashcardsServicePort['listPhrasalVerbGroups']>[];
+    organizePhrasalVerbsByBaseVerb: Parameters<
+      FlashcardsServicePort['organizePhrasalVerbsByBaseVerb']
+    >[];
     getFlashcard: Parameters<FlashcardsServicePort['getFlashcard']>[];
     updateFlashcard: Parameters<FlashcardsServicePort['updateFlashcard']>[];
     suspendFlashcard: Parameters<FlashcardsServicePort['suspendFlashcard']>[];
@@ -96,6 +112,8 @@ function buildDeps(
     listFlashcards: [],
     createWordFamily: [],
     listWordFamilies: [],
+    listPhrasalVerbGroups: [],
+    organizePhrasalVerbsByBaseVerb: [],
     getFlashcard: [],
     updateFlashcard: [],
     suspendFlashcard: [],
@@ -120,6 +138,18 @@ function buildDeps(
     listWordFamilies: async (...args) => {
       calls.listWordFamilies.push(args);
       return overrides.listWordFamilies ? overrides.listWordFamilies(...args) : [WORD_FAMILY_DTO];
+    },
+    listPhrasalVerbGroups: async (...args) => {
+      calls.listPhrasalVerbGroups.push(args);
+      return overrides.listPhrasalVerbGroups
+        ? overrides.listPhrasalVerbGroups(...args)
+        : [PHRASAL_GROUP_DTO];
+    },
+    organizePhrasalVerbsByBaseVerb: async (...args) => {
+      calls.organizePhrasalVerbsByBaseVerb.push(args);
+      return overrides.organizePhrasalVerbsByBaseVerb
+        ? overrides.organizePhrasalVerbsByBaseVerb(...args)
+        : { updatedCount: 1, groups: [PHRASAL_GROUP_DTO] };
     },
     getFlashcard: async (...args) => {
       calls.getFlashcard.push(args);
@@ -460,6 +490,36 @@ describe('listWordFamilies', () => {
       deps,
     );
     assert.equal(result.statusCode, 404);
+  });
+});
+
+// ── listPhrasalVerbGroups / organizePhrasalVerbs ─────────────────────────────────
+
+describe('listPhrasalVerbGroups', () => {
+  it('returns groups from the service', async () => {
+    const { deps, service } = buildDeps();
+    const result = await listPhrasalVerbGroupsHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(service.calls.listPhrasalVerbGroups[0], [USER_ID, DECK_ID]);
+    const data = parseBody(result).data as PhrasalVerbGroupDto[];
+    assert.equal(data[0]!.baseVerb, 'give');
+  });
+});
+
+describe('organizePhrasalVerbs', () => {
+  it('returns the organize result from the service', async () => {
+    const { deps, service } = buildDeps();
+    const result = await organizePhrasalVerbsHandler(
+      makeEvent({ pathParameters: { deckId: DECK_ID } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(service.calls.organizePhrasalVerbsByBaseVerb[0], [USER_ID, DECK_ID]);
+    const data = parseBody(result).data as { updatedCount: number };
+    assert.equal(data.updatedCount, 1);
   });
 });
 
