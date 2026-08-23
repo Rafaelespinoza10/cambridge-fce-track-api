@@ -121,6 +121,37 @@ function makeService(opts: {
 }
 
 describe('SubmitMockAttemptService.execute', () => {
+  it('gives a scoped attempt no estimated score or level, and files it as PARTIAL', async () => {
+    // Writing only. The overall average reads a missing group as 0, so scoring
+    // this would report (0 + 0 + 75 + 0) / 4 = 18.75% as a B2 First result and
+    // then show up as "your last mock" on Home and Progress. A partial sitting
+    // is not a B2 First estimate, so it reports none.
+    const { service, createMockCalls, createSectionsCalls } = makeService({
+      attempt: makeAttempt(),
+      sections: [
+        makeSection('writing-part-1', MockAttemptSectionStatus.COMPLETED, '15', '20'),
+        makeSection('writing-part-2', MockAttemptSectionStatus.COMPLETED, '15', '20'),
+      ],
+    });
+
+    await service.execute(USER_ID, ATTEMPT_ID, SUBMITTED_AT);
+
+    const mockData = createMockCalls[0] as {
+      mockType: MockType;
+      estimatedStandardizedScore: number | null;
+      estimatedLevel: string | null;
+      name: string;
+    };
+    assert.equal(mockData.mockType, MockType.PARTIAL);
+    assert.equal(mockData.estimatedStandardizedScore, null);
+    assert.equal(mockData.estimatedLevel, null);
+    // Recognisable in the mock history instead of another "Full Timed Mock".
+    assert.ok(mockData.name.startsWith('Writing Timed Mock'));
+
+    // The per-section scores still roll up — they feed the exam-part metrics.
+    assert.equal((createSectionsCalls[0] as unknown[]).length, 2);
+  });
+
   it('aggregates completed sections into a MockTest + MockSectionScore rows and completes the attempt', async () => {
     const { service, createMockCalls, createSectionsCalls, completeAttemptCalls } = makeService({
       attempt: makeAttempt(),
