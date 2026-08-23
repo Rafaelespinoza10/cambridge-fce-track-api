@@ -24,6 +24,11 @@ import type { MockAttemptSection } from '@models/MockAttemptSection';
 import type { PracticeExercise } from '@models/PracticeExercise';
 import type { PracticeItem } from '@models/PracticeItem';
 import type { WritingTask } from '@models/WritingTask';
+import {
+  computeMockAttemptPaperScores,
+  PAPER_GROUPS,
+} from '@lib/mocks/mock-attempt-paper-scores';
+import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ATTEMPT_ID = 'attempt-1';
@@ -241,6 +246,55 @@ describe('GetMockAttemptResultService.execute', () => {
     assert.deepEqual(result.paperScores.writing, { rawScore: 31, maxScore: 40, percentage: 77.5 });
     // No listening section was completed in this attempt.
     assert.deepEqual(result.paperScores.listening, { rawScore: 0, maxScore: 0, percentage: null });
+  });
+
+  it('estimates an overall Cambridge Scale Score + level for a completed B2 First attempt', async () => {
+    const uoe = makeObjectiveSection({ raw_score: '1.00', max_score: '1.00' });
+    const reading = makeObjectiveSection({
+      id: 'section-reading5',
+      section_code: 'reading-part-5',
+      raw_score: '4.00',
+      max_score: '6.00',
+    });
+    const writingPart1 = makeWritingSection({ raw_score: '15.00', max_score: '20.00' });
+    const writingPart2 = makeWritingSection({
+      id: 'section-writing2',
+      section_code: 'writing-part-2',
+      raw_score: '16.00',
+      max_score: '20.00',
+    });
+
+    const service = makeService({ sections: [uoe, reading, writingPart1, writingPart2] });
+    const result = await service.execute(USER_ID, ATTEMPT_ID);
+
+    // Derived the exact same way estimateB2FirstResult itself computes it —
+    // stays correct regardless of the fixture's own numbers, and listening
+    // being un-attempted (0%) is deliberately part of the overall average.
+    const paperScores = computeMockAttemptPaperScores([uoe, reading, writingPart1, writingPart2]);
+    const overallPercentage =
+      PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0).reduce((a, b) => a + b, 0) /
+      PAPER_GROUPS.length;
+    assert.deepEqual(result.estimatedResult, estimateB2FirstResult(overallPercentage));
+  });
+
+  it('never estimates a score for an attempt still missing sections (abandoned)', async () => {
+    const service = makeService({
+      attempt: makeAttempt({ status: MockAttemptStatus.ABANDONED }),
+      sections: [makeObjectiveSection()],
+    });
+
+    const result = await service.execute(USER_ID, ATTEMPT_ID);
+    assert.equal(result.estimatedResult, null);
+  });
+
+  it('never estimates a score for a non-B2-First exam type', async () => {
+    const service = makeService({
+      attempt: makeAttempt({ exam_type: ExamType.C1_ADVANCED }),
+      sections: [makeObjectiveSection()],
+    });
+
+    const result = await service.execute(USER_ID, ATTEMPT_ID);
+    assert.equal(result.estimatedResult, null);
   });
 
   it('rejects an attempt that is still in progress', async () => {

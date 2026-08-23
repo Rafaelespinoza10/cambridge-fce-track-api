@@ -8,7 +8,9 @@ import {
   MockAttemptStatus,
   MockAttemptSectionStatus,
   MockAttemptSectionContentType,
+  ExamType,
 } from '@models/enums';
+import type { EnglishLevel } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
 import type { PracticeExercise } from '@models/PracticeExercise';
@@ -21,9 +23,17 @@ import {
   formatUserAnswer,
   roundToTwoDecimals,
 } from '@lib/practice/practice-attempt-grading';
-import { findMockAttemptSectionCatalogEntry } from '@lib/mocks/mock-attempt-catalog';
+import {
+  computeMockAttemptPaperScores,
+  PAPER_GROUPS,
+  type MockAttemptPaperGroup,
+  type MockAttemptPaperScoreDto,
+} from '@lib/mocks/mock-attempt-paper-scores';
+import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 import { toMockAttemptSafeDto } from '@lib/mocks/mock-attempt-dto';
 import type { MockAttemptSafeDto } from '../../interfaces/mocks/mock-attempt.interface';
+
+export type { MockAttemptPaperGroup, MockAttemptPaperScoreDto };
 
 export enum GetMockAttemptResultErrorCode {
   ATTEMPT_NOT_FOUND = 'attempt_not_found',
@@ -76,18 +86,17 @@ export interface MockAttemptSectionDetailDto {
   review: MockAttemptSectionReviewDto | null;
 }
 
-export type MockAttemptPaperGroup = 'reading' | 'useOfEnglish' | 'writing' | 'listening';
-
-export interface MockAttemptPaperScoreDto {
-  rawScore: number;
-  maxScore: number;
-  /** null when no section in this group has been completed yet (e.g. an abandoned attempt). */
-  percentage: number | null;
+export interface MockAttemptEstimatedResultDto {
+  /** Estimated Cambridge Scale Score (100-190) — an approximation, never an official score. */
+  estimatedScore: number;
+  estimatedLevel: EnglishLevel;
 }
 
 export interface MockAttemptResultDto {
   attempt: MockAttemptSafeDto;
   paperScores: Record<MockAttemptPaperGroup, MockAttemptPaperScoreDto>;
+  /** null for an abandoned (incomplete) attempt, or a non-B2_FIRST exam type. */
+  estimatedResult: MockAttemptEstimatedResultDto | null;
   sections: MockAttemptSectionDetailDto[];
 }
 
@@ -128,12 +137,6 @@ const DEFAULT_WRITING_TASKS_FACTORY = (dataSource: DataSource): WritingTasksRepo
 const DEFAULT_LISTENING_SOURCES_FACTORY = (
   dataSource: DataSource,
 ): ListeningSourcesRepositoryPort => new ListeningSourcesRepository(dataSource);
-
-const PAPER_GROUPS: MockAttemptPaperGroup[] = ['reading', 'useOfEnglish', 'writing', 'listening'];
-
-function emptyPaperScore(): MockAttemptPaperScoreDto {
-  return { rawScore: 0, maxScore: 0, percentage: null };
-}
 
 /**
  * Full, answer-revealing detail of one finished mock attempt: every
@@ -177,42 +180,32 @@ export class GetMockAttemptResultService {
       sections.map((section) => this.buildSectionDetail(userId, section)),
     );
 
+    const paperScores = computeMockAttemptPaperScores(sections);
+
     return {
       attempt: toMockAttemptSafeDto(attempt, sections),
-      paperScores: this.buildPaperScores(sections),
+      paperScores,
+      estimatedResult: this.buildEstimatedResult(attempt, paperScores),
       sections: sectionDetails,
     };
   }
 
-  private buildPaperScores(
-    sections: MockAttemptSection[],
-  ): Record<MockAttemptPaperGroup, MockAttemptPaperScoreDto> {
-    const scores: Record<MockAttemptPaperGroup, MockAttemptPaperScoreDto> = {
-      reading: emptyPaperScore(),
-      useOfEnglish: emptyPaperScore(),
-      writing: emptyPaperScore(),
-      listening: emptyPaperScore(),
-    };
+  /**
+   * Only meaningful once every section is graded (attempt.status ===
+   * 'completed' — an abandoned attempt may be missing whole papers) and
+   * only for B2 First (the only exam type estimateB2FirstResult has
+   * published boundaries for).
+   */
+  private buildEstimatedResult(
+    attempt: MockAttempt,
+    paperScores: Record<MockAttemptPaperGroup, MockAttemptPaperScoreDto>,
+  ) {
+    if (attempt.status !== MockAttemptStatus.COMPLETED) return null;
+    if (attempt.exam_type !== ExamType.B2_FIRST) return null;
 
-    for (const section of sections) {
-      if (section.status !== MockAttemptSectionStatus.COMPLETED) continue;
-      if (section.raw_score === null || section.max_score === null) continue;
-
-      const catalogEntry = findMockAttemptSectionCatalogEntry(section.section_code);
-      if (catalogEntry === undefined) continue;
-
-      const group = scores[catalogEntry.scoreGroup];
-      group.rawScore += Number(section.raw_score);
-      group.maxScore += Number(section.max_score);
-    }
-
-    for (const group of PAPER_GROUPS) {
-      const score = scores[group];
-      score.percentage =
-        score.maxScore > 0 ? roundToTwoDecimals((score.rawScore / score.maxScore) * 100) : null;
-    }
-
-    return scores;
+    const percentages = PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0);
+    const overallPercentage = percentages.reduce((sum, p) => sum + p, 0) / percentages.length;
+    return estimateB2FirstResult(overallPercentage);
   }
 
   private async buildSectionDetail(
