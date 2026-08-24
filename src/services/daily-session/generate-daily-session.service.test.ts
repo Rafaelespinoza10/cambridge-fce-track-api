@@ -2,6 +2,8 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { DataSource } from 'typeorm';
 
+import type { WeakestExamPart } from '../progress/resolve-weakest-exam-part';
+
 import {
   GenerateDailySessionService,
   GenerateDailySessionError,
@@ -69,6 +71,9 @@ const SAFE_RESULT: DailySessionSafeWithItems = {
     sentenceTaskInstructions: 's',
     sentenceTargets: [],
     createdAt: new Date(),
+    knowledgeSourceNames: [],
+    focusSectionSlug: null,
+    focusSectionName: null,
   },
   items: [],
 };
@@ -89,6 +94,7 @@ interface RepoCalls {
 }
 
 interface MakeServiceOverrides {
+  weakestExamPart?: WeakestExamPart | null;
   user?: User | null;
   findSafeSessionForUser?: () => Promise<DailySessionSafeWithItems | null>;
   findByUserAndSessionDate?: (userId: string, sessionDate: string) => Promise<DailySession | null>;
@@ -140,6 +146,10 @@ function makeService(
     users,
     dailySessions,
     searchKnowledge: overrides.searchKnowledge,
+    // Stubbed because the real one queries the progress metrics, and this
+    // suite's DataSource is a fake. Defaults to "no weak part", which is the
+    // balanced-session path every pre-existing assertion here describes.
+    resolveWeakestExamPart: async () => overrides.weakestExamPart ?? null,
   });
   return { service, calls, llmCallCount: () => llmCalls };
 }

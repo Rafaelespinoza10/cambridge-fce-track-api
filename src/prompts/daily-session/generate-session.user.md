@@ -5,4 +5,6 @@ Target CEFR level: {{targetLevel}}
 Number of comprehension questions: {{itemCount}}
 Number of sentence-writing targets: {{sentenceTargetCount}}
 
+Personalised focus for this learner: {{focusInstruction}}
+
 {{groundingExcerpts}}
