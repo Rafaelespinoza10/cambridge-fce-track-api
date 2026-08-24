@@ -99,6 +99,22 @@ describe('OpenAIProvider', () => {
     assert.equal(provider.defaultModel, 'gpt-4o');
   });
 
+  // A key absent from serverless.env.yml resolves to '' (not undefined) via
+  // the `, ''` fallback in the serverless configs, so a blank value must fall
+  // back to the default rather than be sent as an empty model id.
+  it('falls back to the default model when the configured value is blank', () => {
+    for (const blank of ['', '   ']) {
+      const provider = new OpenAIProvider(
+        {
+          chat: { completions: { create: async () => makeCompletion('unused') } },
+          responses: { create: UNUSED_RESPONSES_CREATE },
+        },
+        blank,
+      );
+      assert.equal(provider.defaultModel, 'gpt-4o-mini');
+    }
+  });
+
   it('translates params to the OpenAI request shape', async () => {
     let capturedParams: unknown;
     const provider = makeProvider(async (params) => {

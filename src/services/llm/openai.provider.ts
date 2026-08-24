@@ -123,11 +123,19 @@ export class OpenAIProvider implements LLMProvider {
   readonly name = 'openai';
   readonly defaultModel: string;
 
+  /**
+   * `defaultModel` is blank-tolerant on purpose. Every caller passes
+   * `process.env['OPENAI_MODEL']`, and the serverless configs resolve that var
+   * with `${file(serverless.env.yml):...OPENAI_MODEL, ''}` — so a key missing
+   * from the env file arrives as `''`, not `undefined`, which would silently
+   * slip past a plain default parameter and be sent to the API as an empty
+   * model id (a 400 on every single call). Treat blank as "not configured".
+   */
   constructor(
     private readonly client: OpenAIClientPort,
-    defaultModel: string = DEFAULT_MODEL,
+    defaultModel?: string,
   ) {
-    this.defaultModel = defaultModel;
+    this.defaultModel = defaultModel?.trim() ? defaultModel.trim() : DEFAULT_MODEL;
   }
 
   async createCompletion(params: LLMProviderCompletionParams): Promise<LLMProviderResult> {
