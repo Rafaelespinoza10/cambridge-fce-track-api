@@ -131,9 +131,11 @@ class ProgressService {
     let examGoal: ExamGoalMetric | null = null;
     if (activeGoal !== null && activeGoal.target_date !== null && activeGoal.target_exam !== null) {
       const todayLocal = resolveLocalDay(new Date(), timeZone).localDate;
-      const [todayYear, todayMonth, todayDay] = todayLocal
-        .split('-')
-        .map(Number) as [number, number, number];
+      const [todayYear, todayMonth, todayDay] = todayLocal.split('-').map(Number) as [
+        number,
+        number,
+        number,
+      ];
       const todayMs = Date.UTC(todayYear, todayMonth - 1, todayDay);
       const examMs = new Date(activeGoal.target_date).getTime();
       const daysUntilExam = Math.ceil((examMs - todayMs) / 86_400_000);

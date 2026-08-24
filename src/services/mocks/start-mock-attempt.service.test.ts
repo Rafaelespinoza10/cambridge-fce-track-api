@@ -120,10 +120,7 @@ describe('StartMockAttemptService.execute', () => {
 
     await service.execute(USER_ID, ExamType.B2_FIRST, STARTED_AT);
 
-    assert.equal(
-      (captured.sections as unknown[]).length,
-      MOCK_ATTEMPT_SECTION_CATALOG.length,
-    );
+    assert.equal((captured.sections as unknown[]).length, MOCK_ATTEMPT_SECTION_CATALOG.length);
   });
 
   it('rejects an unknown scope rather than silently widening it to the full exam', async () => {

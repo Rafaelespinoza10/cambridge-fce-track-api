@@ -14,10 +14,7 @@ describe('OpenAIEmbeddingClient', () => {
       embeddings: { create: async () => ({}) as never },
     };
     for (const blank of ['', '   ']) {
-      assert.equal(
-        new OpenAIEmbeddingClient(client, blank).defaultModel,
-        'text-embedding-3-small',
-      );
+      assert.equal(new OpenAIEmbeddingClient(client, blank).defaultModel, 'text-embedding-3-small');
     }
   });
 
