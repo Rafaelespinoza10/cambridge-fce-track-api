@@ -14,6 +14,7 @@ import {
   LEVEL_BANDS,
 } from '@lib/mocks/estimate-mock-level';
 import { getUserTimeZone } from '../planning/resolve-user-local-day';
+import { resolveLocalDay } from '@lib/shared/timezone';
 import type {
   ActivityHeatmapResponse,
   ExamGoalMetric,
@@ -37,17 +38,18 @@ class ProgressService {
     const ds = await getDatabaseConnection();
     const repo = new ProgressRepository(ds);
 
-    const { weekStart, weekEnd } = getCurrentWeekBounds();
-    const weekStarts = getLastNWeekStarts(MONTHLY_WEEKS);
-    const skillLookbackDate = (() => {
-      const d = new Date();
-      d.setUTCDate(d.getUTCDate() - SKILL_LOOKBACK_DAYS);
-      return d.toISOString().split('T')[0]!;
-    })();
-
     // One lookup, shared by every query that buckets instants into days or
     // weeks. Always a zone Postgres accepts — see getUserTimeZone.
     const timeZone = await getUserTimeZone(ds, userId);
+
+    const { weekStart, weekEnd } = getCurrentWeekBounds(timeZone);
+    const weekStarts = getLastNWeekStarts(MONTHLY_WEEKS, timeZone);
+    const skillLookbackDate = (() => {
+      const { localDate } = resolveLocalDay(new Date(), timeZone);
+      const [year, month, day] = localDate.split('-').map(Number) as [number, number, number];
+      const d = new Date(Date.UTC(year, month - 1, day - SKILL_LOOKBACK_DAYS));
+      return d.toISOString().split('T')[0]!;
+    })();
 
     const [
       activityStats,
@@ -128,7 +130,11 @@ class ProgressService {
     // ── Exam goal ──────────────────────────────────────────────────────────────
     let examGoal: ExamGoalMetric | null = null;
     if (activeGoal !== null && activeGoal.target_date !== null && activeGoal.target_exam !== null) {
-      const todayMs = new Date().setUTCHours(0, 0, 0, 0);
+      const todayLocal = resolveLocalDay(new Date(), timeZone).localDate;
+      const [todayYear, todayMonth, todayDay] = todayLocal
+        .split('-')
+        .map(Number) as [number, number, number];
+      const todayMs = Date.UTC(todayYear, todayMonth - 1, todayDay);
       const examMs = new Date(activeGoal.target_date).getTime();
       const daysUntilExam = Math.ceil((examMs - todayMs) / 86_400_000);
       examGoal = {
@@ -151,7 +157,7 @@ class ProgressService {
       weeklyAvgScore: scoreStats.avgScore !== null ? roundTwo(scoreStats.avgScore) : null,
       strongestSkill,
       weakestSkill,
-      studyStreak: calculateStreak(studyDates),
+      studyStreak: calculateStreak(studyDates, timeZone),
       lastMock: lastMockMetric,
       monthlyProgressBySkill,
       overallWeeklyScores,
