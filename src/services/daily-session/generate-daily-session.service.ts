@@ -79,7 +79,10 @@ export interface LLMServicePort {
 /** Narrow port over SearchCambridgeKnowledgeService — grounding is optional, never required. */
 export interface SearchKnowledgePort {
   execute(filters: {
+    /** Free text ranked by embedding similarity — what actually finds material. */
+    query?: string;
     skill?: string;
+    /** Exact array match against import-time tags; usually too narrow to use. */
     topic?: string;
     limit?: number;
   }): Promise<{ content: string; sourceName: string; sourcePage: number }[]>;
@@ -563,13 +566,26 @@ export class GenerateDailySessionService {
       // Grounding is a quality improvement, never a hard requirement — a
       // Knowledge Base miss (or an empty corpus) still lets generation
       // proceed with buildGroundingResult's "no material found" fallback.
+      // `query` is what turns on semantic ranking — without it
+      // SearchCambridgeKnowledgeService leaves every relevance score at 0 and
+      // just returns whatever the SQL filter matched, so the embeddings this
+      // corpus was built with went entirely unused.
+      //
+      // `topic` is deliberately NOT passed. It filters with
+      // `:topic = ANY(item.topics)`, an exact array match against tags
+      // assigned at import time, so any topic the corpus happens not to carry
+      // returns zero rows and grounding silently does nothing. The topic bank
+      // is much wider than the corpus's coverage, so that was the common case,
+      // not the edge one. Ranking by embedding instead always yields the
+      // closest real Cambridge material, which is the entire point of having
+      // embedded it.
       const readingChunks = await this.deps.searchKnowledge.execute({
-        topic: topicHint,
+        query: topicHint,
         skill: 'reading',
         limit: 3,
       });
       const vocabChunks = await this.deps.searchKnowledge.execute({
-        topic: topicHint,
+        query: topicHint,
         limit: 3,
       });
       grounding = buildGroundingResult([...readingChunks, ...vocabChunks]);

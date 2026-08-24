@@ -417,7 +417,9 @@ describe('GeneratePracticeExerciseService.execute — Reading parts', () => {
   });
 
   it('grounds Reading generation with Cambridge Knowledge Base chunks when available', async () => {
-    let capturedFilters: { skill?: string; topic?: string; limit?: number } | undefined;
+    let capturedFilters:
+      | { query?: string; skill?: string; topic?: string; limit?: number }
+      | undefined;
     const searchKnowledge: SearchKnowledgePort = {
       execute: async (filters) => {
         capturedFilters = filters;
@@ -436,7 +438,12 @@ describe('GeneratePracticeExerciseService.execute — Reading parts', () => {
     await service.execute(USER_ID, readingMultipleChoiceRequest());
 
     assert.equal(capturedFilters?.skill, 'reading');
-    assert.ok(capturedFilters?.topic);
+    // `query` is what switches on embedding ranking. `topic` must stay unset:
+    // it filters with an exact array match against import-time tags, so any
+    // topic the corpus doesn't carry returned nothing and silently disabled
+    // grounding — which is what this test used to lock in.
+    assert.ok(capturedFilters?.query);
+    assert.equal(capturedFilters?.topic, undefined);
     assert.match(
       capturedMessages?.[1]?.content ?? '',
       /Real Cambridge material about renewable energy\./,

@@ -77,7 +77,10 @@ export interface LLMServicePort {
 /** Narrow port over SearchCambridgeKnowledgeService — grounding is optional, never required. */
 export interface SearchKnowledgePort {
   execute(filters: {
+    /** Free text ranked by embedding similarity — what actually finds material. */
+    query?: string;
     skill?: string;
+    /** Exact array match against import-time tags; usually too narrow to use. */
     topic?: string;
     limit?: number;
   }): Promise<{ content: string }[]>;
@@ -656,9 +659,13 @@ export class GeneratePracticeExerciseService {
       // proceed with buildGroundingContext's "no material found" fallback,
       // exactly like the rest of this method never fails generation over
       // something optional.
+      // Same fix as generate-daily-session: `query` enables the embedding
+      // ranking, and `topic` is dropped because it is an exact array match
+      // against import-time tags — a topic the corpus doesn't carry returned
+      // nothing and silently disabled grounding.
       const chunks = await this.deps.searchKnowledge.execute({
         skill: 'reading',
-        topic: topicHint,
+        query: topicHint,
         limit: 2,
       });
       groundingContext = buildGroundingContext(chunks);
