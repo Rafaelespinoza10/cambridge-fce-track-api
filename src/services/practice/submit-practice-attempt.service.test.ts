@@ -17,6 +17,7 @@ import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswer } from '../../models/PracticeAnswer';
 import type { CreateAnswerData } from '@repositories/practice/practice-answers.repository';
 import { PracticeAttemptStatus } from '../../models/enums';
+import type { RecordPracticeMistakesInput } from '../mistakes/record-practice-mistakes.service';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const ATTEMPT_ID = 'attempt-id';
@@ -65,8 +66,18 @@ const ITEM_2 = {
   skill_tags: ['present-perfect'],
 } as unknown as PracticeItem;
 
+const EXERCISE = {
+  id: EXERCISE_ID,
+  title: 'Word Formation Exercise',
+  exam_code: 'B2_FIRST',
+  paper_code: 'PAPER_1',
+  part_code: 'UOE_PART_3',
+  target_level: null,
+};
+
 interface RepoState {
   createAnswersCalls: CreateAnswerData[][];
+  recordMistakesCalls: RecordPracticeMistakesInput[];
   completeAttemptCalls: { attemptId: string; userId: string; data: unknown }[];
   findByIdForUpdateCalls: number;
   createAiLinkedActivityCalls: unknown[];
@@ -89,6 +100,7 @@ function makeService(overrides: Overrides = {}): {
 } {
   const state: RepoState = {
     createAnswersCalls: [],
+    recordMistakesCalls: [],
     completeAttemptCalls: [],
     findByIdForUpdateCalls: 0,
     createAiLinkedActivityCalls: [],
@@ -118,7 +130,7 @@ function makeService(overrides: Overrides = {}): {
       overrides.findExerciseWithAnswerKeysForEvaluation ??
       (async () => ({
         items: [ITEM_1, ITEM_2],
-        exercise: { title: 'Word Formation Exercise', part_code: 'UOE_PART_3' },
+        exercise: EXERCISE,
       })),
   });
 
@@ -147,6 +159,13 @@ function makeService(overrides: Overrides = {}): {
     resolveUserLocalDayKey: async (_manager, userId, instant) => {
       state.resolveUserLocalDayKeyCalls.push({ userId, instant });
       return overrides.localDayKey ?? instant.toISOString().slice(0, 10);
+    },
+    // Stubbed for the same reason as the two helpers above: the real
+    // recorder writes through a transactional EntityManager, and this
+    // suite's manager is `{}`. Its own behaviour is covered by
+    // record-practice-mistakes.service.test.ts.
+    recordMistakes: async (_manager, input) => {
+      state.recordMistakesCalls.push(input);
     },
   });
   return { service, state };
@@ -507,5 +526,131 @@ describe('SubmitPracticeAttemptService.execute — idempotent replay', () => {
     assert.equal(result.correctCount, 2);
     assert.equal(state.createAnswersCalls.length, 0);
     assert.equal(state.completeAttemptCalls.length, 0);
+  });
+});
+
+// ── Mistake Bank ─────────────────────────────────────────────────────────────
+
+describe('SubmitPracticeAttemptService.execute — Mistake Bank', () => {
+  it('hands every graded item to the recorder, marked correct or not', async () => {
+    const { service, state } = makeService();
+
+    await service.execute(
+      USER_ID,
+      ATTEMPT_ID,
+      [
+        { itemId: 'item-1', answer: { kind: 'single_choice', optionId: 'b' } },
+        { itemId: 'item-2', answer: { kind: 'text', value: 'been' } },
+      ],
+      SUBMITTED_AT,
+    );
+
+    assert.equal(state.recordMistakesCalls.length, 1);
+    const [call] = state.recordMistakesCalls;
+    assert.equal(call.userId, USER_ID);
+    assert.equal(call.attemptId, ATTEMPT_ID);
+    assert.equal(call.exercise.id, EXERCISE_ID);
+    assert.equal(call.exercise.part_code, 'UOE_PART_3');
+    assert.equal(call.occurredAt, SUBMITTED_AT);
+    assert.deepEqual(
+      call.items.map((item) => ({ id: item.item.id, isCorrect: item.isCorrect })),
+      [
+        { id: 'item-1', isCorrect: false },
+        { id: 'item-2', isCorrect: true },
+      ],
+    );
+  });
+
+  it('passes an unanswered item through as a wrong answer, not as a missing one', async () => {
+    const { service, state } = makeService();
+
+    await service.execute(
+      USER_ID,
+      ATTEMPT_ID,
+      [{ itemId: 'item-1', answer: { kind: 'single_choice', optionId: 'a' } }],
+      SUBMITTED_AT,
+    );
+
+    const graded = state.recordMistakesCalls[0].items.find((item) => item.item.id === 'item-2');
+    assert.ok(graded !== undefined);
+    assert.equal(graded.isCorrect, false);
+    assert.deepEqual(graded.payload, { kind: 'unanswered' });
+  });
+
+  it('records nothing when the attempt is only being replayed', async () => {
+    const completed = makeAttempt({
+      status: PracticeAttemptStatus.COMPLETED,
+      submitted_at: SUBMITTED_AT,
+      duration_seconds: 300,
+      correct_count: 2,
+      total_count: 2,
+      percentage: '100.00',
+      feedback_summary: {
+        version: 'practice-attempt-feedback-v1',
+        unansweredCount: 0,
+        skillBreakdown: [],
+      },
+    });
+    const persistedAnswers = [
+      {
+        item_id: 'item-1',
+        answer_payload: { kind: 'single_choice', optionId: 'a' },
+        normalized_answer: 'a',
+        is_correct: true,
+        response_time_ms: null,
+      },
+      {
+        item_id: 'item-2',
+        answer_payload: { kind: 'text', value: 'been' },
+        normalized_answer: 'been',
+        is_correct: true,
+        response_time_ms: null,
+      },
+    ] as unknown as PracticeAnswer[];
+
+    const { service, state } = makeService({
+      findByIdForUpdate: async () => completed,
+      findByAttemptForUser: async () => persistedAnswers,
+    });
+
+    await service.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT);
+
+    assert.equal(state.recordMistakesCalls.length, 0);
+  });
+
+  it('propagates a recording failure instead of reporting a successful submission', async () => {
+    // Same contract the Plan/Home linking already has: the Mistake Bank
+    // writes inside the submitting transaction, so its failure aborts the
+    // whole submission rather than leaving a half-completed attempt behind.
+    const dataSource = {
+      transaction: async <T>(work: (manager: never) => Promise<T>) => work({} as never),
+    } as unknown as DataSource;
+    const failing = new SubmitPracticeAttemptService(dataSource, {
+      practiceAttempts: () => ({
+        findByIdForUpdate: async () => makeAttempt(),
+        completeAttempt: async () => ({ affected: 1 }),
+      }),
+      practiceExercises: () => ({
+        findExerciseWithAnswerKeysForEvaluation: async () => ({
+          items: [ITEM_1, ITEM_2],
+          exercise: EXERCISE,
+        }),
+      }),
+      practiceAnswers: () => ({
+        createAnswers: async () => [],
+        findByAttemptForUser: async () => [],
+      }),
+      createAiLinkedActivity: async () => undefined,
+      resolvePlanDayId: async () => 'default-day-id',
+      resolveUserLocalDayKey: async () => '2026-01-01',
+      recordMistakes: async () => {
+        throw new Error('mistake bank unavailable');
+      },
+    });
+
+    await assert.rejects(
+      () => failing.execute(USER_ID, ATTEMPT_ID, fullAnswers(), SUBMITTED_AT),
+      /mistake bank unavailable/,
+    );
   });
 });
