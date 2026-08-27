@@ -10,6 +10,7 @@ import {
   extractBaseWord,
   resolveSkillSlug,
 } from '@lib/mistakes/mistake-concept-key';
+import { MistakeClassifier, type MistakeClassificationResult } from '@lib/mistakes/mistake-classifier';
 
 /** The exercise metadata a mistake needs — a structural subset of PracticeExercise. */
 export interface RecordPracticeMistakesExercise {
@@ -55,13 +56,26 @@ export interface MistakesRepositoryPort {
   registerLaterCorrect(userId: string, conceptKey: string, at: Date): Promise<boolean>;
 }
 
+export interface MistakeClassifierPort {
+  classify(input: {
+    baseWord: string | null;
+    userAnswer: string;
+    correctAnswer: string;
+    taskType: string | null;
+  }): MistakeClassificationResult;
+}
+
 export interface RecordPracticeMistakesServiceDeps {
   /** Injectable seam for tests — the default builds the real repository on the caller's manager. */
   repository?: (manager: EntityManager) => MistakesRepositoryPort;
+  /** Injectable seam for tests — the default is the real deterministic MistakeClassifier. */
+  classifier?: MistakeClassifierPort;
 }
 
 const DEFAULT_REPOSITORY_FACTORY = (manager: EntityManager): MistakesRepositoryPort =>
   new MistakesRepository(manager);
+
+const DEFAULT_CLASSIFIER: MistakeClassifierPort = new MistakeClassifier();
 
 /**
  * Turns an already-graded practice submission into Mistake Bank rows.
@@ -72,10 +86,11 @@ const DEFAULT_REPOSITORY_FACTORY = (manager: EntityManager): MistakesRepositoryP
  * attempt never silently loses its mistakes.
  *
  * What it does NOT do, on purpose: it never grades (it only reads the
- * `isCorrect` the deterministic grader produced), never calls an AI, never
- * classifies the error (`error_type` stays `unknown`), and never creates
- * anything at all for a correct answer — a correct answer can only bump
- * `times_correct` on a concept the user had already failed before.
+ * `isCorrect` the deterministic grader produced), never calls an AI (the
+ * classifier it runs is fully deterministic — see MistakeClassifier's own
+ * doc comment for why), and never creates anything at all for a correct
+ * answer — a correct answer can only bump `times_correct` on a concept the
+ * user had already failed before.
  */
 export class RecordPracticeMistakesService {
   constructor(private readonly deps: RecordPracticeMistakesServiceDeps = {}) {}
@@ -124,6 +139,17 @@ export class RecordPracticeMistakesService {
 
       const correctAnswer = acceptedAnswers.join(' / ');
       const userAnswer = formatUserAnswer(graded.item, graded.payload);
+
+      // Classified against the single primary accepted answer, never the
+      // "/"-joined display string above — that string can legitimately
+      // contain more than one valid form, which the classifier's suffix
+      // heuristics were never meant to parse.
+      const classification = (this.deps.classifier ?? DEFAULT_CLASSIFIER).classify({
+        baseWord,
+        userAnswer,
+        correctAnswer: primaryCorrectAnswer,
+        taskType: graded.item.task_type,
+      });
 
       const conceptId = await repository.ensureConcept({
         userId: input.userId,
@@ -174,6 +200,11 @@ export class RecordPracticeMistakesService {
         taskType: graded.item.task_type,
         targetLevel: input.exercise.target_level,
         occurredAt: input.occurredAt,
+        errorType: classification.errorType,
+        errorSubtype: classification.errorSubtype,
+        expectedWordClass: classification.expectedWordClass,
+        userWordClass: classification.userWordClass,
+        classificationSource: classification.classificationSource,
       });
       result.recordedCount += 1;
     }
