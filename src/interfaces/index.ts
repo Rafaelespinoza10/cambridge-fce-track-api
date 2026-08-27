@@ -10,3 +10,4 @@ export * from './progress';
 export * from './decks';
 export * from './flashcards';
 export * from './practice';
+export * from './mistakes';

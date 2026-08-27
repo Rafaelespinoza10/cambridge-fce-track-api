@@ -8,6 +8,9 @@ import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswer } from '../../models/PracticeAnswer';
 import { PracticeAttemptStatus } from '../../models/enums';
+import type { EnglishLevel } from '../../models/enums';
+import { RecordPracticeMistakesService } from '../mistakes/record-practice-mistakes.service';
+import type { RecordPracticeMistakesInput } from '../mistakes/record-practice-mistakes.service';
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
@@ -57,11 +60,27 @@ export interface PracticeAttemptsRepositoryPort {
   ): Promise<{ affected?: number | null }>;
 }
 
+/**
+ * The exercise fields this service reads — a structural subset of what
+ * PracticeExercisesRepository really returns (the full PracticeExercise).
+ * `id`/`exam_code`/`paper_code`/`target_level` are here for the Mistake Bank
+ * (see RecordPracticeMistakesService), which files a mistake under the exam
+ * coordinates of the exercise it came from.
+ */
+export interface SubmitPracticeAttemptExercise {
+  id: string;
+  title: string;
+  exam_code: string;
+  paper_code: string;
+  part_code: string;
+  target_level: EnglishLevel | null;
+}
+
 export interface PracticeExercisesRepositoryPort {
   findExerciseWithAnswerKeysForEvaluation(
     exerciseId: string,
     userId: string,
-  ): Promise<{ items: PracticeItem[]; exercise: { title: string; part_code: string } } | null>;
+  ): Promise<{ items: PracticeItem[]; exercise: SubmitPracticeAttemptExercise } | null>;
 }
 
 export interface PracticeAnswersRepositoryPort {
@@ -88,6 +107,10 @@ export interface SubmitPracticeAttemptServiceDeps {
     userId: string,
     instant: Date,
   ) => Promise<string>;
+  // Injectable seam for tests — the default is the real Mistake Bank
+  // recorder (see record-practice-mistakes.service.ts), which runs on this
+  // submission's own EntityManager.
+  recordMistakes?: (manager: EntityManager, input: RecordPracticeMistakesInput) => Promise<unknown>;
 }
 
 const DEFAULT_PRACTICE_ATTEMPTS_FACTORY = (
@@ -99,6 +122,11 @@ const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
 const DEFAULT_PRACTICE_ANSWERS_FACTORY = (
   source: RepositorySource,
 ): PracticeAnswersRepositoryPort => new PracticeAnswersRepository(source);
+
+const DEFAULT_RECORD_MISTAKES = (
+  manager: EntityManager,
+  input: RecordPracticeMistakesInput,
+): Promise<unknown> => new RecordPracticeMistakesService().record(manager, input);
 
 function invalidInput(message: string): never {
   throw new SubmitPracticeAttemptError(message, SubmitPracticeAttemptErrorCode.INVALID_INPUT);
@@ -277,7 +305,10 @@ export class SubmitPracticeAttemptService {
       responseTimeMs: g.responseTimeMs,
       feedback: null,
     }));
-    await answersFactory(manager).createAnswers(answersToCreate);
+    const persistedAnswerRows = await answersFactory(manager).createAnswers(answersToCreate);
+    const answerIdByItemId = new Map(
+      persistedAnswerRows.map((answer) => [answer.item_id, answer.id]),
+    );
 
     await attemptsRepo.completeAttempt(attempt.id, userId, {
       submittedAt,
@@ -286,6 +317,30 @@ export class SubmitPracticeAttemptService {
       percentage,
       feedbackSummary,
     });
+
+    // Mistake Bank: every wrong answer of this submission becomes (or
+    // reinforces) a mistake concept, and every correct one can only mark a
+    // previously failed concept as answered right again — a correct answer
+    // never creates a mistake. Recorded inside this same transaction, like
+    // the Plan/Home linking below, so a completed attempt and its mistakes
+    // can never disagree. Nothing is re-graded here: it only reads the
+    // isCorrect this service already computed.
+    {
+      const recordMistakes = this.deps.recordMistakes ?? DEFAULT_RECORD_MISTAKES;
+      await recordMistakes(manager, {
+        userId,
+        attemptId: attempt.id,
+        exercise: withKeys.exercise,
+        occurredAt: submittedAt,
+        items: gradedItems.map((graded) => ({
+          item: graded.item,
+          payload: graded.payload,
+          normalizedAnswer: graded.normalizedAnswer,
+          isCorrect: graded.isCorrect,
+          answerId: answerIdByItemId.get(graded.item.id) ?? null,
+        })),
+      });
+    }
 
     // Register on the Plan/Home only once the attempt is really finished —
     // never at start time. Every completed attempt registers: the day

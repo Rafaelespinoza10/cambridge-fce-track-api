@@ -8,6 +8,8 @@ export * from './EvidenceFile';
 export * from './Flashcard';
 export * from './FlashcardPreference';
 export * from './FlashcardReview';
+export * from './MistakeConcept';
+export * from './MistakeOccurrence';
 export * from './MockSectionScore';
 export * from './MockTest';
 export * from './NotificationPreference';

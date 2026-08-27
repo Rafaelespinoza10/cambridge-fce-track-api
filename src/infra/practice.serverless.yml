@@ -89,6 +89,16 @@ functions:
           path: /practice/attempts/{attemptId}/items/{itemId}/flashcard-draft
           method: POST
 
+  # Mistake Bank read side. Lives in this stack (not its own) because it is
+  # written by the practice submission flow and read with the same API base
+  # URL the app already has configured for practice.
+  practiceListMistakes:
+    handler: src/controllers/mistakesController.listMistakes
+    events:
+      - httpApi:
+          path: /practice/mistakes
+          method: GET
+
   practiceInsights:
     handler: src/controllers/practiceAdaptiveController.getPracticeInsights
     events:
