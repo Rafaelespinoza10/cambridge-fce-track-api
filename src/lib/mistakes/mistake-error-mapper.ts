@@ -6,6 +6,10 @@ import {
   ListWeaknessesError,
   ListWeaknessesErrorCode,
 } from '../../services/mistakes/list-weaknesses.service';
+import {
+  ListReviewsError,
+  ListReviewsErrorCode,
+} from '../../services/mistakes/list-due-reviews.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -28,6 +32,11 @@ const WEAKNESSES_STATUS_BY_CODE: Record<ListWeaknessesErrorCode, number> = {
   [ListWeaknessesErrorCode.UNSUPPORTED_PART]: 400,
 };
 
+/** The reviews listing only ever rejects a malformed filter. */
+const REVIEWS_STATUS_BY_CODE: Record<ListReviewsErrorCode, number> = {
+  [ListReviewsErrorCode.INVALID_INPUT]: 400,
+};
+
 /**
  * Translates Mistake Bank domain errors into an Error carrying `statusCode`,
  * consumable by @lib/shared/response's handleError. Anything unrecognized
@@ -40,6 +49,9 @@ function mapMistakeError(error: unknown): unknown {
   }
   if (error instanceof ListWeaknessesError) {
     return httpError(error.message, WEAKNESSES_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof ListReviewsError) {
+    return httpError(error.message, REVIEWS_STATUS_BY_CODE[error.code]);
   }
   return error;
 }

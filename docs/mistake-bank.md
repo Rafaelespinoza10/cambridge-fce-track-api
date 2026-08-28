@@ -305,3 +305,80 @@ response.
 **Independent of spaced retesting.** Selection here reads only
 `mistake_concepts`/`mistake_occurrences` and the mastery aggregation — never
 `nextReviewAt`, `reviewStatus`, or any table/model spaced retesting owns.
+
+## 12. Spaced retesting
+
+The second half of the loop. Mastery answers "is this weakness being
+corrected?"; spaced retesting answers the question that only time can:
+
+```
+mistake -> targeted practice -> mastery rises -> WAIT -> retest
+        -> retention confirmed -> longer interval (or shorter)
+```
+
+`GET /practice/reviews` lists the user's scheduled retests (`status=due`,
+`upcoming`, or `all`), most urgent first: overdue, then least-mastered, then
+oldest due date. Generating one reuses Practice My Mistakes rather than
+adding an endpoint — `POST /practice/mistakes/generate` with
+`{ "mode": "retest", "reviewIds": [...] }` (omit `reviewIds` for everything
+that is due). Completion has no endpoint at all: it happens inside the
+existing submit, so a retest is graded exactly like any other attempt.
+
+**Not SM-2.** No ease factor, no per-item state — a fixed ladder
+(`src/lib/mistakes/retest-scheduler.ts`, every number in
+`RETEST_CONSTANTS`):
+
+```
+ladder    [1, 3, 7, 14, 30] days
+first     LEARNING 3 · STRONG 7 · MASTERED 14   (WEAK is never scheduled)
+PASS      one rung up (capped at 30)
+PARTIAL   same rung — retention neither confirmed nor lost
+FAIL      3 days, or 1 if the pattern collapsed to WEAK
+```
+
+The 30-day cap is one `ANSWER_HALF_LIFE_DAYS`: the point where the evidence
+behind a score has lost half its weight and the score starts sliding on its
+own, and the same window MASTERED already uses for "no recent relapse".
+
+**Eligibility**: `masteryScore >= 40 AND remediationCorrect >= 1`. A WEAK
+pattern is one the student never learned, so there is nothing to have
+forgotten — it goes to remediation, not to a retention test. A pattern that
+falls back out of eligibility has its scheduled review cancelled (kept as
+history, not deleted). MASTERED keeps being retested: mastered is not
+permanent, and a failed retest is exactly how it stops being true.
+
+**Grading a retest** (`gradeRetest`): `PASS` needs >= 80% correct **and >= 2
+distinct lexical families**; `PARTIAL` >= 50%; `FAIL` below that. The family
+gate is the point of the whole feature — answering
+"responsible -> responsibly" right three times is memory of one word, not
+retention of the pattern. It can only ever downgrade a PASS to a PARTIAL,
+never to a FAIL, so a generator that ignored its "use new word families"
+instruction costs the student nothing.
+
+**Session size**: 3 items for one pattern, 2 each for a combined session,
+capped at 3 patterns (6 items). One exercise is one taskType (an existing
+invariant), so when the due patterns span several, the rest stay due.
+
+**Mastery is untouched.** A retest is just more remediation evidence: its
+answers are tagged `generationSource: 'spaced_retest'` and the mastery query
+accepts them alongside `mistake_practice`, so there is exactly one score.
+The scheduler only decides _when to look again_. Wrong answers in a retest
+are recorded by `RecordPracticeMistakesService` like any other wrong answer,
+which is what makes a failed retest visibly drop the score.
+
+**One active review per pattern**, enforced by two partial unique indexes
+(split rather than one `COALESCE(error_subtype::text, ...)` expression index
+because casting a nullable enum is only STABLE, and index expressions must be
+IMMUTABLE). Completed reviews stay as history: scheduled, completed, result,
+interval used.
+
+**Voluntary practice cannot postpone a retest.** Practising a weakness
+before its review leaves the schedule alone; only a real retest moves the
+ladder. `upsertScheduled` additionally uses `LEAST(existing, new)` on the due
+date, so even a buggy caller can only ever pull a check-up closer.
+
+**Everything is UTC.** `due_at` is stored and compared in UTC; "Today",
+"in 3 days" and "2 days overdue" are the client's job in the device's own
+zone. `due` / `upcoming` / `overdue` are derived from `due_at` against the
+clock (`resolveTiming`), never stored — the only persisted states are
+`scheduled`, `completed` and `cancelled`.

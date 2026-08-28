@@ -6,8 +6,15 @@
  *   - `mode` omitted — `mistakeConceptIds` must be a non-empty array.
  */
 export interface GenerateMistakePracticeRequest {
-  mode?: 'weaknesses';
+  mode?: 'weaknesses' | 'retest';
   mistakeConceptIds?: string[];
+  /**
+   * `mode: 'retest'` only. Which scheduled reviews to take now; omitted
+   * means "everything that is due". Ownership is checked server-side, so an
+   * id belonging to someone else is simply not found.
+   */
+  reviewIds?: string[];
+  /** Ignored for `mode: 'retest'` — a review's size is decided by how many patterns it covers. */
   questionCount?: number;
   idempotencyKey: string;
 }

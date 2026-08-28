@@ -5,6 +5,7 @@ import type {
   PracticeAttemptFeedbackSummary,
 } from '../../models/practice-json-types';
 import type { PracticeExerciseSafeWithItems } from './practice-exercise.interface';
+import type { ReviewOutcomeDto } from '../mistakes/reviews.interface';
 
 export interface SubmitPracticeAttemptAnswerInput {
   itemId: string;
@@ -92,6 +93,13 @@ export interface PracticeAttemptStartResultDto {
 export interface PracticeAttemptSubmitResultDto {
   result: PracticeAttemptResultDto;
   idempotentReplay: boolean;
+  /**
+   * Spaced retesting: one entry per weakness review this submission closed,
+   * carrying the retention verdict, the mastery move it caused and the
+   * follow-up it booked. Empty for every ordinary practice submission — and
+   * for an idempotent replay, which re-grades and re-schedules nothing.
+   */
+  reviewOutcomes: ReviewOutcomeDto[];
 }
 
 export interface PracticeAttemptAbandonResultDto {

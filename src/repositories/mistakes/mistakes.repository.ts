@@ -281,6 +281,51 @@ class MistakesRepository {
       .getMany();
   }
 
+  /**
+   * Every concept belonging to any of the given weakness patterns —
+   * `(partCode, errorType, errorSubtype)` tuples. Used by spaced retesting,
+   * which schedules *patterns* but has to generate from the concepts
+   * underneath them. Most-failed first so the caller's slot planner sees the
+   * same priority order it does everywhere else.
+   */
+  async findByPatternsForUser(
+    userId: string,
+    patterns: Array<{
+      partCode: string;
+      errorType: MistakeErrorType;
+      errorSubtype: MistakeErrorSubtype | null;
+    }>,
+  ): Promise<MistakeConcept[]> {
+    if (patterns.length === 0) return [];
+
+    const query = this.conceptRepo
+      .createQueryBuilder('concept')
+      .where('concept.user_id = :userId', { userId });
+
+    query.andWhere(
+      `(${patterns
+        .map(
+          (_pattern, index) =>
+            `(concept.part_code = :part${index} AND concept.error_type = :type${index} AND ` +
+            `COALESCE(concept.error_subtype::text, 'none') = :subtype${index})`,
+        )
+        .join(' OR ')})`,
+      Object.fromEntries(
+        patterns.flatMap((pattern, index) => [
+          [`part${index}`, pattern.partCode],
+          [`type${index}`, pattern.errorType],
+          [`subtype${index}`, pattern.errorSubtype ?? 'none'],
+        ]),
+      ),
+    );
+
+    return query
+      .orderBy('concept.times_wrong', 'DESC')
+      .addOrderBy('concept.last_wrong_at', 'DESC')
+      .addOrderBy('concept.id', 'ASC')
+      .getMany();
+  }
+
   /** Most recently failed first. Always scoped to `filters.userId`. */
   async listByUser(filters: ListMistakesFilters): Promise<ListMistakesResult> {
     const query = this.conceptRepo

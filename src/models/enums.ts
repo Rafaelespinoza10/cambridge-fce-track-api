@@ -311,3 +311,26 @@ export enum MistakeClassificationSource {
   USER = 'user',
   UNKNOWN = 'unknown',
 }
+
+/**
+ * A WeaknessReview row is an event, not a mutable schedule: it is
+ * `scheduled` until its retest is graded, then `completed` forever.
+ * `cancelled` is for a review whose pattern stopped being eligible before it
+ * was ever taken (e.g. mastery collapsed and the pattern went back to plain
+ * remediation) — it keeps the history without pretending the retest happened.
+ *
+ * `due` / `overdue` / `upcoming` are deliberately absent: those are derived
+ * from `due_at` against the clock, never stored.
+ */
+export enum WeaknessReviewStatus {
+  SCHEDULED = 'scheduled',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
+
+/** Outcome of a graded retest — see gradeRetest in @lib/mistakes/retest-scheduler.ts. */
+export enum WeaknessReviewResult {
+  PASS = 'pass',
+  PARTIAL = 'partial',
+  FAIL = 'fail',
+}

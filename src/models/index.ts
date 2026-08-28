@@ -10,6 +10,7 @@ export * from './FlashcardPreference';
 export * from './FlashcardReview';
 export * from './MistakeConcept';
 export * from './MistakeOccurrence';
+export * from './WeaknessReview';
 export * from './MockSectionScore';
 export * from './MockTest';
 export * from './NotificationPreference';
