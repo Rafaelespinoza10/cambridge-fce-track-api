@@ -69,8 +69,48 @@ function toInt(value: number | string | null | undefined): number {
   return typeof value === 'number' ? value : Number.parseInt(value, 10);
 }
 
+/** One pattern's recently-practised lexical families. */
+export interface RecentFamiliesRow {
+  partCode: string;
+  errorType: string;
+  errorSubtype: string | null;
+  families: string[];
+}
+
 class MistakeMasteryRepository {
   constructor(private readonly source: DataSource | EntityManager) {}
+
+  /**
+   * The lexical families this user has already been drilled on per pattern
+   * since `since`. A spaced retest hands these to the generator as words to
+   * avoid: re-testing "responsible -> responsibly" would measure memory of
+   * one word, not retention of the pattern.
+   */
+  async findRecentFamilies(userId: string, since: Date): Promise<RecentFamiliesRow[]> {
+    const rows: Array<Omit<RecentFamiliesRow, 'families'> & { families: string[] | null }> =
+      await this.source.query(
+        `SELECT pe.part_code AS "partCode",
+                pi.metadata->>'targetErrorType' AS "errorType",
+                pi.metadata->>'targetErrorSubtype' AS "errorSubtype",
+                COALESCE(
+                  ARRAY_AGG(DISTINCT pi.metadata->>'itemBaseWord')
+                    FILTER (WHERE pi.metadata->>'itemBaseWord' IS NOT NULL),
+                  '{}'
+                ) AS "families"
+           FROM practice_answers pa
+           JOIN practice_items pi ON pi.id = pa.item_id
+           JOIN practice_exercises pe ON pe.id = pa.exercise_id
+          WHERE pa.user_id = $1
+            AND pa.created_at >= $2::timestamptz
+            AND pi.metadata->>'targetErrorType' IS NOT NULL
+          GROUP BY pe.part_code,
+                   pi.metadata->>'targetErrorType',
+                   pi.metadata->>'targetErrorSubtype'`,
+        [userId, since],
+      );
+
+    return rows.map((row) => ({ ...row, families: row.families ?? [] }));
+  }
 
   /**
    * Failure side: every pattern the user has recorded mistakes for, with its
@@ -135,7 +175,15 @@ class MistakeMasteryRepository {
   }
 
   /**
-   * Remediation side: Practice My Mistakes answers, bucketed per pattern and
+   * Remediation side: Practice My Mistakes, spaced-retest AND Mistake Remix
+   * answers — all three are evidence about the same pattern, so they feed
+   * the one mastery score rather than a second one. The metadata still
+   * records which kind each answer was; only its own feature (the
+   * scheduler, the Remix breakdown) cares about the difference. A Remix
+   * item only reaches this query at all when it was `targeted` — a neutral
+   * item's `targetErrorType` is null, which the next line already excludes.
+   *
+   * Bucketed per pattern and
    * per the user's OWN calendar day (`timeZone`) — bucketing by the UTC day
    * would split an evening session from its own morning west of Greenwich,
    * inflating "distinct practice days".
@@ -166,7 +214,7 @@ class MistakeMasteryRepository {
          JOIN practice_items pi ON pi.id = pa.item_id
          JOIN practice_exercises pe ON pe.id = pa.exercise_id
         WHERE pa.user_id = $1
-          AND pi.metadata->>'generationSource' = 'mistake_practice'
+          AND pi.metadata->>'generationSource' IN ('mistake_practice', 'spaced_retest', 'mistake_remix')
           AND pi.metadata->>'targetErrorType' IS NOT NULL
         GROUP BY pe.part_code,
                  pi.metadata->>'targetErrorType',

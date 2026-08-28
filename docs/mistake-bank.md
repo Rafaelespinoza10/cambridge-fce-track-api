@@ -114,6 +114,7 @@ exposed.
 | AI mistake classification            | **Shipped** — `MistakeClassifier` (`src/lib/mistakes/mistake-classifier.ts`) deterministically classifies `word_formation` mistakes on every wrong answer; every other task type still gets `unknown` until a classifier exists for it. |
 | Practice my mistakes                 | **Shipped** — `GenerateMistakePracticeExerciseService` (`POST /practice/mistakes/generate`), see §9 below.                                                                                                                              |
 | Mastery / weakness score             | **Shipped** — `GET /practice/weaknesses`, see §10 below.                                                                                                                                                                                |
+| Mistake Remix                        | **Shipped** — `GenerateMistakeRemixExerciseService` (`POST /practice/mistakes/remix`), see §11 below.                                                                                                                                   |
 | Mistakes from mocks / daily sessions | call `RecordPracticeMistakesService` (or a sibling) with `MistakeSource.MOCK_ATTEMPT` / `DAILY_SESSION`; the enum and the nullable `practice_*` columns already exist                                                                   |
 
 ## 9. Practice My Mistakes
@@ -210,3 +211,97 @@ produced.
 prefers the least-mastered pattern, with `times_wrong`/recency as tie-breaks,
 so what the Weaknesses screen shows as worst is what a session targets.
 "Practice this mistake" (explicit ids) is unchanged — the user already chose.
+
+## 11. Mistake Remix
+
+`GenerateMistakeRemixExerciseService`
+(`src/services/practice/generate-mistake-remix-exercise.service.ts`) builds a
+**mixed** adaptive mini-test instead of a single-pattern drill: several
+weakness patterns plus plain, untargeted control items, interleaved so the
+session never telegraphs which item is which. This is the difference from
+Practice My Mistakes — that feature drills one chosen weakness; Remix checks
+whether the student can recognize and resolve their weaknesses without being
+told which pattern is being tested.
+
+```http
+POST /practice/mistakes/remix
+{ "questionCount": 8 }        # Quick (default) | 15 = Challenge
+```
+
+Same response shape as every other generator (`PracticeExerciseSafeWithItems`),
+same shared core (`@lib/practice/generate-practice-exercise-core.ts`) as
+`GeneratePracticeExerciseService` and `GenerateMistakePracticeExerciseService`
+— no second generation engine, no `mistakeConceptIds` (all weakness selection
+happens server-side from the JWT user; there is nothing here for a client to
+target with).
+
+**Scope**: UoE Part 3 (Word Formation) only for v1 — the only part with
+error subtypes, base words and mastery scoring today. Filtering is on
+`WeaknessDto.partCode`, so widening to another part later is a config
+change, not a rewrite.
+
+**Weakness-pattern selection** (`@lib/mistakes/select-mistake-remix.ts`,
+pure/DB-free): reuses `GET /practice/weaknesses`' own
+`computeWeaknessProfiles` — the same weakest-first ranking the Weaknesses
+screen shows. `weight = 100 - masteryScore`, tie-broken by most recent
+failure; up to `MAX_REMIX_PATTERNS` (6) candidate patterns are considered.
+
+**Composition**: `questionCount × 0.625` targeted, the rest neutral — 5/3 for
+Quick (8), 9/6 for Challenge (15). Targeted slots are allocated by a
+**weighted round-robin with a per-pattern cap** (`MAX_QUESTIONS_PER_PATTERN =
+2`): walk the priority-ordered patterns, +1 slot per pattern per pass,
+skipping any pattern already at the cap, until every targeted slot is placed
+or no pattern can accept more. A shortfall (too few distinct weaknesses)
+becomes extra neutral slots — never a fabricated pattern. With only one real
+weakness, an 8-question Quick session comes out 2 targeted + 6 neutral;
+with four weaknesses of decreasing mastery it reproduces `2/1/1/1 + 3
+neutral` exactly. Zero weaknesses (or none in the supported part) is
+rejected with `NO_ELIGIBLE_MISTAKES` — this is deliberately not "generate a
+plain Part 3 exercise instead," since that would no longer be a Remix.
+
+**Interleaving**: positions are assigned by round-robining across every
+selected pattern plus one "neutral" group, skipping exhausted groups and
+avoiding a same-group repeat when another group still has slots — so a
+session reads like `targeted, neutral, targeted, targeted, neutral, ...`
+rather than blocks. Best-effort only: when a single group is all that's
+left, it fills the remaining slots even if that means two in a row.
+Deterministic — same weakness data always produces the same plan.
+
+**Blind practice**: nothing here is new work — `PracticeItemSafeDto` (what
+the client receives before submitting) has no `metadata` field at all, so a
+targeted item is indistinguishable from a neutral one until after grading.
+
+**Metadata** (`MistakeRemixItemMetadata`) deliberately reuses
+`targetErrorType`/`targetErrorSubtype`/`itemBaseWord` verbatim from
+`MistakePracticeItemMetadata`, plus `questionRole: 'targeted' | 'neutral'`.
+That reuse is what makes mastery integration a one-line change: `findRemediationDays`'s
+`generationSource` predicate widened to
+`IN ('mistake_practice', 'spaced_retest', 'mistake_remix')` — a targeted
+correct answer counts as remediation evidence exactly like Practice My
+Mistakes; a targeted wrong answer drags the pattern's accuracy down; a
+neutral item (`targetErrorType IS NULL`) is excluded from the join with no
+extra filtering. No second mastery score, no new formula.
+
+**Neutral errors still create mistakes.** `RecordPracticeMistakesService`
+never reads `PracticeItem.metadata` — every wrong answer in every submitted
+attempt is graded and recorded the same way regardless of source, so a
+missed neutral item can surface a brand-new weakness exactly like a normal
+Part 3 attempt would.
+
+**Results breakdown**: `PracticeAttemptItemResultDto.adaptiveMetadata`
+(`src/lib/practice/practice-attempt-grading.ts`) carries the same four
+fields through to the graded result — `null` for a plain catalog item — so
+the client can group by role/pattern and compute targeted/neutral accuracy
+by counting over data the backend already returned. Never a duplicated
+mastery calculation; before/after mastery, if shown at all, is a client-side
+diff of two `GET /practice/weaknesses` snapshots taken before and after the
+session.
+
+**Observability**: one structured `mistake_remix_generated` log line per
+generation (`userId`, `exerciseId`, `questionCount`, `targetedCount`,
+`neutralCount`, the selected patterns) — never the prompt or the raw LLM
+response.
+
+**Independent of spaced retesting.** Selection here reads only
+`mistake_concepts`/`mistake_occurrences` and the mastery aggregation — never
+`nextReviewAt`, `reviewStatus`, or any table/model spaced retesting owns.

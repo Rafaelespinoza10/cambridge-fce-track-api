@@ -48,11 +48,19 @@ export interface PracticeExerciseGenerationMetadata {
    * exercise was built from the Mistake Bank" apart from a plain generation
    * — without a new PracticeExerciseSource enum value (and its migration).
    */
-  generationSource?: 'mistake_practice';
+  generationSource?: 'mistake_practice' | 'mistake_remix' | 'spaced_retest';
   /** Every MistakeConcept.id this session actually targeted (see MistakeSlotPlan.usedConceptIds). */
   mistakeConceptIds?: string[];
   targetErrorTypes?: string[];
   targetErrorSubtypes?: string[];
+  /** Mistake Remix only — the weighted, capped pattern allocation this session actually used. */
+  remixTargetPatterns?: {
+    errorType: string;
+    errorSubtype: string | null;
+    questionCount: number;
+  }[];
+  /** Mistake Remix only — how many of the session's items were neutral control questions. */
+  remixNeutralCount?: number;
 }
 
 // Open-ended placeholder — no consumer defines its shape yet, EXCEPT
@@ -70,7 +78,14 @@ export type PracticeItemMetadata = Record<string, unknown>;
  * docs/mistake-bank.md §6.
  */
 export interface MistakePracticeItemMetadata extends Record<string, unknown> {
-  generationSource: 'mistake_practice';
+  /**
+   * `mistake_practice` — the student chose to work on a known weakness.
+   * `spaced_retest` — days have passed and the app is checking whether the
+   * pattern stuck. Both are remediation evidence for mastery (the query
+   * accepts either), but they are never conflated: only a retest can close a
+   * scheduled review or move the interval ladder.
+   */
+  generationSource: 'mistake_practice' | 'spaced_retest';
   practiceMode: 'concept_specific' | 'pattern_transfer';
   targetConceptId: string;
   targetErrorType: string;
@@ -87,6 +102,31 @@ export interface MistakePracticeItemMetadata extends Record<string, unknown> {
    * attempts, and the mastery query falls back to the answer the student
    * produced for their family attribution.
    */
+  itemBaseWord: string | null;
+  /**
+   * The WeaknessReview this item was generated for. Set only when
+   * `generationSource === 'spaced_retest'`; it is what lets the submit flow
+   * close the right review without trusting anything the client sent.
+   */
+  scheduledReviewId?: string;
+}
+
+/**
+ * The shape GenerateMistakeRemixExerciseService writes into every item it
+ * generates. Deliberately reuses `targetErrorType`/`targetErrorSubtype`/
+ * `itemBaseWord` field names verbatim from MistakePracticeItemMetadata so the
+ * mastery aggregation (mistake-mastery.repository.ts) needs only a widened
+ * `generationSource IN (...)`, never a second query shape. `questionRole`
+ * distinguishes a targeted item (feeds mastery for its pattern) from a
+ * neutral control item (`targetErrorType`/`targetErrorSubtype` both null,
+ * which already excludes it from remediation aggregation with no extra
+ * filtering — see docs/mistake-bank.md §10).
+ */
+export interface MistakeRemixItemMetadata extends Record<string, unknown> {
+  generationSource: 'mistake_remix';
+  questionRole: 'targeted' | 'neutral';
+  targetErrorType: string | null;
+  targetErrorSubtype: string | null;
   itemBaseWord: string | null;
 }
 
