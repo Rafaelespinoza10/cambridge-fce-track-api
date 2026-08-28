@@ -188,3 +188,62 @@ describe('buildSlotPlan', () => {
     assert.equal(plan.conceptSpecificCount + plan.patternTransferCount, 5);
   });
 });
+
+describe('selectDiverseWeaknesses — mastery ordering', () => {
+  it('practises the least-mastered pattern first, even when another was failed more often', () => {
+    const oftenFailedButRecovering = candidate({
+      id: 'recovering',
+      timesWrong: 9,
+      masteryScore: 72,
+    });
+    const rarelyFailedButUntouched = candidate({
+      id: 'untouched',
+      timesWrong: 2,
+      errorSubtype: MistakeErrorSubtype.NOUN_TO_ADVERB,
+      masteryScore: 10,
+    });
+
+    const selected = selectDiverseWeaknesses(
+      [oftenFailedButRecovering, rarelyFailedButUntouched],
+      2,
+    );
+
+    assert.deepEqual(
+      selected.map((c) => c.id),
+      ['untouched', 'recovering'],
+    );
+  });
+
+  it('falls back to the most-failed order when nothing is scored', () => {
+    const many = candidate({ id: 'many', timesWrong: 9 });
+    const few = candidate({
+      id: 'few',
+      timesWrong: 2,
+      errorSubtype: MistakeErrorSubtype.NOUN_TO_ADVERB,
+    });
+
+    const selected = selectDiverseWeaknesses([few, many], 2);
+
+    assert.deepEqual(
+      selected.map((c) => c.id),
+      ['many', 'few'],
+    );
+  });
+
+  it('breaks a mastery tie on the most-failed pattern', () => {
+    const many = candidate({ id: 'many', timesWrong: 9, masteryScore: 40 });
+    const few = candidate({
+      id: 'few',
+      timesWrong: 2,
+      errorSubtype: MistakeErrorSubtype.NOUN_TO_ADVERB,
+      masteryScore: 40,
+    });
+
+    const selected = selectDiverseWeaknesses([few, many], 2);
+
+    assert.deepEqual(
+      selected.map((c) => c.id),
+      ['many', 'few'],
+    );
+  });
+});

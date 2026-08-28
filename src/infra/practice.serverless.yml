@@ -110,6 +110,16 @@ functions:
           path: /practice/mistakes/generate
           method: POST
 
+  # Mastery / weakness rollup: aggregates the Mistake Bank into weakness
+  # patterns and scores each one from its remediation evidence. Read-only,
+  # derives everything — no table of its own.
+  practiceListWeaknesses:
+    handler: src/controllers/mistakesController.listWeaknesses
+    events:
+      - httpApi:
+          path: /practice/weaknesses
+          method: GET
+
   practiceInsights:
     handler: src/controllers/practiceAdaptiveController.getPracticeInsights
     events:

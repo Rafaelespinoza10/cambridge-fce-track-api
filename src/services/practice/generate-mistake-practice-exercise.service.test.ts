@@ -1,9 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-import {
-  GenerateMistakePracticeExerciseService,
-} from './generate-mistake-practice-exercise.service';
+import { GenerateMistakePracticeExerciseService } from './generate-mistake-practice-exercise.service';
 import type {
   MistakesRepositoryPort,
   GenerateMistakePracticeExerciseServiceDeps,
@@ -34,6 +32,8 @@ const IDEMPOTENCY_KEY = 'aaaaaaaa-1111-1111-1111-111111111111';
 function concept(overrides: Partial<MistakeConcept> = {}): MistakeConcept {
   return {
     id: overrides.id ?? 'concept-1',
+    // Real concepts always carry their part; the mastery rollup keys on it.
+    part_code: 'UOE_PART_3',
     task_type: 'word_formation',
     base_word: 'RESPONSIBLE',
     correct_answer: 'responsibly',
@@ -99,6 +99,8 @@ interface MakeServiceOverrides {
     userId: string,
     idempotencyKey: string,
   ) => Promise<PracticeExercise | null>;
+  /** Pattern key -> mastery score; empty by default, i.e. selection falls back to times_wrong. */
+  weaknessScores?: Map<string, number>;
 }
 
 function makeService(
@@ -152,6 +154,10 @@ function makeService(
     modelLabel: 'gpt-4o-mini',
     practiceExercises,
     mistakes,
+    // Stubbed for the same reason as the repositories: the real one runs two
+    // aggregate queries, and this suite's DataSource is a fake. The scoring
+    // itself is covered by mastery-score.test.ts and list-weaknesses.service.test.ts.
+    weaknessScores: async () => overrides.weaknessScores ?? new Map<string, number>(),
   };
   const service = new GenerateMistakePracticeExerciseService(FAKE_DATA_SOURCE, deps);
   return { service, calls, llmMessages, llmCallCount: () => llmCalls };
@@ -187,7 +193,9 @@ describe('GenerateMistakePracticeExerciseService.execute — concepts mode', () 
     assert.equal(exerciseData.itemCount, 8);
     assert.deepEqual(exerciseData.generationMetadata?.generationSource, 'mistake_practice');
     assert.deepEqual(exerciseData.generationMetadata?.mistakeConceptIds, [target.id]);
-    assert.deepEqual(exerciseData.generationMetadata?.targetErrorTypes, [MistakeErrorType.WORD_CLASS]);
+    assert.deepEqual(exerciseData.generationMetadata?.targetErrorTypes, [
+      MistakeErrorType.WORD_CLASS,
+    ]);
     assert.deepEqual(exerciseData.generationMetadata?.targetErrorSubtypes, [
       MistakeErrorSubtype.ADJECTIVE_TO_ADVERB,
     ]);
@@ -198,11 +206,18 @@ describe('GenerateMistakePracticeExerciseService.execute — concepts mode', () 
       const metadata = item.metadata as Record<string, unknown>;
       assert.equal(metadata.generationSource, 'mistake_practice');
       assert.equal(metadata.targetConceptId, target.id);
-      assert.ok(metadata.practiceMode === 'concept_specific' || metadata.practiceMode === 'pattern_transfer');
+      assert.ok(
+        metadata.practiceMode === 'concept_specific' ||
+          metadata.practiceMode === 'pattern_transfer',
+      );
     }
     // 8 questions, known subtype -> 2 concept-specific, 6 pattern-transfer (see buildSlotPlan).
-    const conceptSpecific = items.filter((i) => (i.metadata as Record<string, unknown>).practiceMode === 'concept_specific');
-    const patternTransfer = items.filter((i) => (i.metadata as Record<string, unknown>).practiceMode === 'pattern_transfer');
+    const conceptSpecific = items.filter(
+      (i) => (i.metadata as Record<string, unknown>).practiceMode === 'concept_specific',
+    );
+    const patternTransfer = items.filter(
+      (i) => (i.metadata as Record<string, unknown>).practiceMode === 'pattern_transfer',
+    );
     assert.equal(conceptSpecific.length, 2);
     assert.equal(patternTransfer.length, 6);
   });
@@ -260,7 +275,12 @@ describe('GenerateMistakePracticeExerciseService.execute — concepts mode', () 
 
 describe('GenerateMistakePracticeExerciseService.execute — weaknesses mode', () => {
   it('generates from multiple weaknesses, using the highest-priority ones for concept-specific slots', async () => {
-    const weak1 = concept({ id: 'w1', times_wrong: 9, base_word: 'RESPONSIBLE', correct_answer: 'responsibly' });
+    const weak1 = concept({
+      id: 'w1',
+      times_wrong: 9,
+      base_word: 'RESPONSIBLE',
+      correct_answer: 'responsibly',
+    });
     const weak2 = concept({
       id: 'w2',
       times_wrong: 5,
@@ -301,7 +321,11 @@ describe('GenerateMistakePracticeExerciseService.execute — weaknesses mode', (
     await service.execute(USER_ID, IDEMPOTENCY_KEY, weaknessesRequest());
 
     const items = calls.createItems[0]!.items;
-    assert.ok(items.every((i) => (i.metadata as Record<string, unknown>).practiceMode === 'concept_specific'));
+    assert.ok(
+      items.every(
+        (i) => (i.metadata as Record<string, unknown>).practiceMode === 'concept_specific',
+      ),
+    );
   });
 });
 
@@ -352,5 +376,62 @@ describe('GenerateMistakePracticeExerciseService.execute — idempotency', () =>
 
     assert.equal(llmCallCount(), 0);
     assert.equal(result.exercise.id, SAFE_RESULT.exercise.id);
+  });
+});
+
+describe('GenerateMistakePracticeExerciseService.execute — mastery-aware selection', () => {
+  it('tags every item with the lexical family of its own prompt, for the mastery rollup', async () => {
+    const target = concept({ id: 'wf' });
+    const { service, calls } = makeService(async () => validWordFormationResponse(8), {
+      findByIdsForUser: async () => [target],
+    });
+
+    await service.execute(USER_ID, IDEMPOTENCY_KEY, conceptsRequest([target.id]));
+
+    const items = calls.createItems[0]!.items;
+    for (const item of items) {
+      // The generated prompt is about CAREFUL, not about the targeted
+      // concept's own word — which is exactly the point: transfer is
+      // measured on the item's family, never on the mistake's.
+      assert.equal((item.metadata as Record<string, unknown>).itemBaseWord, 'CAREFUL');
+    }
+  });
+
+  it('gives the concept-specific slots to the least-mastered pattern, not the most-failed one', async () => {
+    const recovering = concept({
+      id: 'recovering',
+      times_wrong: 9,
+      base_word: 'RESPONSIBLE',
+      correct_answer: 'responsibly',
+    });
+    const untouched = concept({
+      id: 'untouched',
+      times_wrong: 2,
+      base_word: 'CARE',
+      correct_answer: 'careful',
+      error_subtype: MistakeErrorSubtype.NOUN_TO_ADJECTIVE,
+    });
+    const { service, calls } = makeService(async () => validWordFormationResponse(8), {
+      findTopWeaknessesForUser: async () => [recovering, untouched],
+      weaknessScores: new Map([
+        ['UOE_PART_3|word_class|adjective_to_adverb', 78],
+        ['UOE_PART_3|word_class|noun_to_adjective', 12],
+      ]),
+    });
+
+    await service.execute(USER_ID, IDEMPOTENCY_KEY, weaknessesRequest());
+
+    // Slots are handed out in selection order, so the least-mastered pattern
+    // takes the first one — even though the other was failed 9 times to its 2.
+    const items = calls.createItems[0]!.items;
+    const conceptSpecific = items.filter(
+      (i) => (i.metadata as Record<string, unknown>).practiceMode === 'concept_specific',
+    );
+    assert.ok(conceptSpecific.length > 0);
+    assert.equal(
+      (conceptSpecific[0].metadata as Record<string, unknown>).targetConceptId,
+      'untouched',
+    );
+    assert.equal(calls.createExercise[0]!.generationMetadata?.mistakeConceptIds?.[0], 'untouched');
   });
 });

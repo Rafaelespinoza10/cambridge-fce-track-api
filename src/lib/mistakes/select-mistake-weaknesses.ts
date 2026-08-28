@@ -18,6 +18,14 @@ export interface WeaknessCandidate {
   errorSubtype: MistakeErrorSubtype | null;
   timesWrong: number;
   lastWrongAt: Date;
+  /**
+   * Mastery of the PATTERN this concept belongs to (0-100), when the caller
+   * resolved it — "practice my weaknesses" does, "practice this mistake"
+   * does not, since the user already chose. Undefined means "not scored",
+   * never "mastered": the sort falls back to the previous rule instead of
+   * assuming anything.
+   */
+  masteryScore?: number;
 }
 
 export type MistakePracticeMode = 'concept_specific' | 'pattern_transfer';
@@ -67,9 +75,25 @@ function bucketKey(candidate: WeaknessCandidate): string {
   return `${candidate.errorType}|${candidate.errorSubtype ?? 'none'}`;
 }
 
-/** Most-failed first, most-recent as tie-break — the priority order every selection step in this module builds on. */
+/**
+ * Least-mastered first when the caller scored the candidates, most-failed
+ * and most-recent as tie-breaks.
+ *
+ * Mastery leads because "failed 9 times but 8 of those were before three
+ * solid remediation sessions across four word families" is a weaker signal
+ * of current weakness than "failed twice and never practised" — raw
+ * `timesWrong` cannot tell those apart. When no score is available the order
+ * is exactly what it was before mastery existed.
+ */
 function sortByPriority(candidates: WeaknessCandidate[]): WeaknessCandidate[] {
   return [...candidates].sort((a, b) => {
+    if (
+      a.masteryScore !== undefined &&
+      b.masteryScore !== undefined &&
+      a.masteryScore !== b.masteryScore
+    ) {
+      return a.masteryScore - b.masteryScore;
+    }
     if (b.timesWrong !== a.timesWrong) return b.timesWrong - a.timesWrong;
     return b.lastWrongAt.getTime() - a.lastWrongAt.getTime();
   });

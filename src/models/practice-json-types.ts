@@ -75,6 +75,19 @@ export interface MistakePracticeItemMetadata extends Record<string, unknown> {
   targetConceptId: string;
   targetErrorType: string;
   targetErrorSubtype: string | null;
+  /**
+   * The lexical family THIS generated item is about, extracted
+   * deterministically from its own prompt (see extractBaseWord). Null when
+   * the task type carries no root word or the prompt was ambiguous.
+   *
+   * It is what makes "transfer" measurable: a pattern-transfer item targets
+   * a past concept but deliberately uses a NEW word, so the targeted
+   * concept's own base word says nothing about which families the student
+   * has actually proved. Items generated before this field existed count as
+   * attempts, and the mastery query falls back to the answer the student
+   * produced for their family attribution.
+   */
+  itemBaseWord: string | null;
 }
 
 // Still an open placeholder — no consumer defines a shape for a single
