@@ -4,13 +4,21 @@ import type { EntityManager } from 'typeorm';
 
 import { RecordPracticeMistakesService } from './record-practice-mistakes.service';
 import type {
+  MistakeClassifierPort,
   MistakesRepositoryPort,
   RecordPracticeMistakesExercise,
   RecordPracticeMistakesGradedItem,
 } from './record-practice-mistakes.service';
 import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswerPayload } from '../../models/practice-json-types';
-import { EnglishLevel, MistakeSource } from '../../models/enums';
+import {
+  EnglishLevel,
+  MistakeClassificationSource,
+  MistakeErrorSubtype,
+  MistakeErrorType,
+  MistakeSource,
+  WordClass,
+} from '../../models/enums';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const OTHER_USER_ID = '22222222-2222-2222-2222-222222222222';
@@ -141,9 +149,14 @@ function makeFakeRepository(options: { duplicateAnswerIds?: string[] } = {}): {
   return { repository, state };
 }
 
-function makeService(options: { duplicateAnswerIds?: string[] } = {}) {
+function makeService(
+  options: { duplicateAnswerIds?: string[]; classifier?: MistakeClassifierPort } = {},
+) {
   const { repository, state } = makeFakeRepository(options);
-  const service = new RecordPracticeMistakesService({ repository: () => repository });
+  const service = new RecordPracticeMistakesService({
+    repository: () => repository,
+    classifier: options.classifier,
+  });
   return { service, state };
 }
 
@@ -441,5 +454,127 @@ describe('RecordPracticeMistakesService.record — incomplete data', () => {
     assert.deepEqual(result, { recordedCount: 0, masteredCount: 0, skippedCount: 0 });
     assert.equal(state.concepts.length, 0);
     assert.equal(state.occurrences.length, 0);
+  });
+});
+
+describe('RecordPracticeMistakesService.record — classification', () => {
+  it('classifies a Word Formation mistake deterministically and persists it via registerWrong', async () => {
+    const { service, state } = makeService();
+
+    await service.record(MANAGER, {
+      userId: USER_ID,
+      attemptId: ATTEMPT_ID,
+      exercise: EXERCISE,
+      occurredAt: OCCURRED_AT,
+      items: [wrongTextAnswer('IRRESPONSIBLE')],
+    });
+
+    const call = state.registerWrongCalls[0] as {
+      errorType: MistakeErrorType;
+      errorSubtype: MistakeErrorSubtype | null;
+      expectedWordClass: WordClass | null;
+      userWordClass: WordClass | null;
+      classificationSource: MistakeClassificationSource;
+    };
+    assert.equal(call.errorType, MistakeErrorType.WORD_CLASS);
+    assert.equal(call.errorSubtype, MistakeErrorSubtype.ADJECTIVE_TO_ADVERB);
+    assert.equal(call.expectedWordClass, WordClass.ADVERB);
+    assert.equal(call.userWordClass, WordClass.ADJECTIVE);
+    assert.equal(call.classificationSource, MistakeClassificationSource.DETERMINISTIC);
+  });
+
+  it('leaves a non-word_formation mistake unclassified (UNKNOWN)', async () => {
+    const { service, state } = makeService();
+    const item = makeItem({
+      task_type: 'multiple_choice',
+      prompt: 'What does the writer suggest?',
+      options: [
+        { id: 'a', label: 'She regrets it' },
+        { id: 'b', label: 'She insists on it' },
+      ],
+      answer_key: { kind: 'single_choice', acceptedOptionIds: ['b'] },
+    });
+
+    await service.record(MANAGER, {
+      userId: USER_ID,
+      attemptId: ATTEMPT_ID,
+      exercise: { ...EXERCISE, part_code: 'READING_PART_5' },
+      occurredAt: OCCURRED_AT,
+      items: [
+        {
+          item,
+          payload: { kind: 'single_choice', optionId: 'a' },
+          normalizedAnswer: 'a',
+          isCorrect: false,
+          answerId: 'answer-9',
+        },
+      ],
+    });
+
+    const call = state.registerWrongCalls[0] as { errorType: MistakeErrorType };
+    assert.equal(call.errorType, MistakeErrorType.UNKNOWN);
+  });
+
+  it('never invokes the classifier for a correct answer', async () => {
+    let classifyCalls = 0;
+    const spyClassifier: MistakeClassifierPort = {
+      classify: () => {
+        classifyCalls += 1;
+        return {
+          errorType: MistakeErrorType.UNKNOWN,
+          errorSubtype: null,
+          expectedWordClass: null,
+          userWordClass: null,
+          confidence: 0,
+          classificationSource: MistakeClassificationSource.UNKNOWN,
+        };
+      },
+    };
+    const { service } = makeService({ classifier: spyClassifier });
+
+    await service.record(MANAGER, {
+      userId: USER_ID,
+      attemptId: ATTEMPT_ID,
+      exercise: EXERCISE,
+      occurredAt: OCCURRED_AT,
+      items: [wrongTextAnswer('responsibly', { isCorrect: true })],
+    });
+
+    assert.equal(classifyCalls, 0);
+  });
+
+  it('classifies against the single primary accepted answer, not a "/"-joined display string', async () => {
+    let receivedCorrectAnswer: string | null = null;
+    const spyClassifier: MistakeClassifierPort = {
+      classify: (input) => {
+        receivedCorrectAnswer = input.correctAnswer;
+        return {
+          errorType: MistakeErrorType.UNKNOWN,
+          errorSubtype: null,
+          expectedWordClass: null,
+          userWordClass: null,
+          confidence: 0,
+          classificationSource: MistakeClassificationSource.UNKNOWN,
+        };
+      },
+    };
+    const { service } = makeService({ classifier: spyClassifier });
+    const item = makeItem({
+      answer_key: {
+        kind: 'text',
+        acceptedAnswers: ['responsibly', 'very responsibly'],
+        caseSensitive: false,
+      },
+    });
+
+    await service.record(MANAGER, {
+      userId: USER_ID,
+      attemptId: ATTEMPT_ID,
+      exercise: EXERCISE,
+      occurredAt: OCCURRED_AT,
+      items: [wrongTextAnswer('IRRESPONSIBLE', { item })],
+    });
+
+    assert.equal(receivedCorrectAnswer, 'responsibly');
   });
 });

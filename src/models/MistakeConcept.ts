@@ -13,6 +13,7 @@ import {
   MistakeSource,
   MistakeErrorType,
   MistakeErrorSubtype,
+  MistakeClassificationSource,
   WordClass,
 } from './enums';
 import type { User } from './User';
@@ -102,7 +103,10 @@ export class MistakeConcept {
   })
   target_level: EnglishLevel | null;
 
-  // ── Classification (not populated yet — see MistakeErrorType) ─────────────
+  // ── Classification ─────────────────────────────────────────────────────────
+  // Populated by MistakeClassifier (see @lib/mistakes/mistake-classifier.ts) on
+  // every recorded wrong answer, EXCEPT when classification_source is already
+  // 'user' — a manual correction is never silently overwritten.
 
   @Column({
     type: 'enum',
@@ -135,6 +139,14 @@ export class MistakeConcept {
     nullable: true,
   })
   user_word_class: WordClass | null;
+
+  @Column({
+    type: 'enum',
+    enum: MistakeClassificationSource,
+    enumName: 'mistake_classification_source_enum',
+    default: MistakeClassificationSource.UNKNOWN,
+  })
+  classification_source: MistakeClassificationSource;
 
   // ── Counters (the base for a future mastery score) ────────────────────────
 

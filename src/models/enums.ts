@@ -296,3 +296,18 @@ export enum WordClass {
   ADVERB = 'adverb',
   OTHER = 'other',
 }
+
+/**
+ * Who last decided a mistake's classification — the precedence rule the
+ * whole classification pipeline is built around: a row whose source is
+ * `USER` (a future manual correction) must never be silently overwritten by
+ * a later deterministic reclassification or an AI pass. `UNKNOWN` means
+ * "never classified" (the default for every row today), not "classified as
+ * unclassifiable" — that distinction belongs to MistakeErrorType.UNKNOWN.
+ */
+export enum MistakeClassificationSource {
+  DETERMINISTIC = 'deterministic',
+  AI = 'ai',
+  USER = 'user',
+  UNKNOWN = 'unknown',
+}

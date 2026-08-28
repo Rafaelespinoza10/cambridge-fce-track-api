@@ -1,6 +1,13 @@
 import type { DataSource, EntityManager, Repository } from 'typeorm';
 import { MistakeConcept } from '@models/MistakeConcept';
-import type { EnglishLevel, MistakeErrorType, MistakeSource } from '@models/enums';
+import type {
+  EnglishLevel,
+  MistakeClassificationSource,
+  MistakeErrorSubtype,
+  MistakeErrorType,
+  MistakeSource,
+  WordClass,
+} from '@models/enums';
 
 interface EnsureConceptData {
   userId: string;
@@ -46,6 +53,17 @@ interface RegisterWrongData {
   taskType: string | null;
   targetLevel: EnglishLevel | null;
   occurredAt: Date;
+  /**
+   * MistakeClassifier's verdict for THIS occurrence. Written to the row via
+   * a conditional UPDATE that never touches a concept whose
+   * classification_source is already 'user' — a manual correction always
+   * wins over any later deterministic (or AI) reclassification.
+   */
+  errorType: MistakeErrorType;
+  errorSubtype: MistakeErrorSubtype | null;
+  expectedWordClass: WordClass | null;
+  userWordClass: WordClass | null;
+  classificationSource: MistakeClassificationSource;
 }
 
 interface ListMistakesFilters {
@@ -166,6 +184,13 @@ class MistakesRepository {
    * overwrites a known explanation/base word with a null coming from an item
    * that happens to lack one.
    */
+  /**
+   * The four classification columns only ever move via the `CASE WHEN
+   * classification_source = 'user' THEN <current> ELSE <new>` guard below —
+   * a manual correction (classification_source='user') is permanent until a
+   * human changes it again; MistakeClassifier re-running on a later wrong
+   * answer for the same concept can never silently overwrite it.
+   */
   async registerWrong(data: RegisterWrongData): Promise<void> {
     await this.source.query(
       `UPDATE mistake_concepts SET
@@ -178,6 +203,11 @@ class MistakesRepository {
          base_word = COALESCE($8, base_word),
          task_type = COALESCE($9, task_type),
          target_level = COALESCE($10::english_level_enum, target_level),
+         error_type = CASE WHEN classification_source = 'user' THEN error_type ELSE $11::mistake_error_type_enum END,
+         error_subtype = CASE WHEN classification_source = 'user' THEN error_subtype ELSE $12::mistake_error_subtype_enum END,
+         expected_word_class = CASE WHEN classification_source = 'user' THEN expected_word_class ELSE $13::word_class_enum END,
+         user_word_class = CASE WHEN classification_source = 'user' THEN user_word_class ELSE $14::word_class_enum END,
+         classification_source = CASE WHEN classification_source = 'user' THEN classification_source ELSE $15::mistake_classification_source_enum END,
          updated_at = now()
        WHERE id = $1 AND user_id = $2`,
       [
@@ -191,6 +221,11 @@ class MistakesRepository {
         data.baseWord,
         data.taskType,
         data.targetLevel,
+        data.errorType,
+        data.errorSubtype,
+        data.expectedWordClass,
+        data.userWordClass,
+        data.classificationSource,
       ],
     );
   }
