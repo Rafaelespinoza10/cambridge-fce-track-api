@@ -10,7 +10,10 @@ import {
   extractBaseWord,
   resolveSkillSlug,
 } from '@lib/mistakes/mistake-concept-key';
-import { MistakeClassifier, type MistakeClassificationResult } from '@lib/mistakes/mistake-classifier';
+import {
+  MistakeClassifier,
+  type MistakeClassificationResult,
+} from '@lib/mistakes/mistake-classifier';
 
 /** The exercise metadata a mistake needs — a structural subset of PracticeExercise. */
 export interface RecordPracticeMistakesExercise {
