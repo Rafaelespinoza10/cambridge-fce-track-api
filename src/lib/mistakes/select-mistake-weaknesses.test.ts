@@ -18,6 +18,7 @@ function candidate(overrides: Partial<WeaknessCandidate> = {}): WeaknessCandidat
   seq += 1;
   return {
     id: overrides.id ?? `concept-${seq}`,
+    partCode: 'UOE_PART_3',
     taskType: 'word_formation',
     baseWord: 'RESPONSIBLE',
     correctAnswer: 'responsibly',

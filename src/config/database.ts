@@ -44,6 +44,7 @@ import { DailySessionSubmission } from '../models/DailySessionSubmission';
 import { SpotifyConnection } from '../models/SpotifyConnection';
 import { MistakeConcept } from '../models/MistakeConcept';
 import { MistakeOccurrence } from '../models/MistakeOccurrence';
+import { WeaknessReview } from '../models/WeaknessReview';
 
 function getSslConfig(): boolean | { rejectUnauthorized: boolean } {
   const databaseUrl: string = process.env.DATABASE_URL ?? '';
@@ -107,6 +108,7 @@ export const AppDataSource = new DataSource({
     SpotifyConnection,
     MistakeConcept,
     MistakeOccurrence,
+    WeaknessReview,
   ],
   migrations: ['src/migrations/*.ts'],
   migrationsTableName: 'typeorm_migrations',

@@ -73,6 +73,8 @@ const EXERCISE = {
   paper_code: 'PAPER_1',
   part_code: 'UOE_PART_3',
   target_level: null,
+  // A plain generated exercise: spaced retesting must treat it as a no-op.
+  generation_metadata: null,
 };
 
 interface RepoState {

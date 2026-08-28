@@ -144,6 +144,7 @@ const RESULT_DTO = {
 const SUBMIT_RESULT: PracticeAttemptSubmitResultDto = {
   result: RESULT_DTO,
   idempotentReplay: false,
+  reviewOutcomes: [],
 };
 
 const ABANDON_RESULT: PracticeAttemptAbandonResultDto = {
@@ -575,7 +576,11 @@ describe('submitPracticeAttempt', () => {
 
   it('returns 200 with idempotentReplay:true on a replay', async () => {
     const { deps } = buildDeps({
-      submitExecute: async () => ({ result: RESULT_DTO, idempotentReplay: true }),
+      submitExecute: async () => ({
+        result: RESULT_DTO,
+        idempotentReplay: true,
+        reviewOutcomes: [],
+      }),
     });
     const result = await submitPracticeAttemptHandler(
       makeEvent({

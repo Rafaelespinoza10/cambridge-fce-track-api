@@ -197,10 +197,21 @@ function request(questionCount?: number): GenerateMistakeRemixRequest {
 
 describe('GenerateMistakeRemixExerciseService.execute — happy path', () => {
   it('generates a Quick (8-question) remix and tags the exercise + every item with mistake_remix metadata', async () => {
-    const w1 = weakness({ masteryScore: 35, errorSubtype: MistakeErrorSubtype.ADJECTIVE_TO_ADVERB });
+    const w1 = weakness({
+      masteryScore: 35,
+      errorSubtype: MistakeErrorSubtype.ADJECTIVE_TO_ADVERB,
+    });
     const w2 = weakness({ masteryScore: 48, errorSubtype: MistakeErrorSubtype.NOUN_TO_ADJECTIVE });
-    const c1 = concept({ id: 'c1', error_subtype: MistakeErrorSubtype.ADJECTIVE_TO_ADVERB, base_word: 'RESPONSIBLE' });
-    const c2 = concept({ id: 'c2', error_subtype: MistakeErrorSubtype.NOUN_TO_ADJECTIVE, base_word: 'ENCOURAGE' });
+    const c1 = concept({
+      id: 'c1',
+      error_subtype: MistakeErrorSubtype.ADJECTIVE_TO_ADVERB,
+      base_word: 'RESPONSIBLE',
+    });
+    const c2 = concept({
+      id: 'c2',
+      error_subtype: MistakeErrorSubtype.NOUN_TO_ADJECTIVE,
+      base_word: 'ENCOURAGE',
+    });
     const { service, calls } = makeService(async () => validRemixResponse(8), {
       weaknessProfiles: async () => [w1, w2],
       findTopWeaknessesForUser: async () => [c1, c2],
@@ -217,14 +228,21 @@ describe('GenerateMistakeRemixExerciseService.execute — happy path', () => {
     assert.equal(exerciseData.generationMetadata?.generationSource, 'mistake_remix');
     assert.equal(exerciseData.generationMetadata?.remixNeutralCount, 4);
     assert.equal(
-      exerciseData.generationMetadata?.remixTargetPatterns?.reduce((s, p) => s + p.questionCount, 0),
+      exerciseData.generationMetadata?.remixTargetPatterns?.reduce(
+        (s, p) => s + p.questionCount,
+        0,
+      ),
       4,
     );
 
     const items = calls.createItems[0]!.items;
     assert.equal(items.length, 8);
-    const targeted = items.filter((i) => (i.metadata as Record<string, unknown>).questionRole === 'targeted');
-    const neutral = items.filter((i) => (i.metadata as Record<string, unknown>).questionRole === 'neutral');
+    const targeted = items.filter(
+      (i) => (i.metadata as Record<string, unknown>).questionRole === 'targeted',
+    );
+    const neutral = items.filter(
+      (i) => (i.metadata as Record<string, unknown>).questionRole === 'neutral',
+    );
     assert.equal(targeted.length, 4);
     assert.equal(neutral.length, 4);
     for (const item of neutral) {
@@ -311,7 +329,9 @@ describe('GenerateMistakeRemixExerciseService.execute — no eligible weaknesses
     await service.execute(USER_ID, IDEMPOTENCY_KEY, request());
 
     const items = calls.createItems[0]!.items;
-    assert.ok(items.every((i) => (i.metadata as Record<string, unknown>).questionRole === 'neutral'));
+    assert.ok(
+      items.every((i) => (i.metadata as Record<string, unknown>).questionRole === 'neutral'),
+    );
   });
 });
 

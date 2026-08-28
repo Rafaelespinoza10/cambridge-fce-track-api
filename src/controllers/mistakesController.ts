@@ -217,7 +217,9 @@ interface GenerateMistakeRemixBody {
  * /practice/mistakes/generate, so there is nothing here for a client to
  * spoof its way into targeting.
  */
-function toGenerateMistakeRemixRequest(body: GenerateMistakeRemixBody): GenerateMistakeRemixRequest {
+function toGenerateMistakeRemixRequest(
+  body: GenerateMistakeRemixBody,
+): GenerateMistakeRemixRequest {
   return {
     questionCount: typeof body.questionCount === 'number' ? body.questionCount : undefined,
     idempotencyKey: typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '',
@@ -241,7 +243,11 @@ async function generateMistakeRemixHandler(
   try {
     const { generateMistakeRemix } = await deps.remixGenerationServices();
     const request = toGenerateMistakeRemixRequest(body);
-    const exercise = await generateMistakeRemix.execute(payload.sub, request.idempotencyKey, request);
+    const exercise = await generateMistakeRemix.execute(
+      payload.sub,
+      request.idempotencyKey,
+      request,
+    );
     return successResponse({ success: true, data: exercise }, 201);
   } catch (err: unknown) {
     return handleError(mapGeneratePracticeExerciseError(err));
@@ -278,9 +284,7 @@ async function listDueReviewsHandler(
   }
 }
 
-export async function listDueReviews(
-  event: APIGatewayProxyEvent,
-): Promise<APIGatewayProxyResult> {
+export async function listDueReviews(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   return listDueReviewsHandler(event, DEFAULT_DEPS);
 }
 

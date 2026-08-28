@@ -32,7 +32,11 @@ import type {
   CreateItemCoreData,
 } from '@lib/practice/generate-practice-exercise-core';
 import { buildRemixPlan } from '@lib/mistakes/select-mistake-remix';
-import type { RemixConceptCandidate, RemixPlan, RemixWeaknessPattern } from '@lib/mistakes/select-mistake-remix';
+import type {
+  RemixConceptCandidate,
+  RemixPlan,
+  RemixWeaknessPattern,
+} from '@lib/mistakes/select-mistake-remix';
 import { buildMistakeRemixContext } from '@lib/practice/build-mistake-remix-context';
 import { extractBaseWord } from '@lib/mistakes/mistake-concept-key';
 import { renderPromptTemplate } from '@lib/llm/prompt-template';
@@ -86,7 +90,9 @@ const DEFAULT_MISTAKES_FACTORY = (source: RepositorySource): MistakesRepositoryP
 
 function normalizeQuestionCount(raw: number | undefined): number {
   if (raw === undefined) return 8;
-  if (!MISTAKE_REMIX_QUESTION_COUNTS.includes(raw as (typeof MISTAKE_REMIX_QUESTION_COUNTS)[number])) {
+  if (
+    !MISTAKE_REMIX_QUESTION_COUNTS.includes(raw as (typeof MISTAKE_REMIX_QUESTION_COUNTS)[number])
+  ) {
     invalidInput(`questionCount must be one of: ${MISTAKE_REMIX_QUESTION_COUNTS.join(', ')}`);
   }
   return raw;
@@ -271,7 +277,16 @@ export class GenerateMistakeRemixExerciseService {
 
     try {
       return await this.dataSource.transaction((manager) =>
-        this.persist(manager, userId, idempotencyKey, part, questionCount, generated, plan, generationMetadata),
+        this.persist(
+          manager,
+          userId,
+          idempotencyKey,
+          part,
+          questionCount,
+          generated,
+          plan,
+          generationMetadata,
+        ),
       );
     } catch (err: unknown) {
       if (isUniqueConstraintViolation(err, IDEMPOTENCY_CONSTRAINT_NAME)) {

@@ -2,6 +2,8 @@
 import type { DataSource, EntityManager } from 'typeorm';
 import { EnglishLevel, PracticeExerciseSource } from '../../models/enums';
 import type { MistakeConcept } from '../../models/MistakeConcept';
+import type { WeaknessReview } from '../../models/WeaknessReview';
+import type { MistakeErrorType, MistakeErrorSubtype } from '../../models/enums';
 import type {
   PracticeExerciseGenerationMetadata,
   MistakePracticeItemMetadata,
@@ -45,6 +47,9 @@ import { buildMistakePracticeContext } from '@lib/practice/build-mistake-practic
 import { renderPromptTemplate } from '@lib/llm/prompt-template';
 import { pickRandomExamTopic } from '@lib/shared/exam-topics';
 import { MistakesRepository } from '@repositories/mistakes/mistakes.repository';
+import { WeaknessReviewsRepository } from '@repositories/mistakes/weakness-reviews.repository';
+import { RETEST_CONSTANTS, retestItemCount } from '@lib/mistakes/retest-scheduler';
+import { MASTERY_CONSTANTS } from '@lib/mistakes/mastery-score';
 import { MistakeMasteryRepository } from '@repositories/mistakes/mistake-mastery.repository';
 import {
   computeWeaknessProfiles,
@@ -66,6 +71,20 @@ const IDEMPOTENCY_CONSTRAINT_NAME = 'uq_practice_exercises_user_idempotency';
 export interface MistakesRepositoryPort {
   findByIdsForUser(userId: string, ids: string[]): Promise<MistakeConcept[]>;
   findTopWeaknessesForUser(userId: string, limit: number): Promise<MistakeConcept[]>;
+  findByPatternsForUser(
+    userId: string,
+    patterns: Array<{
+      partCode: string;
+      errorType: MistakeErrorType;
+      errorSubtype: MistakeErrorSubtype | null;
+    }>,
+  ): Promise<MistakeConcept[]>;
+}
+
+/** The reviews a retest reads — always ownership-checked, never by id alone. */
+export interface WeaknessReviewsReadPort {
+  findScheduledForUser(userId: string): Promise<WeaknessReview[]>;
+  findScheduledByIdsForUser(userId: string, ids: string[]): Promise<WeaknessReview[]>;
 }
 
 export interface GenerateMistakePracticeExerciseServiceDeps {
@@ -81,6 +100,11 @@ export interface GenerateMistakePracticeExerciseServiceDeps {
    * ranked worst is what a session actually targets.
    */
   weaknessScores?: (userId: string) => Promise<Map<string, number>>;
+  /** Injectable seams for spaced retesting (`mode: 'retest'`). */
+  reviews?: (source: RepositorySource) => WeaknessReviewsReadPort;
+  now?: () => Date;
+  /** Injectable seam for tests — the default reads the real practice history. */
+  wordsToAvoid?: (userId: string, plan: MistakeSlotPlan, partCode: string) => Promise<string[]>;
 }
 
 const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
@@ -88,10 +112,13 @@ const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
 ): PracticeExercisesRepositoryPort => new PracticeExercisesRepository(source);
 const DEFAULT_MISTAKES_FACTORY = (source: RepositorySource): MistakesRepositoryPort =>
   new MistakesRepository(source);
+const DEFAULT_REVIEWS_FACTORY = (source: RepositorySource): WeaknessReviewsReadPort =>
+  new WeaknessReviewsRepository(source);
 
 function toWeaknessCandidate(concept: MistakeConcept): WeaknessCandidate {
   return {
     id: concept.id,
+    partCode: concept.part_code,
     taskType: concept.task_type,
     baseWord: concept.base_word,
     correctAnswer: concept.correct_answer,
@@ -158,7 +185,9 @@ function toItemMetadata(
     );
   }
   return {
-    generationSource: 'mistake_practice',
+    // A retest's items are the evidence that closes a review, so they must
+    // carry the same source the exercise does.
+    generationSource: entry.scheduledReviewId === undefined ? 'mistake_practice' : 'spaced_retest',
     practiceMode: entry.practiceMode,
     targetConceptId: entry.targetConceptId,
     targetErrorType: entry.targetErrorType,
@@ -168,6 +197,9 @@ function toItemMetadata(
     // never assumed to be the targeted concept's word (a pattern-transfer
     // item is supposed to use a different one).
     itemBaseWord: extractBaseWord(plan.taskType, item.prompt),
+    ...(entry.scheduledReviewId === undefined
+      ? {}
+      : { scheduledReviewId: entry.scheduledReviewId }),
   };
 }
 
@@ -202,7 +234,9 @@ export class GenerateMistakePracticeExerciseService {
       invalidInput('idempotencyKey is required');
     }
 
-    const questionCount = normalizeQuestionCount(input.questionCount);
+    // A retest's size is decided by how many patterns it covers, not by the
+    // caller — see retestItemCount.
+    const questionCount = input.mode === 'retest' ? 0 : normalizeQuestionCount(input.questionCount);
     const exercisesFactory = this.deps.practiceExercises ?? DEFAULT_PRACTICE_EXERCISES_FACTORY;
 
     const existing = await exercisesFactory(this.dataSource).findByIdempotencyKeyForUser(
@@ -214,14 +248,20 @@ export class GenerateMistakePracticeExerciseService {
     }
 
     const plan = await this.buildPlan(userId, input, questionCount);
+    // The retest planner owns its own item count; every other mode already
+    // agreed on one before the plan was built.
+    const itemCount = plan.entries.length;
     const part = GENERATABLE_PARTS[plan.taskType];
 
     const topicHint = pickRandomExamTopic();
-    const weaknessesContext = buildMistakePracticeContext(plan);
+    const weaknessesContext = buildMistakePracticeContext(
+      plan,
+      input.mode === 'retest' ? await this.resolveWordsToAvoid(userId, plan, part.partCode) : [],
+    );
     const messages = buildMessages(
       part.partLabel,
       part.taskTypeInstructions,
-      questionCount,
+      itemCount,
       EnglishLevel.B2,
       topicHint,
       weaknessesContext,
@@ -240,7 +280,7 @@ export class GenerateMistakePracticeExerciseService {
       throw mapLLMError(err);
     }
 
-    const generated = validateGeneratedExercise(raw, part, questionCount);
+    const generated = validateGeneratedExercise(raw, part, itemCount);
 
     const targetErrorTypes = [...new Set(plan.entries.map((e) => e.targetErrorType as string))];
     const targetErrorSubtypes = [
@@ -253,7 +293,7 @@ export class GenerateMistakePracticeExerciseService {
     const generationMetadata: PracticeExerciseGenerationMetadata = {
       provider: this.deps.providerLabel,
       schemaVersion: PROMPT_VERSION,
-      generationSource: 'mistake_practice',
+      generationSource: input.mode === 'retest' ? 'spaced_retest' : 'mistake_practice',
       mistakeConceptIds: plan.usedConceptIds,
       targetErrorTypes,
       targetErrorSubtypes,
@@ -266,7 +306,7 @@ export class GenerateMistakePracticeExerciseService {
           userId,
           idempotencyKey,
           part,
-          questionCount,
+          itemCount,
           generated,
           plan,
           generationMetadata,
@@ -306,6 +346,150 @@ export class GenerateMistakePracticeExerciseService {
     return toMasteryScoreByPattern(profiles);
   }
 
+  /**
+   * Turns the user's due reviews into a slot plan. Unlike the other two
+   * modes this one is driven by weakness *patterns* (a review schedules a
+   * pattern, not a word), so it loads every concept under those patterns and
+   * lets the planner rotate through them — with every slot forced to
+   * `pattern_transfer` and stamped with the review it answers.
+   */
+  private async buildRetestPlan(
+    userId: string,
+    input: GenerateMistakePracticeRequest,
+    mistakesRepo: MistakesRepositoryPort,
+  ): Promise<MistakeSlotPlan> {
+    const reviewsRepo = (this.deps.reviews ?? DEFAULT_REVIEWS_FACTORY)(this.dataSource);
+    const now = (this.deps.now ?? (() => new Date()))();
+
+    const rawIds: unknown = input.reviewIds;
+    const explicitIds =
+      rawIds === undefined
+        ? null
+        : Array.isArray(rawIds) && rawIds.every((id) => typeof id === 'string' && id.trim() !== '')
+          ? (rawIds as string[])
+          : invalidInput('reviewIds must be an array of non-empty strings');
+
+    // Ownership is enforced inside both lookups, so "not yours" and "does
+    // not exist" are indistinguishable from here.
+    const scheduled =
+      explicitIds === null
+        ? (await reviewsRepo.findScheduledForUser(userId)).filter(
+            (review) => review.due_at.getTime() <= now.getTime(),
+          )
+        : await reviewsRepo.findScheduledByIdsForUser(userId, explicitIds);
+
+    if (scheduled.length === 0) {
+      noEligibleMistakes('You have no reviews due right now');
+    }
+
+    // Most urgent first (oldest due date), then capped: a review is a
+    // check-up, never a full practice set.
+    const patterns = [...scheduled]
+      .sort((a, b) => a.due_at.getTime() - b.due_at.getTime())
+      .slice(0, RETEST_CONSTANTS.MAX_PATTERNS_PER_SESSION);
+
+    const concepts = await mistakesRepo.findByPatternsForUser(
+      userId,
+      patterns.map((review) => ({
+        partCode: review.part_code,
+        errorType: review.error_type,
+        errorSubtype: review.error_subtype,
+      })),
+    );
+    if (concepts.length === 0) {
+      // The pattern's mistakes were removed after it was scheduled — there
+      // is nothing left to build a retest from.
+      noEligibleMistakes('The scheduled reviews no longer have any mistakes behind them');
+    }
+
+    const candidates = concepts.map(toWeaknessCandidate);
+    const taskType = this.pickTaskType(candidates);
+    const filtered = candidates.filter((c) => c.taskType === taskType);
+
+    const reviewIdByPatternKey = new Map(
+      patterns.map((review) => [
+        buildPatternKey({
+          partCode: review.part_code,
+          errorType: review.error_type,
+          errorSubtype: review.error_subtype,
+        }),
+        review.id,
+      ]),
+    );
+    // Only the patterns that survived the single-taskType collapse are
+    // actually being retested; the rest stay due for another session.
+    const coveredKeys = new Set(
+      filtered.map((c) =>
+        buildPatternKey({
+          partCode: c.partCode,
+          errorType: c.errorType,
+          errorSubtype: c.errorSubtype,
+        }),
+      ),
+    );
+    const coveredPatterns = [...reviewIdByPatternKey.keys()].filter((key) => coveredKeys.has(key));
+
+    return buildSlotPlan(filtered, retestItemCount(coveredPatterns.length), {
+      reviewIdByPatternKey,
+    });
+  }
+
+  /**
+   * The families already drilled for the patterns this retest covers, within
+   * one answer half-life. Best-effort: if the lookup finds nothing the
+   * prompt simply carries no avoid-list, and the generator's standing
+   * "use a NEW word family" instruction still applies.
+   */
+  private async resolveWordsToAvoid(
+    userId: string,
+    plan: MistakeSlotPlan,
+    partCode: string,
+  ): Promise<string[]> {
+    if (this.deps.wordsToAvoid !== undefined) {
+      return this.deps.wordsToAvoid(userId, plan, partCode);
+    }
+    const since = new Date(
+      (this.deps.now ?? (() => new Date()))().getTime() -
+        MASTERY_CONSTANTS.ANSWER_HALF_LIFE_DAYS * 86_400_000,
+    );
+    const rows = await new MistakeMasteryRepository(this.dataSource).findRecentFamilies(
+      userId,
+      since,
+    );
+    const wanted = new Set(
+      plan.entries.map((entry) =>
+        buildPatternKey({
+          partCode,
+          errorType: entry.targetErrorType,
+          errorSubtype: entry.targetErrorSubtype,
+        }),
+      ),
+    );
+    const families = new Set<string>();
+    for (const row of rows) {
+      const key = buildPatternKey({
+        partCode: row.partCode,
+        errorType: row.errorType,
+        errorSubtype: row.errorSubtype,
+      });
+      if (!wanted.has(key)) continue;
+      for (const family of row.families) families.add(family);
+    }
+    return [...families];
+  }
+
+  /** Shared by every mode: one exercise is always one taskType. */
+  private pickTaskType(candidates: WeaknessCandidate[]): string {
+    try {
+      return pickDominantTaskType(candidates);
+    } catch (err: unknown) {
+      if (err instanceof SelectMistakeWeaknessesError) {
+        noEligibleMistakes(err.message);
+      }
+      throw err;
+    }
+  }
+
   private async buildPlan(
     userId: string,
     input: GenerateMistakePracticeRequest,
@@ -313,6 +497,10 @@ export class GenerateMistakePracticeExerciseService {
   ): Promise<MistakeSlotPlan> {
     const mistakesFactory = this.deps.mistakes ?? DEFAULT_MISTAKES_FACTORY;
     const mistakesRepo = mistakesFactory(this.dataSource);
+
+    if (input.mode === 'retest') {
+      return this.buildRetestPlan(userId, input, mistakesRepo);
+    }
 
     let candidates: WeaknessCandidate[];
     let isWeaknessesMode: boolean;

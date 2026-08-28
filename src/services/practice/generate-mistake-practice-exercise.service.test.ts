@@ -3,6 +3,7 @@ import * as assert from 'node:assert/strict';
 
 import { GenerateMistakePracticeExerciseService } from './generate-mistake-practice-exercise.service';
 import type {
+  WeaknessReviewsReadPort,
   MistakesRepositoryPort,
   GenerateMistakePracticeExerciseServiceDeps,
 } from './generate-mistake-practice-exercise.service';
@@ -18,6 +19,7 @@ import type { LLMChatMessage, LLMStructuredCompletionOptions } from '../llm/llm.
 import type { GenerateMistakePracticeRequest } from '../../interfaces/practice/practice-mistake-generation.interface';
 import { MistakeErrorSubtype, MistakeErrorType } from '@models/enums';
 import type { MistakeConcept } from '../../models/MistakeConcept';
+import type { WeaknessReview } from '../../models/WeaknessReview';
 import type { PracticeExerciseSafeWithItems } from '../../interfaces/practice/practice-exercise.interface';
 import type {
   CreateExerciseData,
@@ -26,6 +28,7 @@ import type {
 import type { PracticeExercise } from '../../models/PracticeExercise';
 import type { DataSource } from 'typeorm';
 
+const NOW = new Date('2026-03-01T12:00:00.000Z');
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const IDEMPOTENCY_KEY = 'aaaaaaaa-1111-1111-1111-111111111111';
 
@@ -101,6 +104,9 @@ interface MakeServiceOverrides {
   ) => Promise<PracticeExercise | null>;
   /** Pattern key -> mastery score; empty by default, i.e. selection falls back to times_wrong. */
   weaknessScores?: Map<string, number>;
+  findByPatternsForUser?: () => Promise<MistakeConcept[]>;
+  scheduledReviews?: WeaknessReview[];
+  wordsToAvoid?: string[];
 }
 
 function makeService(
@@ -146,6 +152,12 @@ function makeService(
   const mistakes = (): MistakesRepositoryPort => ({
     findByIdsForUser: overrides.findByIdsForUser ?? (async () => []),
     findTopWeaknessesForUser: overrides.findTopWeaknessesForUser ?? (async () => []),
+    findByPatternsForUser: overrides.findByPatternsForUser ?? (async () => []),
+  });
+  const reviews = (): WeaknessReviewsReadPort => ({
+    findScheduledForUser: async () => overrides.scheduledReviews ?? [],
+    findScheduledByIdsForUser: async (_userId, ids) =>
+      (overrides.scheduledReviews ?? []).filter((review) => ids.includes(review.id)),
   });
 
   const deps: GenerateMistakePracticeExerciseServiceDeps = {
@@ -158,6 +170,11 @@ function makeService(
     // aggregate queries, and this suite's DataSource is a fake. The scoring
     // itself is covered by mastery-score.test.ts and list-weaknesses.service.test.ts.
     weaknessScores: async () => overrides.weaknessScores ?? new Map<string, number>(),
+    reviews,
+    now: () => NOW,
+    // Stubbed for the same reason as the repositories: the real one queries
+    // the practice history, and this suite's DataSource is a fake.
+    wordsToAvoid: async () => overrides.wordsToAvoid ?? [],
   };
   const service = new GenerateMistakePracticeExerciseService(FAKE_DATA_SOURCE, deps);
   return { service, calls, llmMessages, llmCallCount: () => llmCalls };
@@ -433,5 +450,193 @@ describe('GenerateMistakePracticeExerciseService.execute — mastery-aware selec
       'untouched',
     );
     assert.equal(calls.createExercise[0]!.generationMetadata?.mistakeConceptIds?.[0], 'untouched');
+  });
+});
+
+// ── Spaced retesting (mode: 'retest') ────────────────────────────────────────
+
+function scheduledReview(overrides: Record<string, unknown> = {}): WeaknessReview {
+  return {
+    id: 'review-1',
+    user_id: USER_ID,
+    skill_slug: 'use-of-english',
+    exam_code: 'B2_FIRST',
+    paper_code: 'PAPER_1',
+    part_code: 'UOE_PART_3',
+    error_type: MistakeErrorType.WORD_CLASS,
+    error_subtype: MistakeErrorSubtype.ADJECTIVE_TO_ADVERB,
+    status: 'scheduled',
+    due_at: new Date(NOW.getTime() - 86_400_000),
+    interval_days: 7,
+    consecutive_successful_reviews: 1,
+    mastery_score_before: 78,
+    ...overrides,
+  } as unknown as WeaknessReview;
+}
+
+function retestRequest(reviewIds?: string[]): GenerateMistakePracticeRequest {
+  return { mode: 'retest', reviewIds, idempotencyKey: IDEMPOTENCY_KEY };
+}
+
+describe('GenerateMistakePracticeExerciseService.execute — spaced retest', () => {
+  it('builds a 3-item retest for a single due pattern and tags it as a retest', async () => {
+    const target = concept({ id: 'wf' });
+    const { service, calls } = makeService(async () => validWordFormationResponse(3), {
+      scheduledReviews: [scheduledReview()],
+      findByPatternsForUser: async () => [target],
+    });
+
+    await service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest());
+
+    const exercise = calls.createExercise[0]!;
+    assert.equal(exercise.generationMetadata?.generationSource, 'spaced_retest');
+    assert.equal(exercise.itemCount, 3);
+
+    const items = calls.createItems[0]!.items;
+    assert.equal(items.length, 3);
+    for (const item of items) {
+      const metadata = item.metadata as Record<string, unknown>;
+      assert.equal(metadata.generationSource, 'spaced_retest');
+      assert.equal(metadata.scheduledReviewId, 'review-1');
+      // Never concept_specific: a retest has to test the pattern on new
+      // words, not the word that was originally failed.
+      assert.equal(metadata.practiceMode, 'pattern_transfer');
+    }
+  });
+
+  it('gives a combined session two items per due pattern', async () => {
+    const { service, calls } = makeService(async () => validWordFormationResponse(4), {
+      scheduledReviews: [
+        scheduledReview({ id: 'review-1' }),
+        scheduledReview({
+          id: 'review-2',
+          error_subtype: MistakeErrorSubtype.NOUN_TO_ADJECTIVE,
+        }),
+      ],
+      findByPatternsForUser: async () => [
+        concept({ id: 'a' }),
+        concept({ id: 'b', error_subtype: MistakeErrorSubtype.NOUN_TO_ADJECTIVE }),
+      ],
+    });
+
+    await service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest());
+
+    assert.equal(calls.createExercise[0]!.itemCount, 4);
+    const reviewIds = new Set(
+      calls.createItems[0]!.items.map(
+        (item) => (item.metadata as Record<string, unknown>).scheduledReviewId,
+      ),
+    );
+    assert.deepEqual(reviewIds, new Set(['review-1', 'review-2']));
+  });
+
+  it('never turns a review into a full practice set, however many are due', async () => {
+    const subtypes = [
+      MistakeErrorSubtype.ADJECTIVE_TO_ADVERB,
+      MistakeErrorSubtype.NOUN_TO_ADJECTIVE,
+      MistakeErrorSubtype.VERB_TO_NOUN,
+      MistakeErrorSubtype.NOUN_TO_ADVERB,
+      MistakeErrorSubtype.ADJECTIVE_TO_NOUN,
+    ];
+    const reviews = subtypes.map((error_subtype, i) =>
+      scheduledReview({
+        id: `review-${i}`,
+        error_subtype,
+        due_at: new Date(NOW.getTime() - (i + 1) * 86_400_000),
+      }),
+    );
+    const { service, calls } = makeService(async () => validWordFormationResponse(6), {
+      scheduledReviews: reviews,
+      findByPatternsForUser: async () =>
+        subtypes.map((error_subtype, i) => concept({ id: `c-${i}`, error_subtype })),
+    });
+
+    await service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest());
+
+    assert.equal(calls.createExercise[0]!.itemCount, 6);
+  });
+
+  it('only takes the reviews the caller asked for', async () => {
+    const { service, calls } = makeService(async () => validWordFormationResponse(3), {
+      scheduledReviews: [scheduledReview({ id: 'review-1' }), scheduledReview({ id: 'review-2' })],
+      findByPatternsForUser: async () => [concept({ id: 'a' })],
+    });
+
+    await service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest(['review-2']));
+
+    const reviewIds = new Set(
+      calls.createItems[0]!.items.map(
+        (item) => (item.metadata as Record<string, unknown>).scheduledReviewId,
+      ),
+    );
+    assert.deepEqual(reviewIds, new Set(['review-2']));
+  });
+
+  it('ignores a review that is not due yet when no ids were given', async () => {
+    const { service, llmCallCount } = makeService(async () => validWordFormationResponse(3), {
+      scheduledReviews: [scheduledReview({ due_at: new Date(NOW.getTime() + 86_400_000) })],
+      findByPatternsForUser: async () => [concept({ id: 'a' })],
+    });
+
+    await assert.rejects(
+      () => service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest()),
+      (err: unknown) => assertGenErr(err, GeneratePracticeExerciseErrorCode.NO_ELIGIBLE_MISTAKES),
+    );
+    assert.equal(llmCallCount(), 0);
+  });
+
+  it('rejects a retest when the user has nothing due', async () => {
+    const { service, llmCallCount } = makeService(async () => validWordFormationResponse(3), {
+      scheduledReviews: [],
+    });
+
+    await assert.rejects(
+      () => service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest()),
+      (err: unknown) => assertGenErr(err, GeneratePracticeExerciseErrorCode.NO_ELIGIBLE_MISTAKES),
+    );
+    assert.equal(llmCallCount(), 0);
+  });
+
+  it('never reaches a review that is not this user own — an unknown id finds nothing', async () => {
+    const { service, llmCallCount } = makeService(async () => validWordFormationResponse(3), {
+      scheduledReviews: [scheduledReview({ id: 'mine' })],
+      findByPatternsForUser: async () => [concept({ id: 'a' })],
+    });
+
+    await assert.rejects(
+      () => service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest(['someone-elses'])),
+      (err: unknown) => assertGenErr(err, GeneratePracticeExerciseErrorCode.NO_ELIGIBLE_MISTAKES),
+    );
+    assert.equal(llmCallCount(), 0);
+  });
+
+  it('rejects a malformed reviewIds payload before any generation', async () => {
+    const { service, llmCallCount } = makeService(async () => validWordFormationResponse(3), {
+      scheduledReviews: [scheduledReview()],
+    });
+
+    await assert.rejects(
+      () =>
+        service.execute(USER_ID, IDEMPOTENCY_KEY, {
+          mode: 'retest',
+          reviewIds: [''] as string[],
+          idempotencyKey: IDEMPOTENCY_KEY,
+        }),
+      (err: unknown) => assertGenErr(err, GeneratePracticeExerciseErrorCode.INVALID_INPUT),
+    );
+    assert.equal(llmCallCount(), 0);
+  });
+
+  it('rejects a retest whose patterns no longer have any mistakes behind them', async () => {
+    const { service, llmCallCount } = makeService(async () => validWordFormationResponse(3), {
+      scheduledReviews: [scheduledReview()],
+      findByPatternsForUser: async () => [],
+    });
+
+    await assert.rejects(
+      () => service.execute(USER_ID, IDEMPOTENCY_KEY, retestRequest()),
+      (err: unknown) => assertGenErr(err, GeneratePracticeExerciseErrorCode.NO_ELIGIBLE_MISTAKES),
+    );
+    assert.equal(llmCallCount(), 0);
   });
 });

@@ -10,8 +10,24 @@ import type {
  * correct answer as part of an item's own prompt; the anti-repetition rules
  * from the PR spec are appended once, not per line.
  */
-export function buildMistakePracticeContext(plan: MistakeSlotPlan): string {
+export function buildMistakePracticeContext(
+  plan: MistakeSlotPlan,
+  /**
+   * Spaced retesting only: lexical families this student has already been
+   * drilled on for these patterns. A retention check that reuses them would
+   * measure memory of those words rather than the pattern itself.
+   */
+  avoidWords: string[] = [],
+): string {
   const lines = plan.entries.map(describeEntry);
+  const avoidLine =
+    avoidWords.length === 0
+      ? []
+      : [
+          '',
+          'Do NOT build items around these word families - the student has already ' +
+            `practised them: ${avoidWords.join(', ')}.`,
+        ];
   return [
     'Student weaknesses this session must target, by item position (position = the 1-based `position` field in your JSON response):',
     ...lines,
@@ -21,6 +37,7 @@ export function buildMistakePracticeContext(plan: MistakeSlotPlan): string {
     'Avoid reusing the original base word unless necessary.',
     'Test transfer of the underlying pattern, not memorization of one word.',
     'Never state or hint at the correct answer inside an item\'s own prompt text.',
+    ...avoidLine,
   ].join('\n');
 }
 

@@ -7,6 +7,7 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
   listMistakesHandler,
   listWeaknessesHandler,
+  listDueReviewsHandler,
   generateMistakePracticeHandler,
   generateMistakeRemixHandler,
 } from './mistakesController';
@@ -23,6 +24,12 @@ import {
 } from '../services/mistakes/list-weaknesses.service';
 import type { ListWeaknessesRawQuery } from '../services/mistakes/list-weaknesses.service';
 import type { ListWeaknessesResponseDto } from '../interfaces/mistakes/weaknesses.interface';
+import {
+  ListReviewsError,
+  ListReviewsErrorCode,
+} from '../services/mistakes/list-due-reviews.service';
+import type { ListReviewsRawQuery } from '../services/mistakes/list-due-reviews.service';
+import type { ListReviewsResponseDto } from '../interfaces/mistakes/reviews.interface';
 import type { ListMistakesRawQuery } from '../services/mistakes/list-mistakes.service';
 import type { ListMistakesResponseDto } from '../interfaces/mistakes/mistakes.interface';
 import {
@@ -632,6 +639,125 @@ describe('generateMistakeRemix (generateMistakeRemixHandler)', () => {
       makeEvent({ body: JSON.stringify({ idempotencyKey: 'idem-1' }) }),
       deps,
     );
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── GET /practice/reviews ────────────────────────────────────────────────────
+
+const EMPTY_REVIEWS: ListReviewsResponseDto = { items: [], dueCount: 0, totalItems: 0 };
+
+interface ReviewSpy {
+  deps: MistakesControllerDeps;
+  calls: Array<{ userId: string; rawQuery: ListReviewsRawQuery }>;
+}
+
+function makeReviewDeps(execute?: () => Promise<ListReviewsResponseDto>): ReviewSpy {
+  const calls: ReviewSpy['calls'] = [];
+  const deps: MistakesControllerDeps = {
+    services: async () => ({
+      listMistakes: { execute: async () => EMPTY_RESULT },
+      listWeaknesses: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+      listDueReviews: {
+        execute: async (userId, rawQuery) => {
+          calls.push({ userId, rawQuery });
+          return execute === undefined ? EMPTY_REVIEWS : execute();
+        },
+      },
+    }),
+    generationServices: async () => ({
+      generateMistakePractice: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+    remixGenerationServices: async () => ({
+      generateMistakeRemix: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+  };
+  return { deps, calls };
+}
+
+describe('listDueReviews (listDueReviewsHandler)', () => {
+  it('rejects an unauthenticated request without calling the service', async () => {
+    const { deps, calls } = makeReviewDeps();
+
+    const result = await listDueReviewsHandler(makeEvent({ headers: {} }), deps);
+
+    assert.equal(result.statusCode, 401);
+    assert.equal(calls.length, 0);
+  });
+
+  it('reads the owner from the verified token, never from the query string', async () => {
+    const { deps, calls } = makeReviewDeps();
+
+    const result = await listDueReviewsHandler(
+      makeEvent({ queryStringParameters: { userId: 'someone-else' } }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(calls[0].userId, USER_ID);
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(calls[0].rawQuery, 'userId'),
+      false,
+      'a client-sent userId must never reach the service',
+    );
+  });
+
+  it('forwards only the status filter', async () => {
+    const { deps, calls } = makeReviewDeps();
+
+    await listDueReviewsHandler(
+      makeEvent({ queryStringParameters: { status: 'due', limit: '500' } }),
+      deps,
+    );
+
+    assert.deepEqual(calls[0].rawQuery, { status: 'due' });
+  });
+
+  it('returns the service result under the standard success envelope', async () => {
+    const { deps } = makeReviewDeps();
+
+    const result = await listDueReviewsHandler(makeEvent(), deps);
+
+    assert.equal(result.statusCode, 200);
+    const body = parseBody(result);
+    assert.equal(body.success, true);
+    assert.deepEqual(body.data, { items: [], dueCount: 0, totalItems: 0 });
+  });
+
+  it('maps an invalid filter to 400 with its message', async () => {
+    const { deps } = makeReviewDeps(async () => {
+      throw new ListReviewsError(
+        'status must be one of: due, upcoming, all',
+        ListReviewsErrorCode.INVALID_INPUT,
+      );
+    });
+
+    const result = await listDueReviewsHandler(makeEvent(), deps);
+
+    assert.equal(result.statusCode, 400);
+    assert.equal(parseBody(result).message, 'status must be one of: due, upcoming, all');
+  });
+
+  it('masks an unexpected failure as a 500 without leaking its message', async () => {
+    const { deps } = makeReviewDeps(async () => {
+      throw new Error('relation "weakness_reviews" does not exist');
+    });
+
+    const result = await listDueReviewsHandler(makeEvent(), deps);
 
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');

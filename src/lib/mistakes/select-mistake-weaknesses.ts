@@ -1,4 +1,5 @@
 import type { MistakeErrorType, MistakeErrorSubtype } from '@models/enums';
+import { buildPatternKey } from '@lib/mistakes/mistake-pattern';
 import { MISTAKE_PRACTICE_ELIGIBLE_TASK_TYPES } from '@lib/practice/generate-practice-exercise-core';
 
 /**
@@ -16,6 +17,8 @@ export interface WeaknessCandidate {
   correctAnswer: string;
   errorType: MistakeErrorType;
   errorSubtype: MistakeErrorSubtype | null;
+  /** Needed to key a candidate onto its weakness pattern — see buildPatternKey. */
+  partCode: string;
   timesWrong: number;
   lastWrongAt: Date;
   /**
@@ -30,6 +33,16 @@ export interface WeaknessCandidate {
 
 export type MistakePracticeMode = 'concept_specific' | 'pattern_transfer';
 
+export interface RetestSlotOptions {
+  /**
+   * Forces every slot to `pattern_transfer` and stamps each entry with the
+   * review it belongs to. A retest asks "do you still know the PATTERN?", so
+   * reusing the word that was originally failed would test memory of that
+   * word instead — the exact thing spaced retesting is meant to rule out.
+   */
+  reviewIdByPatternKey: Map<string, string>;
+}
+
 export interface MistakeSlotPlanEntry {
   /** 1-based, matches the position the generated item must be assigned to. */
   position: number;
@@ -39,6 +52,8 @@ export interface MistakeSlotPlanEntry {
   targetErrorSubtype: MistakeErrorSubtype | null;
   baseWord: string | null;
   correctAnswer: string;
+  /** Set only for a spaced retest — the WeaknessReview this slot answers. */
+  scheduledReviewId?: string;
 }
 
 export interface MistakeSlotPlan {
@@ -204,6 +219,7 @@ function dedupeBySubtype(candidates: WeaknessCandidate[]): WeaknessCandidate[] {
 export function buildSlotPlan(
   selected: WeaknessCandidate[],
   questionCount: number,
+  retest?: RetestSlotOptions,
 ): MistakeSlotPlan {
   if (selected.length === 0) {
     throw new SelectMistakeWeaknessesError(
@@ -214,9 +230,13 @@ export function buildSlotPlan(
 
   const taskType = selected[0].taskType as string;
   const hasKnownSubtype = selected.some((c) => c.errorSubtype !== null);
-  const conceptSpecificCount = hasKnownSubtype
-    ? Math.min(questionCount, Math.max(1, Math.round(questionCount * CONCEPT_SPECIFIC_RATIO)))
-    : questionCount;
+  // A retest is 100% transfer: no slot may reuse the failed word's own
+  // family (see RetestSlotOptions).
+  const conceptSpecificCount = retest
+    ? 0
+    : hasKnownSubtype
+      ? Math.min(questionCount, Math.max(1, Math.round(questionCount * CONCEPT_SPECIFIC_RATIO)))
+      : questionCount;
   const patternTransferCount = questionCount - conceptSpecificCount;
 
   const entries: MistakeSlotPlanEntry[] = [];
@@ -228,10 +248,13 @@ export function buildSlotPlan(
   }
 
   if (patternTransferCount > 0) {
-    const distinctSubtypeConcepts = dedupeBySubtype(selected);
+    // A retest must cover every due pattern it was built for, so it rotates
+    // through the selection as-is; normal practice collapses to one concept
+    // per subtype to avoid near-duplicate items.
+    const transferPool = retest ? selected : dedupeBySubtype(selected);
     for (let i = 0; i < patternTransferCount; i++) {
-      const concept = distinctSubtypeConcepts[i % distinctSubtypeConcepts.length];
-      entries.push(toEntry(position++, 'pattern_transfer', concept));
+      const concept = transferPool[i % transferPool.length];
+      entries.push(toEntry(position++, 'pattern_transfer', concept, retest));
     }
   }
 
@@ -248,8 +271,9 @@ function toEntry(
   position: number,
   practiceMode: MistakePracticeMode,
   concept: WeaknessCandidate,
+  retest?: RetestSlotOptions,
 ): MistakeSlotPlanEntry {
-  return {
+  const entry: MistakeSlotPlanEntry = {
     position,
     practiceMode,
     targetConceptId: concept.id,
@@ -258,4 +282,15 @@ function toEntry(
     baseWord: concept.baseWord,
     correctAnswer: concept.correctAnswer,
   };
+  if (retest !== undefined) {
+    const reviewId = retest.reviewIdByPatternKey.get(
+      buildPatternKey({
+        partCode: concept.partCode,
+        errorType: concept.errorType,
+        errorSubtype: concept.errorSubtype,
+      }),
+    );
+    if (reviewId !== undefined) entry.scheduledReviewId = reviewId;
+  }
+  return entry;
 }
