@@ -99,6 +99,17 @@ functions:
           path: /practice/mistakes
           method: GET
 
+  # Practice My Mistakes: generates a new exercise from the user's own
+  # Mistake Bank (a specific concept, or the auto-selected top weaknesses)
+  # instead of a catalog part — same generation core as practiceGenerateExercise.
+  practiceGenerateMistakePractice:
+    handler: src/controllers/mistakesController.generateMistakePractice
+    timeout: 29
+    events:
+      - httpApi:
+          path: /practice/mistakes/generate
+          method: POST
+
   practiceInsights:
     handler: src/controllers/practiceAdaptiveController.getPracticeInsights
     events:
