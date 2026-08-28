@@ -42,11 +42,40 @@ export interface PracticeExerciseGenerationMetadata {
   outputTokens?: number;
   requestId?: string;
   schemaVersion?: string;
+  /**
+   * Absent for a normal AI-generated exercise. Set only by
+   * GenerateMistakePracticeExerciseService, so a later report can tell "this
+   * exercise was built from the Mistake Bank" apart from a plain generation
+   * — without a new PracticeExerciseSource enum value (and its migration).
+   */
+  generationSource?: 'mistake_practice';
+  /** Every MistakeConcept.id this session actually targeted (see MistakeSlotPlan.usedConceptIds). */
+  mistakeConceptIds?: string[];
+  targetErrorTypes?: string[];
+  targetErrorSubtypes?: string[];
 }
 
-// Open-ended placeholder — no consumer defines its shape yet. Kept as a
-// plain JSON bag on purpose.
+// Open-ended placeholder — no consumer defines its shape yet, EXCEPT
+// GenerateMistakePracticeExerciseService, which writes
+// MistakePracticeItemMetadata below. Kept as a plain JSON bag on purpose so
+// nothing here ever needs a migration.
 export type PracticeItemMetadata = Record<string, unknown>;
+
+/**
+ * The shape GenerateMistakePracticeExerciseService writes into every item it
+ * generates — lets a future mastery/rollup PR compute "times practiced /
+ * correct during remediation / incorrect during remediation" per
+ * MistakeConcept by joining practice_answers -> practice_items on
+ * `metadata->>'targetConceptId'`, with no new column or migration. See
+ * docs/mistake-bank.md §6.
+ */
+export interface MistakePracticeItemMetadata extends Record<string, unknown> {
+  generationSource: 'mistake_practice';
+  practiceMode: 'concept_specific' | 'pattern_transfer';
+  targetConceptId: string;
+  targetErrorType: string;
+  targetErrorSubtype: string | null;
+}
 
 // Still an open placeholder — no consumer defines a shape for a single
 // answer's own feedback yet (everything PR 3 needs is reconstructable from

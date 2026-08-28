@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
-import { listMistakesHandler } from './mistakesController';
+import { listMistakesHandler, generateMistakePracticeHandler } from './mistakesController';
 import type { MistakesControllerDeps } from './mistakesController';
 import { JwtService } from '@lib/shared/jwt';
 import {
@@ -13,6 +13,12 @@ import {
 } from '../services/mistakes/list-mistakes.service';
 import type { ListMistakesRawQuery } from '../services/mistakes/list-mistakes.service';
 import type { ListMistakesResponseDto } from '../interfaces/mistakes/mistakes.interface';
+import {
+  GeneratePracticeExerciseError,
+  GeneratePracticeExerciseErrorCode,
+} from '@lib/practice/generate-practice-exercise-core';
+import type { GenerateMistakePracticeRequest } from '../interfaces/practice/practice-mistake-generation.interface';
+import type { PracticeExerciseSafeWithItems } from '../interfaces/practice/practice-exercise.interface';
 
 const USER_ID = 'user-1';
 const OTHER_USER_ID = 'user-2';
@@ -50,6 +56,13 @@ function makeDeps(execute?: () => Promise<ListMistakesResponseDto>): Spy {
         execute: async (userId, rawQuery) => {
           calls.push({ userId, rawQuery });
           return execute === undefined ? EMPTY_RESULT : execute();
+        },
+      },
+    }),
+    generationServices: async () => ({
+      generateMistakePractice: {
+        execute: async () => {
+          throw new Error('not used by these tests');
         },
       },
     }),
@@ -157,6 +170,156 @@ describe('listMistakes (listMistakesHandler)', () => {
     });
 
     const result = await listMistakesHandler(makeEvent(), deps);
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── POST /practice/mistakes/generate ─────────────────────────────────────────
+
+const SAFE_EXERCISE: PracticeExerciseSafeWithItems = {
+  exercise: {
+    id: 'exercise-id',
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_1',
+    partCode: 'UOE_PART_3',
+    targetLevel: 'B2' as never,
+    title: 't',
+    instructions: 'i',
+    stimulus: null,
+    timeLimitSeconds: null,
+    itemCount: 8,
+    createdAt: new Date(),
+  },
+  items: [],
+};
+
+interface GenerateSpy {
+  deps: MistakesControllerDeps;
+  calls: Array<{ userId: string; idempotencyKey: string; request: GenerateMistakePracticeRequest }>;
+}
+
+function makeGenerateDeps(
+  execute?: () => Promise<PracticeExerciseSafeWithItems>,
+): GenerateSpy {
+  const calls: GenerateSpy['calls'] = [];
+  const deps: MistakesControllerDeps = {
+    services: async () => ({
+      listMistakes: { execute: async () => EMPTY_RESULT },
+    }),
+    generationServices: async () => ({
+      generateMistakePractice: {
+        execute: async (userId, idempotencyKey, request) => {
+          calls.push({ userId, idempotencyKey, request });
+          return execute === undefined ? SAFE_EXERCISE : execute();
+        },
+      },
+    }),
+  };
+  return { deps, calls };
+}
+
+describe('generateMistakePractice (generateMistakePracticeHandler)', () => {
+  it('rejects an unauthenticated request without calling the service', async () => {
+    const { deps, calls } = makeGenerateDeps();
+
+    const result = await generateMistakePracticeHandler(
+      makeEvent({ headers: {}, body: JSON.stringify({ mistakeConceptIds: ['a'] }) }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 401);
+    assert.equal(calls.length, 0);
+  });
+
+  it('rejects an unparseable body with 400', async () => {
+    const { deps } = makeGenerateDeps();
+
+    const result = await generateMistakePracticeHandler(
+      makeEvent({ body: '{not json' }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('reads the owner from the verified token and forwards mistakeConceptIds/questionCount/idempotencyKey', async () => {
+    const { deps, calls } = makeGenerateDeps();
+
+    await generateMistakePracticeHandler(
+      makeEvent({
+        body: JSON.stringify({
+          mistakeConceptIds: ['concept-1', 'concept-2'],
+          questionCount: 10,
+          idempotencyKey: 'idem-1',
+        }),
+      }),
+      deps,
+    );
+
+    assert.equal(calls[0].userId, USER_ID);
+    assert.equal(calls[0].idempotencyKey, 'idem-1');
+    assert.deepEqual(calls[0].request.mistakeConceptIds, ['concept-1', 'concept-2']);
+    assert.equal(calls[0].request.questionCount, 10);
+    assert.equal(calls[0].request.mode, undefined);
+  });
+
+  it('forwards mode: "weaknesses" and ignores an unknown mode value', async () => {
+    const { deps, calls } = makeGenerateDeps();
+
+    await generateMistakePracticeHandler(
+      makeEvent({ body: JSON.stringify({ mode: 'weaknesses', idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
+    assert.equal(calls[0].request.mode, 'weaknesses');
+
+    await generateMistakePracticeHandler(
+      makeEvent({ body: JSON.stringify({ mode: 'bogus', idempotencyKey: 'idem-2' }) }),
+      deps,
+    );
+    assert.equal(calls[1].request.mode, undefined);
+  });
+
+  it('returns the generated exercise under the standard success envelope with a 201', async () => {
+    const { deps } = makeGenerateDeps(async () => SAFE_EXERCISE);
+
+    const result = await generateMistakePracticeHandler(
+      makeEvent({ body: JSON.stringify({ mistakeConceptIds: ['a'], idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 201);
+    const body = parseBody(result);
+    assert.equal(body.success, true);
+    assert.deepEqual(body.data, JSON.parse(JSON.stringify(SAFE_EXERCISE)));
+  });
+
+  it('maps NO_ELIGIBLE_MISTAKES to 404', async () => {
+    const { deps } = makeGenerateDeps(async () => {
+      throw new GeneratePracticeExerciseError(
+        'No eligible mistakes',
+        GeneratePracticeExerciseErrorCode.NO_ELIGIBLE_MISTAKES,
+      );
+    });
+
+    const result = await generateMistakePracticeHandler(
+      makeEvent({ body: JSON.stringify({ mistakeConceptIds: ['a'], idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 404);
+  });
+
+  it('masks an unexpected failure as a 500 without leaking its message', async () => {
+    const { deps } = makeGenerateDeps(async () => {
+      throw new Error('relation "mistake_concepts" does not exist');
+    });
+
+    const result = await generateMistakePracticeHandler(
+      makeEvent({ body: JSON.stringify({ mistakeConceptIds: ['a'], idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
 
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');

@@ -249,6 +249,38 @@ class MistakesRepository {
     return Array.isArray(result) && typeof result[1] === 'number' && result[1] > 0;
   }
 
+  /**
+   * Ownership-scoped lookup for "Practice this mistake" — every id not
+   * belonging to `userId` (typo'd, deleted, or someone else's) is silently
+   * absent from the result rather than erroring, so the caller can report
+   * "no eligible mistakes" uniformly instead of distinguishing "not found"
+   * from "not yours".
+   */
+  async findByIdsForUser(userId: string, ids: string[]): Promise<MistakeConcept[]> {
+    if (ids.length === 0) return [];
+    return this.conceptRepo
+      .createQueryBuilder('concept')
+      .where('concept.user_id = :userId', { userId })
+      .andWhere('concept.id IN (:...ids)', { ids })
+      .getMany();
+  }
+
+  /**
+   * Candidate pool for "Practice my weaknesses" — most-failed first, most
+   * recently failed as tie-break. Selection/diversity/slot-planning happens
+   * in @lib/mistakes/select-mistake-weaknesses.ts, never here.
+   */
+  async findTopWeaknessesForUser(userId: string, limit: number): Promise<MistakeConcept[]> {
+    return this.conceptRepo
+      .createQueryBuilder('concept')
+      .where('concept.user_id = :userId', { userId })
+      .orderBy('concept.times_wrong', 'DESC')
+      .addOrderBy('concept.last_wrong_at', 'DESC')
+      .addOrderBy('concept.id', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
   /** Most recently failed first. Always scoped to `filters.userId`. */
   async listByUser(filters: ListMistakesFilters): Promise<ListMistakesResult> {
     const query = this.conceptRepo

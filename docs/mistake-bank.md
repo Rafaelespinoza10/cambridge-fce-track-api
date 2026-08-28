@@ -111,10 +111,30 @@ exposed.
 
 | Next feature                         | What it needs                                                                                                                                                         |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AI mistake classification            | write `error_type` / `error_subtype` / `expected_word_class` / `user_word_class` on existing rows                                                                     |
-| Mastery score                        | compute from `times_wrong`, `times_correct`, `last_wrong_at`, `last_correct_at` (all already maintained)                                                              |
-| Practice my mistakes                 | read concepts ordered by weakness, feed `base_word` / `correct_answer` into generation                                                                                |
+| AI mistake classification            | **Shipped** — `MistakeClassifier` (`src/lib/mistakes/mistake-classifier.ts`) deterministically classifies `word_formation` mistakes on every wrong answer; every other task type still gets `unknown` until a classifier exists for it. |
+| Practice my mistakes                 | **Shipped** — `GenerateMistakePracticeExerciseService` (`POST /practice/mistakes/generate`), see §9 below.                                                            |
+| Mastery score                        | compute from `times_wrong`, `times_correct`, `last_wrong_at`, `last_correct_at` (all already maintained), plus "times practiced in remediation / correct / incorrect" reconstructable from `practice_answers ⋈ practice_items` on `metadata->>'targetConceptId'` (see §9) |
 | Mistakes from mocks / daily sessions | call `RecordPracticeMistakesService` (or a sibling) with `MistakeSource.MOCK_ATTEMPT` / `DAILY_SESSION`; the enum and the nullable `practice_*` columns already exist |
+
+## 9. Practice My Mistakes
+
+`GenerateMistakePracticeExerciseService` (`src/services/practice/generate-mistake-practice-exercise.service.ts`) generates a **new** exercise from the user's own Mistake Bank instead of a catalog part — it never replays the original wrong item. It shares its schema, response validation, LLM-error-mapping and persistence with `GeneratePracticeExerciseService` (both delegate to `@lib/practice/generate-practice-exercise-core.ts`); it only owns weakness selection, its own prompt template, and a caller-chosen `questionCount` (5/8/10/15/20, default 8) instead of the catalog's fixed exam item count.
+
+```http
+POST /practice/mistakes/generate
+{ "mistakeConceptIds": ["..."], "questionCount": 8 }        # "Practice this mistake"
+{ "mode": "weaknesses", "questionCount": 8 }                 # "Practice my weaknesses"
+```
+
+Response is the same `PracticeExerciseSafeWithItems` `POST /practice/exercises` returns — the client starts an attempt on it exactly like any other generated exercise.
+
+**Scope**: only the 4 lexical task types a mistake can meaningfully be "about a word" for (`word_formation`, `key_word_transformation`, `open_cloze`, `multiple_choice_cloze` — see `MISTAKE_PRACTICE_ELIGIBLE_TASK_TYPES`). One exercise is always one taskType (an existing invariant — every item shares `PracticeItem.task_type`), so when the selected mistakes span more than one, `@lib/mistakes/select-mistake-weaknesses.ts` picks the dominant one (highest combined `times_wrong`, tie-broken by most recent) and drops the rest for this session.
+
+**Weakness selection** (`selectDiverseWeaknesses`, weaknesses mode only): most-failed first, most recent as tie-break, capped at 2 per `(errorType, errorSubtype)` bucket so a session is never 6 near-duplicates of the worst mistake. "Practice this mistake" (explicit `mistakeConceptIds`) skips the diversity cap — the user already chose what to practice.
+
+**Concept-specific vs. pattern-transfer** (`buildSlotPlan`): ~25% of the session reuses the failed word's own family (concept-specific), ~75% targets NEW word families under the same `errorSubtype` (pattern-transfer) — falling back to 100% concept-specific when no selected mistake has a known `errorSubtype` yet (i.e. anything other than `word_formation` today). Positions are assigned to a target **before** the LLM call — never inferred from its response — so `PracticeItem.metadata` (`MistakePracticeItemMetadata`) can tag every generated item with `generationSource`, `practiceMode`, `targetConceptId`, `targetErrorType`, `targetErrorSubtype` by matching the model's own `position` field. No schema change: `PracticeExercise.generation_metadata` and `PracticeItem.metadata` are both open JSONB.
+
+**Feedback loop**: grading and Mistake Bank recording are untouched (`RecordPracticeMistakesService` still derives `concept_key` from the graded item itself, never from injected metadata) — a correct answer to a pattern-transfer item can only ever bump `times_correct` on a concept that already exists under that item's own key, never the original mistake's. A wrong answer to a brand-new word genuinely creates a new `MistakeConcept`; this is accepted as real signal, not deduplicated, matching this module's "a mistake row is a real recorded failure" philosophy — collapsing "many words, one pattern" into a single view is mastery/rollup work, still out of scope.
 
 ## 7. Idempotency and concurrency
 
