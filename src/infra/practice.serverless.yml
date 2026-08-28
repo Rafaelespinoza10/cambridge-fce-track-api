@@ -120,6 +120,28 @@ functions:
           path: /practice/weaknesses
           method: GET
 
+  # Mistake Remix: a mixed adaptive mini-test built from several weakness
+  # patterns plus neutral control items, interleaved so no single pattern is
+  # telegraphed — same generation core as practiceGenerateMistakePractice,
+  # a different selection/composition strategy (see docs/mistake-bank.md §10).
+  practiceGenerateMistakeRemix:
+    handler: src/controllers/mistakesController.generateMistakeRemix
+    timeout: 29
+    events:
+      - httpApi:
+          path: /practice/mistakes/remix
+          method: POST
+
+  # Spaced retesting: the weakness patterns whose retest is due (or coming
+  # up). Read-only — the schedule itself is written by the practice submit
+  # flow, never by a client call.
+  practiceListReviews:
+    handler: src/controllers/mistakesController.listDueReviews
+    events:
+      - httpApi:
+          path: /practice/reviews
+          method: GET
+
   practiceInsights:
     handler: src/controllers/practiceAdaptiveController.getPracticeInsights
     events:

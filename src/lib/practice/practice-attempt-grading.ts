@@ -1,6 +1,7 @@
 import type {
   PracticeItemAnswerKey,
   PracticeItemOption,
+  PracticeItemMetadata,
   PracticeAnswerPayload,
   PracticeAttemptFeedbackSummary,
   PracticeAttemptSkillBreakdownEntry,
@@ -11,6 +12,7 @@ import type { PracticeAnswer } from '@models/PracticeAnswer';
 import type {
   PracticeAttemptResultDto,
   PracticeAttemptItemResultDto,
+  PracticeAttemptItemAdaptiveMetadata,
 } from '../../interfaces/practice/practice-attempt.interface';
 
 /**
@@ -160,6 +162,38 @@ export function formatUserAnswer(item: GradableItemLike, payload: PracticeAnswer
   return payload.value;
 }
 
+const ADAPTIVE_GENERATION_SOURCES = new Set(['mistake_practice', 'mistake_remix', 'spaced_retest']);
+
+/**
+ * Narrows an item's open `metadata` bag into the client-facing adaptive
+ * summary — `null` for a plain catalog exercise, or any metadata shape this
+ * function doesn't recognize. Never throws on unexpected metadata: an open
+ * JSONB bag can outlive the code that reads it.
+ */
+export function toAdaptiveMetadata(
+  metadata: PracticeItemMetadata | null | undefined,
+): PracticeAttemptItemAdaptiveMetadata | null {
+  if (metadata === null || metadata === undefined) return null;
+
+  const source = metadata['generationSource'];
+  if (typeof source !== 'string' || !ADAPTIVE_GENERATION_SOURCES.has(source)) return null;
+
+  // Practice My Mistakes (and spaced retests reusing its shape) name the
+  // role `practiceMode`; Mistake Remix names it `questionRole`.
+  const questionRole = metadata['questionRole'] ?? metadata['practiceMode'];
+  if (typeof questionRole !== 'string') return null;
+
+  const targetErrorType = metadata['targetErrorType'];
+  const targetErrorSubtype = metadata['targetErrorSubtype'];
+
+  return {
+    generationSource: source as PracticeAttemptItemAdaptiveMetadata['generationSource'],
+    questionRole,
+    targetErrorType: typeof targetErrorType === 'string' ? targetErrorType : null,
+    targetErrorSubtype: typeof targetErrorSubtype === 'string' ? targetErrorSubtype : null,
+  };
+}
+
 /**
  * Builds the full, answer-revealing result DTO for a `completed` attempt —
  * used by both SubmitPracticeAttemptService (fresh submit + replay) and
@@ -199,6 +233,7 @@ export function buildPracticeAttemptResultDto(
       explanation: item.explanation,
       skillTags: item.skill_tags,
       responseTimeMs: answer.response_time_ms,
+      adaptiveMetadata: toAdaptiveMetadata(item.metadata),
     };
   });
 

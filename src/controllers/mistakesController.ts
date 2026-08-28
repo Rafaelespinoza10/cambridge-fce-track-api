@@ -6,11 +6,15 @@ import { mapMistakeError } from '@lib/mistakes/mistake-error-mapper';
 import { mapGeneratePracticeExerciseError } from '@lib/practice/generate-practice-exercise-error-mapper';
 import { buildMistakesServices } from '../services/mistakes/mistakes-composition';
 import { buildMistakePracticeGenerationServices } from '../services/practice/generate-mistake-practice-composition';
+import { buildMistakeRemixGenerationServices } from '../services/practice/generate-mistake-remix-composition';
 import type { ListMistakesRawQuery } from '../services/mistakes/list-mistakes.service';
 import type { ListWeaknessesRawQuery } from '../services/mistakes/list-weaknesses.service';
+import type { ListReviewsRawQuery } from '../services/mistakes/list-due-reviews.service';
 import type { ListMistakesResponseDto } from '../interfaces/mistakes/mistakes.interface';
 import type { ListWeaknessesResponseDto } from '../interfaces/mistakes/weaknesses.interface';
+import type { ListReviewsResponseDto } from '../interfaces/mistakes/reviews.interface';
 import type { GenerateMistakePracticeRequest } from '../interfaces/practice/practice-mistake-generation.interface';
+import type { GenerateMistakeRemixRequest } from '../interfaces/practice/practice-mistake-remix.interface';
 import type { PracticeExerciseSafeWithItems } from '../interfaces/practice/practice-exercise.interface';
 
 interface ListMistakesPort {
@@ -21,6 +25,10 @@ interface ListWeaknessesPort {
   execute(userId: string, rawQuery: ListWeaknessesRawQuery): Promise<ListWeaknessesResponseDto>;
 }
 
+interface ListDueReviewsPort {
+  execute(userId: string, rawQuery: ListReviewsRawQuery): Promise<ListReviewsResponseDto>;
+}
+
 interface GenerateMistakePracticePort {
   execute(
     userId: string,
@@ -29,17 +37,28 @@ interface GenerateMistakePracticePort {
   ): Promise<PracticeExerciseSafeWithItems>;
 }
 
+interface GenerateMistakeRemixPort {
+  execute(
+    userId: string,
+    idempotencyKey: string,
+    input: GenerateMistakeRemixRequest,
+  ): Promise<PracticeExerciseSafeWithItems>;
+}
+
 interface MistakesControllerDeps {
   services: () => Promise<{
     listMistakes: ListMistakesPort;
     listWeaknesses: ListWeaknessesPort;
+    listDueReviews: ListDueReviewsPort;
   }>;
   generationServices: () => Promise<{ generateMistakePractice: GenerateMistakePracticePort }>;
+  remixGenerationServices: () => Promise<{ generateMistakeRemix: GenerateMistakeRemixPort }>;
 }
 
 const DEFAULT_DEPS: MistakesControllerDeps = {
   services: buildMistakesServices,
   generationServices: buildMistakePracticeGenerationServices,
+  remixGenerationServices: buildMistakeRemixGenerationServices,
 };
 
 // ── GET /practice/mistakes ───────────────────────────────────────────────────
@@ -185,10 +204,98 @@ export async function listWeaknesses(event: APIGatewayProxyEvent): Promise<APIGa
   return listWeaknessesHandler(event, DEFAULT_DEPS);
 }
 
-export { listMistakesHandler, listWeaknessesHandler, generateMistakePracticeHandler };
+// ── POST /practice/mistakes/remix ────────────────────────────────────────────
+
+interface GenerateMistakeRemixBody {
+  questionCount?: unknown;
+  idempotencyKey?: unknown;
+}
+
+/**
+ * All weakness selection happens server-side from the JWT user — this body
+ * carries no `mistakeConceptIds`/`userId` at all, unlike
+ * /practice/mistakes/generate, so there is nothing here for a client to
+ * spoof its way into targeting.
+ */
+function toGenerateMistakeRemixRequest(body: GenerateMistakeRemixBody): GenerateMistakeRemixRequest {
+  return {
+    questionCount: typeof body.questionCount === 'number' ? body.questionCount : undefined,
+    idempotencyKey: typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '',
+  };
+}
+
+async function generateMistakeRemixHandler(
+  event: APIGatewayProxyEvent,
+  deps: MistakesControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  let body: GenerateMistakeRemixBody;
+  try {
+    body = JSON.parse(event.body ?? '{}') as GenerateMistakeRemixBody;
+  } catch {
+    return errorResponse('Invalid request body', 400);
+  }
+
+  try {
+    const { generateMistakeRemix } = await deps.remixGenerationServices();
+    const request = toGenerateMistakeRemixRequest(body);
+    const exercise = await generateMistakeRemix.execute(payload.sub, request.idempotencyKey, request);
+    return successResponse({ success: true, data: exercise }, 201);
+  } catch (err: unknown) {
+    return handleError(mapGeneratePracticeExerciseError(err));
+  }
+}
+
+export async function generateMistakeRemix(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return generateMistakeRemixHandler(event, DEFAULT_DEPS);
+}
+
+// ── GET /practice/reviews ────────────────────────────────────────────────────
+
+/** Same rule as every other listing here: a client-sent `userId` is never read. */
+function getReviewsQueryParams(event: APIGatewayProxyEvent): ListReviewsRawQuery {
+  const qs = event.queryStringParameters ?? {};
+  return { status: qs['status'] };
+}
+
+async function listDueReviewsHandler(
+  event: APIGatewayProxyEvent,
+  deps: MistakesControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const { listDueReviews } = await deps.services();
+    const result = await listDueReviews.execute(payload.sub, getReviewsQueryParams(event));
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapMistakeError(err));
+  }
+}
+
+export async function listDueReviews(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return listDueReviewsHandler(event, DEFAULT_DEPS);
+}
+
+export {
+  listMistakesHandler,
+  listWeaknessesHandler,
+  listDueReviewsHandler,
+  generateMistakePracticeHandler,
+  generateMistakeRemixHandler,
+};
 export type {
   MistakesControllerDeps,
   ListMistakesPort,
   ListWeaknessesPort,
+  ListDueReviewsPort,
   GenerateMistakePracticePort,
+  GenerateMistakeRemixPort,
 };

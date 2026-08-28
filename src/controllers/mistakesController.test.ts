@@ -8,8 +8,10 @@ import {
   listMistakesHandler,
   listWeaknessesHandler,
   generateMistakePracticeHandler,
+  generateMistakeRemixHandler,
 } from './mistakesController';
 import type { MistakesControllerDeps } from './mistakesController';
+import type { GenerateMistakeRemixRequest } from '../interfaces/practice/practice-mistake-remix.interface';
 import { JwtService } from '@lib/shared/jwt';
 import {
   ListMistakesError,
@@ -73,9 +75,21 @@ function makeDeps(execute?: () => Promise<ListMistakesResponseDto>): Spy {
           throw new Error('not used by these tests');
         },
       },
+      listDueReviews: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
     }),
     generationServices: async () => ({
       generateMistakePractice: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+    remixGenerationServices: async () => ({
+      generateMistakeRemix: {
         execute: async () => {
           throw new Error('not used by these tests');
         },
@@ -225,12 +239,24 @@ function makeGenerateDeps(execute?: () => Promise<PracticeExerciseSafeWithItems>
           throw new Error('not used by these tests');
         },
       },
+      listDueReviews: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
     }),
     generationServices: async () => ({
       generateMistakePractice: {
         execute: async (userId, idempotencyKey, request) => {
           calls.push({ userId, idempotencyKey, request });
           return execute === undefined ? SAFE_EXERCISE : execute();
+        },
+      },
+    }),
+    remixGenerationServices: async () => ({
+      generateMistakeRemix: {
+        execute: async () => {
+          throw new Error('not used by these tests');
         },
       },
     }),
@@ -361,9 +387,21 @@ function makeWeaknessDeps(execute?: () => Promise<ListWeaknessesResponseDto>): W
           return execute === undefined ? EMPTY_WEAKNESSES : execute();
         },
       },
+      listDueReviews: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
     }),
     generationServices: async () => ({
       generateMistakePractice: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+    remixGenerationServices: async () => ({
+      generateMistakeRemix: {
         execute: async () => {
           throw new Error('not used by these tests');
         },
@@ -461,6 +499,139 @@ describe('listWeaknesses (listWeaknessesHandler)', () => {
     });
 
     const result = await listWeaknessesHandler(makeEvent(), deps);
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── POST /practice/mistakes/remix ────────────────────────────────────────────
+
+interface RemixSpy {
+  deps: MistakesControllerDeps;
+  calls: Array<{ userId: string; idempotencyKey: string; request: GenerateMistakeRemixRequest }>;
+}
+
+function makeRemixDeps(execute?: () => Promise<PracticeExerciseSafeWithItems>): RemixSpy {
+  const calls: RemixSpy['calls'] = [];
+  const deps: MistakesControllerDeps = {
+    services: async () => ({
+      listMistakes: { execute: async () => EMPTY_RESULT },
+      listWeaknesses: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+      listDueReviews: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+    generationServices: async () => ({
+      generateMistakePractice: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+    remixGenerationServices: async () => ({
+      generateMistakeRemix: {
+        execute: async (userId, idempotencyKey, request) => {
+          calls.push({ userId, idempotencyKey, request });
+          return execute === undefined ? SAFE_EXERCISE : execute();
+        },
+      },
+    }),
+  };
+  return { deps, calls };
+}
+
+describe('generateMistakeRemix (generateMistakeRemixHandler)', () => {
+  it('rejects an unauthenticated request without calling the service', async () => {
+    const { deps, calls } = makeRemixDeps();
+
+    const result = await generateMistakeRemixHandler(
+      makeEvent({ headers: {}, body: JSON.stringify({ idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 401);
+    assert.equal(calls.length, 0);
+  });
+
+  it('rejects an unparseable body with 400', async () => {
+    const { deps } = makeRemixDeps();
+
+    const result = await generateMistakeRemixHandler(makeEvent({ body: '{not json' }), deps);
+
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('reads the owner from the verified token and forwards only questionCount/idempotencyKey — never a client-sent userId or mistakeConceptIds', async () => {
+    const { deps, calls } = makeRemixDeps();
+
+    await generateMistakeRemixHandler(
+      makeEvent({
+        body: JSON.stringify({
+          questionCount: 15,
+          idempotencyKey: 'idem-1',
+          userId: 'someone-else',
+          mistakeConceptIds: ['not-honoured'],
+        }),
+      }),
+      deps,
+    );
+
+    assert.equal(calls[0].userId, USER_ID);
+    assert.equal(calls[0].idempotencyKey, 'idem-1');
+    assert.equal(calls[0].request.questionCount, 15);
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(calls[0].request, 'mistakeConceptIds'),
+      false,
+      'mistakeConceptIds must never reach the remix service — selection is server-side only',
+    );
+  });
+
+  it('returns the generated exercise under the standard success envelope with a 201', async () => {
+    const { deps } = makeRemixDeps(async () => SAFE_EXERCISE);
+
+    const result = await generateMistakeRemixHandler(
+      makeEvent({ body: JSON.stringify({ idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 201);
+    const body = parseBody(result);
+    assert.equal(body.success, true);
+    assert.deepEqual(body.data, JSON.parse(JSON.stringify(SAFE_EXERCISE)));
+  });
+
+  it('maps NO_ELIGIBLE_MISTAKES to 404', async () => {
+    const { deps } = makeRemixDeps(async () => {
+      throw new GeneratePracticeExerciseError(
+        'No eligible weaknesses',
+        GeneratePracticeExerciseErrorCode.NO_ELIGIBLE_MISTAKES,
+      );
+    });
+
+    const result = await generateMistakeRemixHandler(
+      makeEvent({ body: JSON.stringify({ idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 404);
+  });
+
+  it('masks an unexpected failure as a 500 without leaking its message', async () => {
+    const { deps } = makeRemixDeps(async () => {
+      throw new Error('relation "mistake_concepts" does not exist');
+    });
+
+    const result = await generateMistakeRemixHandler(
+      makeEvent({ body: JSON.stringify({ idempotencyKey: 'idem-1' }) }),
+      deps,
+    );
 
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');
