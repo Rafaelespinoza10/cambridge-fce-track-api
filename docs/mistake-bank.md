@@ -109,12 +109,12 @@ exposed.
 
 ## 6. How the next increments plug in
 
-| Next feature                         | What it needs                                                                                                                                                         |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Next feature                         | What it needs                                                                                                                                                                                                                           |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | AI mistake classification            | **Shipped** — `MistakeClassifier` (`src/lib/mistakes/mistake-classifier.ts`) deterministically classifies `word_formation` mistakes on every wrong answer; every other task type still gets `unknown` until a classifier exists for it. |
-| Practice my mistakes                 | **Shipped** — `GenerateMistakePracticeExerciseService` (`POST /practice/mistakes/generate`), see §9 below.                                                            |
-| Mastery score                        | compute from `times_wrong`, `times_correct`, `last_wrong_at`, `last_correct_at` (all already maintained), plus "times practiced in remediation / correct / incorrect" reconstructable from `practice_answers ⋈ practice_items` on `metadata->>'targetConceptId'` (see §9) |
-| Mistakes from mocks / daily sessions | call `RecordPracticeMistakesService` (or a sibling) with `MistakeSource.MOCK_ATTEMPT` / `DAILY_SESSION`; the enum and the nullable `practice_*` columns already exist |
+| Practice my mistakes                 | **Shipped** — `GenerateMistakePracticeExerciseService` (`POST /practice/mistakes/generate`), see §9 below.                                                                                                                              |
+| Mastery / weakness score             | **Shipped** — `GET /practice/weaknesses`, see §10 below.                                                                                                                                                                                |
+| Mistakes from mocks / daily sessions | call `RecordPracticeMistakesService` (or a sibling) with `MistakeSource.MOCK_ATTEMPT` / `DAILY_SESSION`; the enum and the nullable `practice_*` columns already exist                                                                   |
 
 ## 9. Practice My Mistakes
 
@@ -157,3 +157,56 @@ touches no existing table and reuses the existing `english_level_enum`.
 ```bash
 npm run db:migration:run
 ```
+
+## 10. Mastery / Weakness score
+
+`GET /practice/weaknesses` rolls the Mistake Bank up into weakness
+**patterns** — `(skill, part, errorType, errorSubtype)` — and scores each one
+0-100 from its remediation evidence. RESPONSIBLE, CAREFUL, PROFESSIONAL and
+EFFECTIVE all feed one `adjective_to_adverb` pattern; a different subtype
+never contaminates it (`buildPatternKey`, `src/lib/mistakes/mistake-pattern.ts`).
+
+**Nothing is persisted.** No table, no column, no snapshot: both sides are
+aggregated in Postgres per request (`MistakeMasteryRepository`) — failures
+from `mistake_concepts`/`mistake_occurrences`, remediation from
+`practice_answers ⋈ practice_items` where `metadata->>'generationSource' =
+'mistake_practice'`, bucketed per pattern and per the user's own local day.
+The single schema change is one index (`idx_practice_answers_user_created`),
+because `practice_answers` had none on `user_id` at all.
+
+**The formula** (`src/lib/mistakes/mastery-score.ts`, every constant in
+`MASTERY_CONSTANTS`):
+
+```
+score = clamp(100 × accuracyW × trust × staleness − failurePenalty, 0, 100)
+
+w(a)      = 0.5 ^ (ageDays / 30)                  per-answer half-life
+accuracyW = Σw(correct) / Σw(all)
+trust     = 0.45 + 0.15·min(1, Σw(all)/8)         volume
+                 + 0.20·min(1, families/3)        transfer
+                 + 0.20·min(1, days/3)            repetition
+staleness = max(0.6, 0.5 ^ (daysSinceLastPractice / 90))
+penalty   = 15 × 0.5 ^ (daysSinceLastWrong / 14)
+```
+
+It never reads `MistakeConcept.times_correct`: that counter moves when the
+same `concept_key` is answered right again, which says nothing about whether
+the _pattern_ transfers to other words.
+
+**Statuses**: `weak` 0-39, `learning` 40-69, `strong` 70-84, `mastered` 85+
+**and** ≥3 distinct lexical families, ≥3 distinct practice days, and no
+failure in the last 30 days. A pattern that clears the score but fails a gate
+is capped at 84, so score and status never disagree. There is no `new`
+status — `remediationAttempts === 0` already says it.
+
+**Transfer** is measured on the _item's_ own lexical family, not the targeted
+concept's: a pattern-transfer item deliberately uses a different word.
+`MistakePracticeItemMetadata.itemBaseWord` records it at generation time
+(deterministically, via `extractBaseWord` on the model's own prompt); items
+generated before that field existed fall back to the answer the student
+produced.
+
+**Practice My Weaknesses** now ranks by mastery: `selectDiverseWeaknesses`
+prefers the least-mastered pattern, with `times_wrong`/recency as tie-breaks,
+so what the Weaknesses screen shows as worst is what a session targets.
+"Practice this mistake" (explicit ids) is unchanged — the user already chose.

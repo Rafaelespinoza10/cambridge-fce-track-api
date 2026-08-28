@@ -38,14 +38,19 @@ import {
   buildSlotPlan,
   SelectMistakeWeaknessesError,
 } from '@lib/mistakes/select-mistake-weaknesses';
-import type {
-  WeaknessCandidate,
-  MistakeSlotPlan,
-} from '@lib/mistakes/select-mistake-weaknesses';
+import type { WeaknessCandidate, MistakeSlotPlan } from '@lib/mistakes/select-mistake-weaknesses';
+import { extractBaseWord } from '@lib/mistakes/mistake-concept-key';
+import { buildPatternKey } from '@lib/mistakes/mistake-pattern';
 import { buildMistakePracticeContext } from '@lib/practice/build-mistake-practice-context';
 import { renderPromptTemplate } from '@lib/llm/prompt-template';
 import { pickRandomExamTopic } from '@lib/shared/exam-topics';
 import { MistakesRepository } from '@repositories/mistakes/mistakes.repository';
+import { MistakeMasteryRepository } from '@repositories/mistakes/mistake-mastery.repository';
+import {
+  computeWeaknessProfiles,
+  toMasteryScoreByPattern,
+} from '../mistakes/compute-weakness-profiles';
+import { getUserTimeZone } from '../planning/resolve-user-local-day';
 import { PracticeExercisesRepository } from '@repositories/practice/practice-exercises.repository';
 import type { LLMChatMessage } from '../llm/llm.types';
 import SYSTEM_PROMPT from '../../prompts/practice/generate-exercise.system.md';
@@ -69,6 +74,13 @@ export interface GenerateMistakePracticeExerciseServiceDeps {
   modelLabel: string | null;
   practiceExercises?: (source: RepositorySource) => PracticeExercisesRepositoryPort;
   mistakes?: (source: RepositorySource) => MistakesRepositoryPort;
+  /**
+   * Pattern key -> mastery score, used to practise the least-mastered
+   * weaknesses first. Injectable seam for tests; the default derives it from
+   * the same evidence GET /practice/weaknesses shows, so what the user sees
+   * ranked worst is what a session actually targets.
+   */
+  weaknessScores?: (userId: string) => Promise<Map<string, number>>;
 }
 
 const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
@@ -92,7 +104,11 @@ function toWeaknessCandidate(concept: MistakeConcept): WeaknessCandidate {
 
 function normalizeQuestionCount(raw: number | undefined): number {
   if (raw === undefined) return 8;
-  if (!MISTAKE_PRACTICE_QUESTION_COUNTS.includes(raw as (typeof MISTAKE_PRACTICE_QUESTION_COUNTS)[number])) {
+  if (
+    !MISTAKE_PRACTICE_QUESTION_COUNTS.includes(
+      raw as (typeof MISTAKE_PRACTICE_QUESTION_COUNTS)[number],
+    )
+  ) {
     invalidInput(`questionCount must be one of: ${MISTAKE_PRACTICE_QUESTION_COUNTS.join(', ')}`);
   }
   return raw;
@@ -127,14 +143,17 @@ function buildMessages(
   ];
 }
 
-function toItemMetadata(plan: MistakeSlotPlan, position: number): MistakePracticeItemMetadata {
-  const entry = plan.entries.find((e) => e.position === position);
+function toItemMetadata(
+  plan: MistakeSlotPlan,
+  item: { position: number; prompt: string },
+): MistakePracticeItemMetadata {
+  const entry = plan.entries.find((e) => e.position === item.position);
   // Unreachable: validateGeneratedExercise already enforces positions are
   // exactly 1..questionCount with no gaps, and the plan has one entry per
   // position by construction — fail loudly rather than persist a mismatch.
   if (entry === undefined) {
     throw new GeneratePracticeExerciseError(
-      `No slot plan entry for generated item at position ${position}`,
+      `No slot plan entry for generated item at position ${item.position}`,
       GeneratePracticeExerciseErrorCode.AI_INVALID_RESPONSE,
     );
   }
@@ -144,6 +163,11 @@ function toItemMetadata(plan: MistakeSlotPlan, position: number): MistakePractic
     targetConceptId: entry.targetConceptId,
     targetErrorType: entry.targetErrorType,
     targetErrorSubtype: entry.targetErrorSubtype,
+    // Read off the model's own generated prompt, with the same parser the
+    // Mistake Bank uses on the failing item — never asked of the model, and
+    // never assumed to be the targeted concept's word (a pattern-transfer
+    // item is supposed to use a different one).
+    itemBaseWord: extractBaseWord(plan.taskType, item.prompt),
   };
 }
 
@@ -237,7 +261,16 @@ export class GenerateMistakePracticeExerciseService {
 
     try {
       return await this.dataSource.transaction((manager) =>
-        this.persist(manager, userId, idempotencyKey, part, questionCount, generated, plan, generationMetadata),
+        this.persist(
+          manager,
+          userId,
+          idempotencyKey,
+          part,
+          questionCount,
+          generated,
+          plan,
+          generationMetadata,
+        ),
       );
     } catch (err: unknown) {
       if (isUniqueConstraintViolation(err, IDEMPOTENCY_CONSTRAINT_NAME)) {
@@ -254,6 +287,25 @@ export class GenerateMistakePracticeExerciseService {
    * caller's explicit picks as-is (only a defensive pool-size truncation, no
    * diversity cap: the user already chose what to practice).
    */
+  /**
+   * The same aggregation GET /practice/weaknesses runs, reduced to what the
+   * selection needs. Two extra aggregate reads before an LLM call that takes
+   * seconds — deliberately not cached or persisted, so a session always
+   * ranks on the evidence as it stands right now.
+   */
+  private async resolveWeaknessScores(userId: string): Promise<Map<string, number>> {
+    if (this.deps.weaknessScores !== undefined) return this.deps.weaknessScores(userId);
+
+    const profiles = await computeWeaknessProfiles(
+      {
+        repository: new MistakeMasteryRepository(this.dataSource),
+        resolveTimeZone: (id) => getUserTimeZone(this.dataSource, id),
+      },
+      userId,
+    );
+    return toMasteryScoreByPattern(profiles);
+  }
+
   private async buildPlan(
     userId: string,
     input: GenerateMistakePracticeRequest,
@@ -267,11 +319,26 @@ export class GenerateMistakePracticeExerciseService {
 
     if (input.mode === 'weaknesses') {
       isWeaknessesMode = true;
-      const concepts = await mistakesRepo.findTopWeaknessesForUser(userId, WEAKNESS_POOL_QUERY_LIMIT);
+      const concepts = await mistakesRepo.findTopWeaknessesForUser(
+        userId,
+        WEAKNESS_POOL_QUERY_LIMIT,
+      );
       if (concepts.length === 0) {
         noEligibleMistakes('You have no recorded mistakes yet');
       }
-      candidates = concepts.map(toWeaknessCandidate);
+      // Only this mode ranks by mastery: "practice this mistake" targets
+      // what the user explicitly picked, whatever its score.
+      const masteryByPattern = await this.resolveWeaknessScores(userId);
+      candidates = concepts.map((concept) => ({
+        ...toWeaknessCandidate(concept),
+        masteryScore: masteryByPattern.get(
+          buildPatternKey({
+            partCode: concept.part_code,
+            errorType: concept.error_type,
+            errorSubtype: concept.error_subtype,
+          }),
+        ),
+      }));
     } else {
       isWeaknessesMode = false;
       const rawIds: unknown = input.mistakeConceptIds;
@@ -358,7 +425,7 @@ export class GenerateMistakePracticeExerciseService {
 
     const itemsData: CreateItemCoreData[] = generated.items.map((item) => ({
       ...item,
-      metadata: toItemMetadata(plan, item.position),
+      metadata: toItemMetadata(plan, item),
     }));
 
     return persistGeneratedExercise(repo, userId, exerciseData, itemsData);

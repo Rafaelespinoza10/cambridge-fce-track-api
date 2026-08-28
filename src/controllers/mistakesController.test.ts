@@ -4,13 +4,23 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
-import { listMistakesHandler, generateMistakePracticeHandler } from './mistakesController';
+import {
+  listMistakesHandler,
+  listWeaknessesHandler,
+  generateMistakePracticeHandler,
+} from './mistakesController';
 import type { MistakesControllerDeps } from './mistakesController';
 import { JwtService } from '@lib/shared/jwt';
 import {
   ListMistakesError,
   ListMistakesErrorCode,
 } from '../services/mistakes/list-mistakes.service';
+import {
+  ListWeaknessesError,
+  ListWeaknessesErrorCode,
+} from '../services/mistakes/list-weaknesses.service';
+import type { ListWeaknessesRawQuery } from '../services/mistakes/list-weaknesses.service';
+import type { ListWeaknessesResponseDto } from '../interfaces/mistakes/weaknesses.interface';
 import type { ListMistakesRawQuery } from '../services/mistakes/list-mistakes.service';
 import type { ListMistakesResponseDto } from '../interfaces/mistakes/mistakes.interface';
 import {
@@ -56,6 +66,11 @@ function makeDeps(execute?: () => Promise<ListMistakesResponseDto>): Spy {
         execute: async (userId, rawQuery) => {
           calls.push({ userId, rawQuery });
           return execute === undefined ? EMPTY_RESULT : execute();
+        },
+      },
+      listWeaknesses: {
+        execute: async () => {
+          throw new Error('not used by these tests');
         },
       },
     }),
@@ -200,13 +215,16 @@ interface GenerateSpy {
   calls: Array<{ userId: string; idempotencyKey: string; request: GenerateMistakePracticeRequest }>;
 }
 
-function makeGenerateDeps(
-  execute?: () => Promise<PracticeExerciseSafeWithItems>,
-): GenerateSpy {
+function makeGenerateDeps(execute?: () => Promise<PracticeExerciseSafeWithItems>): GenerateSpy {
   const calls: GenerateSpy['calls'] = [];
   const deps: MistakesControllerDeps = {
     services: async () => ({
       listMistakes: { execute: async () => EMPTY_RESULT },
+      listWeaknesses: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
     }),
     generationServices: async () => ({
       generateMistakePractice: {
@@ -236,10 +254,7 @@ describe('generateMistakePractice (generateMistakePracticeHandler)', () => {
   it('rejects an unparseable body with 400', async () => {
     const { deps } = makeGenerateDeps();
 
-    const result = await generateMistakePracticeHandler(
-      makeEvent({ body: '{not json' }),
-      deps,
-    );
+    const result = await generateMistakePracticeHandler(makeEvent({ body: '{not json' }), deps);
 
     assert.equal(result.statusCode, 400);
   });
@@ -320,6 +335,132 @@ describe('generateMistakePractice (generateMistakePracticeHandler)', () => {
       makeEvent({ body: JSON.stringify({ mistakeConceptIds: ['a'], idempotencyKey: 'idem-1' }) }),
       deps,
     );
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── GET /practice/weaknesses ─────────────────────────────────────────────────
+
+const EMPTY_WEAKNESSES: ListWeaknessesResponseDto = { items: [], totalItems: 0 };
+
+interface WeaknessSpy {
+  deps: MistakesControllerDeps;
+  calls: Array<{ userId: string; rawQuery: ListWeaknessesRawQuery }>;
+}
+
+function makeWeaknessDeps(execute?: () => Promise<ListWeaknessesResponseDto>): WeaknessSpy {
+  const calls: WeaknessSpy['calls'] = [];
+  const deps: MistakesControllerDeps = {
+    services: async () => ({
+      listMistakes: { execute: async () => EMPTY_RESULT },
+      listWeaknesses: {
+        execute: async (userId, rawQuery) => {
+          calls.push({ userId, rawQuery });
+          return execute === undefined ? EMPTY_WEAKNESSES : execute();
+        },
+      },
+    }),
+    generationServices: async () => ({
+      generateMistakePractice: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+  };
+  return { deps, calls };
+}
+
+describe('listWeaknesses (listWeaknessesHandler)', () => {
+  it('rejects an unauthenticated request without calling the service', async () => {
+    const { deps, calls } = makeWeaknessDeps();
+
+    const result = await listWeaknessesHandler(makeEvent({ headers: {} }), deps);
+
+    assert.equal(result.statusCode, 401);
+    assert.equal(calls.length, 0);
+  });
+
+  it('reads the owner from the verified token, never from the query string', async () => {
+    const { deps, calls } = makeWeaknessDeps();
+
+    const result = await listWeaknessesHandler(
+      makeEvent({ queryStringParameters: { userId: 'someone-else' } }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(calls[0].userId, USER_ID);
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(calls[0].rawQuery, 'userId'),
+      false,
+      'a client-sent userId must never reach the service',
+    );
+  });
+
+  it('forwards only the supported filters', async () => {
+    const { deps, calls } = makeWeaknessDeps();
+
+    await listWeaknessesHandler(
+      makeEvent({
+        queryStringParameters: {
+          skill: 'use-of-english',
+          examCode: 'B2_FIRST',
+          paperCode: 'PAPER_1',
+          partCode: 'UOE_PART_3',
+          errorType: 'word_class',
+          errorSubtype: 'adjective_to_adverb',
+          status: 'learning',
+          page: '3',
+        },
+      }),
+      deps,
+    );
+
+    assert.deepEqual(calls[0].rawQuery, {
+      skill: 'use-of-english',
+      examCode: 'B2_FIRST',
+      paperCode: 'PAPER_1',
+      partCode: 'UOE_PART_3',
+      errorType: 'word_class',
+      errorSubtype: 'adjective_to_adverb',
+      status: 'learning',
+    });
+  });
+
+  it('returns the service result under the standard success envelope', async () => {
+    const { deps } = makeWeaknessDeps();
+
+    const result = await listWeaknessesHandler(makeEvent(), deps);
+
+    assert.equal(result.statusCode, 200);
+    const body = parseBody(result);
+    assert.equal(body.success, true);
+    assert.deepEqual(body.data, { items: [], totalItems: 0 });
+  });
+
+  it('maps an invalid filter to 400 with its message', async () => {
+    const { deps } = makeWeaknessDeps(async () => {
+      throw new ListWeaknessesError(
+        'Unknown skill "maths"',
+        ListWeaknessesErrorCode.UNSUPPORTED_SKILL,
+      );
+    });
+
+    const result = await listWeaknessesHandler(makeEvent(), deps);
+
+    assert.equal(result.statusCode, 400);
+    assert.equal(parseBody(result).message, 'Unknown skill "maths"');
+  });
+
+  it('masks an unexpected failure as a 500 without leaking its message', async () => {
+    const { deps } = makeWeaknessDeps(async () => {
+      throw new Error('relation "mistake_occurrences" does not exist');
+    });
+
+    const result = await listWeaknessesHandler(makeEvent(), deps);
 
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');

@@ -7,12 +7,18 @@ import { mapGeneratePracticeExerciseError } from '@lib/practice/generate-practic
 import { buildMistakesServices } from '../services/mistakes/mistakes-composition';
 import { buildMistakePracticeGenerationServices } from '../services/practice/generate-mistake-practice-composition';
 import type { ListMistakesRawQuery } from '../services/mistakes/list-mistakes.service';
+import type { ListWeaknessesRawQuery } from '../services/mistakes/list-weaknesses.service';
 import type { ListMistakesResponseDto } from '../interfaces/mistakes/mistakes.interface';
+import type { ListWeaknessesResponseDto } from '../interfaces/mistakes/weaknesses.interface';
 import type { GenerateMistakePracticeRequest } from '../interfaces/practice/practice-mistake-generation.interface';
 import type { PracticeExerciseSafeWithItems } from '../interfaces/practice/practice-exercise.interface';
 
 interface ListMistakesPort {
   execute(userId: string, rawQuery: ListMistakesRawQuery): Promise<ListMistakesResponseDto>;
+}
+
+interface ListWeaknessesPort {
+  execute(userId: string, rawQuery: ListWeaknessesRawQuery): Promise<ListWeaknessesResponseDto>;
 }
 
 interface GenerateMistakePracticePort {
@@ -24,7 +30,10 @@ interface GenerateMistakePracticePort {
 }
 
 interface MistakesControllerDeps {
-  services: () => Promise<{ listMistakes: ListMistakesPort }>;
+  services: () => Promise<{
+    listMistakes: ListMistakesPort;
+    listWeaknesses: ListWeaknessesPort;
+  }>;
   generationServices: () => Promise<{ generateMistakePractice: GenerateMistakePracticePort }>;
 }
 
@@ -140,5 +149,46 @@ export async function generateMistakePractice(
   return generateMistakePracticeHandler(event, DEFAULT_DEPS);
 }
 
-export { listMistakesHandler, generateMistakePracticeHandler };
-export type { MistakesControllerDeps, ListMistakesPort, GenerateMistakePracticePort };
+// ── GET /practice/weaknesses ─────────────────────────────────────────────────
+
+/** Same rule as the mistakes listing: a client-sent `userId` is never read. */
+function getWeaknessesQueryParams(event: APIGatewayProxyEvent): ListWeaknessesRawQuery {
+  const qs = event.queryStringParameters ?? {};
+  return {
+    skill: qs['skill'],
+    examCode: qs['examCode'],
+    paperCode: qs['paperCode'],
+    partCode: qs['partCode'],
+    errorType: qs['errorType'],
+    errorSubtype: qs['errorSubtype'],
+    status: qs['status'],
+  };
+}
+
+async function listWeaknessesHandler(
+  event: APIGatewayProxyEvent,
+  deps: MistakesControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const { listWeaknesses } = await deps.services();
+    const result = await listWeaknesses.execute(payload.sub, getWeaknessesQueryParams(event));
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapMistakeError(err));
+  }
+}
+
+export async function listWeaknesses(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  return listWeaknessesHandler(event, DEFAULT_DEPS);
+}
+
+export { listMistakesHandler, listWeaknessesHandler, generateMistakePracticeHandler };
+export type {
+  MistakesControllerDeps,
+  ListMistakesPort,
+  ListWeaknessesPort,
+  GenerateMistakePracticePort,
+};
