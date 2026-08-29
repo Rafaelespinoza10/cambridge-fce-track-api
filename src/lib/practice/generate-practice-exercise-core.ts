@@ -25,6 +25,7 @@ import MULTIPLE_CHOICE_CLOZE_INSTRUCTIONS from '../../prompts/practice/task-type
 import OPEN_CLOZE_INSTRUCTIONS from '../../prompts/practice/task-types/open-cloze.md';
 import WORD_FORMATION_INSTRUCTIONS from '../../prompts/practice/task-types/word-formation.md';
 import KEY_WORD_TRANSFORMATION_INSTRUCTIONS from '../../prompts/practice/task-types/key-word-transformation.md';
+import SENTENCE_CORRECTION_INSTRUCTIONS from '../../prompts/practice/task-types/sentence-correction.md';
 import MULTIPLE_CHOICE_READING_INSTRUCTIONS from '../../prompts/practice/task-types/multiple-choice-reading.md';
 import GAPPED_TEXT_INSTRUCTIONS from '../../prompts/practice/task-types/gapped-text.md';
 import MULTIPLE_MATCHING_INSTRUCTIONS from '../../prompts/practice/task-types/multiple-matching.md';
@@ -165,6 +166,29 @@ export interface GeneratablePart {
 // other catalog entry (Reading 6-7, Writing, Listening, Speaking) is real
 // (see practice-exam-catalog.ts) but has no prompt/schema wired up yet.
 export const GENERATABLE_PARTS: Record<string, GeneratablePart> = {
+  /**
+   * The one entry here that is NOT a Cambridge exam part. It exists so a
+   * mistake the Writing grader found can be practised like any other
+   * weakness: give the student a new sentence containing the same kind of
+   * error and ask them to fix it, graded against the corrected form by the
+   * same deterministic text grader everything else uses.
+   *
+   * `partCode` is the synthetic `WRITING` (see WRITING_PART_CODE) rather
+   * than WRITING_PART_1/2, which is exactly what lets one exercise repair a
+   * weakness regardless of which genre revealed it — mastery joins evidence
+   * to a weakness on the part code, so the two must agree.
+   */
+  sentence_correction: {
+    examCode: 'B2_FIRST',
+    paperCode: 'PAPER_2',
+    partCode: 'WRITING',
+    taskType: 'sentence_correction',
+    partLabel: 'Writing - Sentence Correction',
+    taskTypeInstructions: SENTENCE_CORRECTION_INSTRUCTIONS.trim(),
+    hasOptions: false,
+    // Every item is a standalone sentence — there is no shared passage.
+    requiresStimulus: false,
+  },
   multiple_choice_cloze: {
     examCode: 'B2_FIRST',
     paperCode: 'PAPER_1',
@@ -253,6 +277,9 @@ export const MISTAKE_PRACTICE_ELIGIBLE_TASK_TYPES = new Set([
   'key_word_transformation',
   'open_cloze',
   'multiple_choice_cloze',
+  // Not a Cambridge part: the remediation exercise that makes a Writing
+  // mistake practisable. See GENERATABLE_PARTS.sentence_correction.
+  'sentence_correction',
 ]);
 
 export const VALID_ENGLISH_LEVELS = new Set<string>(Object.values(EnglishLevel));

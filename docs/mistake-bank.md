@@ -453,40 +453,28 @@ twice, so most Writing concepts sit at `times_wrong: 1`. That is real signal
 becomes a weakness. The concept key is built from the CORRECTED form, not the
 original: two different wrong ways of writing "I agree" are one weakness.
 
-**Known limitation — the loop does not close yet.** Practice My Mistakes only
-generates for the four lexical UoE task types, so a Writing weakness has
-`remediationAttempts: 0` permanently, which pins its mastery at 0/WEAK and
-keeps it out of spaced retesting. Writing is therefore diagnosis-only for
-now. Closing it needs a `sentence_correction` task type (give the student the
-original excerpt, ask them to fix it, grade against the corrected one) — see
-the delivery note on why that is its own change rather than a flag here.
+**The loop closes through `sentence_correction`.** Writing weaknesses are
+indexed by the **paper**, not by the part: every Writing mistake is filed
+under the synthetic part code `WRITING` (`WRITING_PART_CODE`), and a mistake
+is recorded under the task type that can _practise_ it
+(`sentence_correction`), not the genre it came from.
 
-### Why `sentence_correction` is not in this change
+That choice is what makes the loop possible at all. Mastery joins
+remediation evidence to a weakness on `(partCode, errorType, errorSubtype)`,
+while Practice maps a task type to one fixed part. Had Writing kept
+`WRITING_PART_1`/`_2`, a single `sentence_correction` exercise could only
+ever repair one of them and the other's evidence would land on a key no
+mistake shares — silently, with nothing erroring. Indexing by paper is also
+the truer model: a passive is a passive whether the student wrote an essay
+or a report, and the genre changes the task, never which grammar needs
+drilling.
 
-Closing the Writing loop looked like adding one task type. It is not, and the
-reason is worth recording before anyone tries again.
+The exercise itself gives the student a NEW sentence containing one error of
+the same kind and asks them to fix it, graded against the corrected form by
+the same deterministic text grader everything else uses. From there it is an
+ordinary weakness: it feeds mastery, it can be practised, and it gets
+retested on a schedule.
 
-Mastery joins remediation evidence to a weakness on `(partCode, errorType,
-errorSubtype)`. Practice's generator maps **task type → a fixed part**
-(`GENERATABLE_PARTS`), because every real Cambridge task type belongs to
-exactly one part. `sentence_correction` breaks that assumption: the same
-exercise type has to be attributed to `WRITING_PART_1` for an essay slip and
-`WRITING_PART_2` for an article one, or the remediation lands on a pattern
-key that no Writing mistake shares — and the evidence silently never counts.
-
-Two ways out, and they are a product decision rather than a refactor:
-
-1. **Let the part vary per generated exercise.** Keeps essay and situational
-   weaknesses separate, matching how the rest of the app talks about parts.
-   Costs a change to `GENERATABLE_PARTS`' shape, which the Practice and Remix
-   generators also read.
-2. **Key Writing mistakes to the paper, not the part** (one `WRITING` bucket).
-   Arguably the truer model — a passive is a passive whether you wrote an
-   essay or a report, and the genre does not change what you need to drill.
-   Cheaper, but it merges the two parts in every Writing weakness the user
-   sees, and it makes Writing's part code unlike every other one.
-
-Until one is chosen, Writing is diagnosis-only: recorded, classified,
-visible in the Mistake Bank and in the pattern rollup, but with
-`remediationAttempts: 0`, which pins it at WEAK and keeps it out of spaced
-retesting.
+`writing-remediation-loop.test.ts` guards the one thing that would break this
+without any test failing: the part code the weakness is filed under and the
+part code the repair exercise is generated with must stay identical.

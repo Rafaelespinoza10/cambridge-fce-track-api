@@ -5,7 +5,8 @@ import type { EntityManager } from 'typeorm';
 import {
   RecordWritingMistakesService,
   buildWritingConceptKey,
-  partCodeForWritingTask,
+  WRITING_PART_CODE,
+  WRITING_REMEDIATION_TASK_TYPE,
 } from './record-writing-mistakes.service';
 import type { MistakesRepositoryPort } from './record-writing-mistakes.service';
 import type { WritingCorrection } from '../../models/writing-json-types';
@@ -62,32 +63,60 @@ function makeService(options: { duplicateOccurrence?: boolean } = {}): {
   };
 }
 
-describe('partCodeForWritingTask', () => {
-  it('reads the exam part from the existing writing catalog, not a second mapping', () => {
-    assert.equal(partCodeForWritingTask(WritingTaskType.ESSAY), 'WRITING_PART_1');
-    assert.equal(partCodeForWritingTask(WritingTaskType.ARTICLE), 'WRITING_PART_2');
-    assert.equal(partCodeForWritingTask(WritingTaskType.REPORT), 'WRITING_PART_2');
+describe('indexing by paper rather than by part', () => {
+  it('files every genre under one Writing weakness', async () => {
+    const { service, calls } = makeService();
+    const input = {
+      userId: USER_ID,
+      submissionId: SUBMISSION_ID,
+      corrections: [correction()],
+      gradedAt: GRADED_AT,
+    };
+
+    // The same slip made in an essay and in a report is ONE weakness: the
+    // genre changes the task, never which grammar needs drilling.
+    await service.record(MANAGER, { ...input, taskType: WritingTaskType.ESSAY });
+    await service.record(MANAGER, { ...input, taskType: WritingTaskType.REPORT });
+
+    assert.equal(calls.concepts[0].conceptKey, calls.concepts[1].conceptKey);
+    assert.equal(calls.concepts[0].partCode, WRITING_PART_CODE);
+    assert.equal(calls.concepts[1].partCode, WRITING_PART_CODE);
+  });
+
+  it('records the task type that can PRACTISE the mistake, not the genre it came from', async () => {
+    const { service, calls } = makeService();
+
+    await service.record(MANAGER, {
+      userId: USER_ID,
+      submissionId: SUBMISSION_ID,
+      taskType: WritingTaskType.ARTICLE,
+      corrections: [correction()],
+      gradedAt: GRADED_AT,
+    });
+
+    assert.equal(calls.concepts[0].taskType, WRITING_REMEDIATION_TASK_TYPE);
+    assert.equal(calls.wrongs[0].taskType, WRITING_REMEDIATION_TASK_TYPE);
   });
 });
 
 describe('buildWritingConceptKey', () => {
   it('keys on what the student should have written, not on what they wrote', () => {
-    const a = buildWritingConceptKey('WRITING_PART_1', 'grammar', 'I agree with this');
-    const b = buildWritingConceptKey('WRITING_PART_1', 'grammar', 'I AGREE  with this ');
+    const a = buildWritingConceptKey('grammar', 'I agree with this');
+    const b = buildWritingConceptKey('grammar', 'I AGREE  with this ');
 
     assert.equal(a, b, 'normalization should make these the same concept');
-    assert.equal(a, 'writing_part_1|grammar|i agree with this');
+    assert.equal(a, 'writing|grammar|i agree with this');
   });
 
   it('separates the same phrase corrected for a different reason', () => {
     assert.notEqual(
-      buildWritingConceptKey('WRITING_PART_1', 'grammar', 'I agree'),
-      buildWritingConceptKey('WRITING_PART_1', 'register', 'I agree'),
+      buildWritingConceptKey('grammar', 'I agree'),
+      buildWritingConceptKey('register', 'I agree'),
     );
   });
 
   it('stays bounded for a very long excerpt', () => {
-    const key = buildWritingConceptKey('WRITING_PART_1', 'grammar', 'word '.repeat(200));
+    const key = buildWritingConceptKey('grammar', 'word '.repeat(200));
 
     assert.ok(key.length < 130, `key was ${key.length} chars`);
   });
@@ -109,7 +138,7 @@ describe('RecordWritingMistakesService', () => {
     const [concept] = calls.concepts;
     assert.equal(concept.source, MistakeSource.WRITING_SUBMISSION);
     assert.equal(concept.skillSlug, 'writing');
-    assert.equal(concept.partCode, 'WRITING_PART_1');
+    assert.equal(concept.partCode, WRITING_PART_CODE);
     assert.equal(concept.correctAnswer, 'I agree with this');
     assert.equal(concept.userAnswer, 'I am agree with this');
     assert.equal(concept.baseWord, null, 'writing has no base word — the unit is a phrase');

@@ -41,13 +41,23 @@ export function buildMistakePracticeContext(
   ].join('\n');
 }
 
+/**
+ * A mistake with no base word — an Open Cloze gap, or anything the Writing
+ * grader corrected — is about a form, not a word family. Saying
+ * 'base word "n/a"' there would just be noise in the prompt.
+ */
+function describeTarget(entry: MistakeSlotPlanEntry): string {
+  if (entry.baseWord === null) return `correct form "${entry.correctAnswer}"`;
+  return `base word "${entry.baseWord}", correct answer "${entry.correctAnswer}"`;
+}
+
 function describeEntry(entry: MistakeSlotPlanEntry): string {
   const pattern = entry.targetErrorSubtype ?? entry.targetErrorType;
 
   if (entry.practiceMode === 'concept_specific') {
     return (
       `Position ${entry.position} (concept-specific): practice the SAME concept as a past ` +
-      `mistake — base word "${entry.baseWord ?? 'n/a'}", correct answer "${entry.correctAnswer}" ` +
+      `mistake — ${describeTarget(entry)} ` +
       `(pattern: ${pattern}). You may reuse this word family (e.g. other forms of the same root), ` +
       'but never repeat the exact original sentence.'
     );
