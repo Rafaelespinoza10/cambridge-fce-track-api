@@ -1,13 +1,7 @@
 import type { DataSource, EntityManager, Repository } from 'typeorm';
 import { MistakeConcept } from '@models/MistakeConcept';
-import type {
-  EnglishLevel,
-  MistakeClassificationSource,
-  MistakeErrorSubtype,
-  MistakeErrorType,
-  MistakeSource,
-  WordClass,
-} from '@models/enums';
+import { MistakeClassificationSource, MistakeErrorType } from '@models/enums';
+import type { EnglishLevel, MistakeErrorSubtype, MistakeSource, WordClass } from '@models/enums';
 
 interface EnsureConceptData {
   userId: string;
@@ -324,6 +318,60 @@ class MistakesRepository {
       .addOrderBy('concept.last_wrong_at', 'DESC')
       .addOrderBy('concept.id', 'ASC')
       .getMany();
+  }
+
+  /**
+   * Concepts of a given task type that no rule could classify — the queue the
+   * AI pass works through. Ordered most-failed first so a capped run spends
+   * its budget on the weaknesses that matter most.
+   *
+   * Only ever returns `unknown` rows: anything a deterministic rule or a
+   * human already decided is out of scope for the model by construction, not
+   * by a later guard.
+   */
+  async findUnclassifiedForUser(
+    userId: string,
+    taskType: string,
+    limit: number,
+  ): Promise<MistakeConcept[]> {
+    return this.conceptRepo
+      .createQueryBuilder('concept')
+      .where('concept.user_id = :userId', { userId })
+      .andWhere('concept.task_type = :taskType', { taskType })
+      .andWhere('concept.error_type = :unknown', { unknown: MistakeErrorType.UNKNOWN })
+      .andWhere('concept.classification_source = :source', {
+        source: MistakeClassificationSource.UNKNOWN,
+      })
+      .orderBy('concept.times_wrong', 'DESC')
+      .addOrderBy('concept.last_wrong_at', 'DESC')
+      .take(limit)
+      .getMany();
+  }
+
+  /**
+   * Writes a classification onto an existing concept, and only ever onto one
+   * still marked `unknown`. That guard is what makes the AI pass safe to
+   * re-run: it can never overwrite a deterministic rule, a human correction,
+   * or its own earlier answer, so repeated runs converge instead of churning.
+   */
+  async reclassify(data: {
+    userId: string;
+    conceptId: string;
+    errorType: MistakeErrorType;
+    errorSubtype: MistakeErrorSubtype | null;
+    classificationSource: MistakeClassificationSource;
+  }): Promise<boolean> {
+    const result: [unknown[], number] = await this.source.query(
+      `UPDATE mistake_concepts SET
+         error_type = $3::mistake_error_type_enum,
+         error_subtype = $4::mistake_error_subtype_enum,
+         classification_source = $5::mistake_classification_source_enum,
+         updated_at = now()
+       WHERE id = $1 AND user_id = $2
+         AND classification_source = 'unknown'`,
+      [data.conceptId, data.userId, data.errorType, data.errorSubtype, data.classificationSource],
+    );
+    return Array.isArray(result) && typeof result[1] === 'number' && result[1] > 0;
   }
 
   /** Most recently failed first. Always scoped to `filters.userId`. */

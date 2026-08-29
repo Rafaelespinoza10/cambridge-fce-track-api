@@ -126,15 +126,20 @@ describe('MistakeClassifier — unknown / conservative fallback', () => {
 });
 
 describe('MistakeClassifier — scope guards', () => {
-  it('never classifies a task type other than word_formation', () => {
-    const result = classifier.classify({
-      baseWord: 'RESPONSIBLE',
-      userAnswer: 'IRRESPONSIBLE',
-      correctAnswer: 'RESPONSIBLY',
-      taskType: 'key_word_transformation',
-    });
-    assert.equal(result.errorType, MistakeErrorType.UNKNOWN);
-    assert.equal(result.classificationSource, MistakeClassificationSource.UNKNOWN);
+  // Key Word Transformation and Open Cloze now have their own classifiers
+  // (see task-type-classifiers.test.ts); this guard is about the ones that
+  // still have no deterministic signal at all.
+  it('never classifies a task type with no deterministic signal', () => {
+    for (const taskType of ['multiple_choice_cloze', 'multiple_choice', 'gapped_text']) {
+      const result = classifier.classify({
+        baseWord: 'RESPONSIBLE',
+        userAnswer: 'IRRESPONSIBLE',
+        correctAnswer: 'RESPONSIBLY',
+        taskType,
+      });
+      assert.equal(result.errorType, MistakeErrorType.UNKNOWN, taskType);
+      assert.equal(result.classificationSource, MistakeClassificationSource.UNKNOWN, taskType);
+    }
   });
 
   it('never classifies when there is no base word', () => {

@@ -142,6 +142,17 @@ functions:
           path: /practice/reviews
           method: GET
 
+  # Second-pass AI classification for the mistakes no deterministic rule can
+  # read (Multiple Choice Cloze). Its own request on purpose — an LLM call
+  # never belongs inside the grading transaction.
+  practiceClassifyMistakes:
+    handler: src/controllers/mistakesController.classifyPendingMistakes
+    timeout: 29
+    events:
+      - httpApi:
+          path: /practice/mistakes/classify
+          method: POST
+
   practiceInsights:
     handler: src/controllers/practiceAdaptiveController.getPracticeInsights
     events:

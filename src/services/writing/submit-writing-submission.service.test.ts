@@ -167,6 +167,11 @@ function makeService(
     llm,
     writingSubmissions,
     writingTasks,
+    // Stubbed for the same reason as the repositories: the real one opens
+    // repositories on the transaction's EntityManager, and this suite's
+    // manager is a fake. Its own behaviour is covered by
+    // record-writing-mistakes.service.test.ts.
+    recordWritingMistakes: async () => undefined,
     createAiLinkedActivity: async (_manager, input) => {
       createAiLinkedActivityCalls.push(input);
     },
