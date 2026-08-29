@@ -1,14 +1,9 @@
 import type { EntityManager } from 'typeorm';
 import { MistakesRepository } from '@repositories/mistakes/mistakes.repository';
-import {
-  MistakeClassificationSource,
-  MistakeErrorType,
-  MistakeSource,
-  WritingTaskType,
-} from '../../models/enums';
+import { MistakeClassificationSource, MistakeErrorType, MistakeSource } from '../../models/enums';
+import type { WritingTaskType } from '../../models/enums';
 import type { WritingCorrection, WritingCorrectionCategory } from '../../models/writing-json-types';
 import { normalizeTextAnswer } from '@lib/practice/practice-attempt-grading';
-import { getWritingTaskFormat } from '@lib/writing/writing-task-catalog';
 
 /**
  * Turns the corrections a graded Writing submission produced into Mistake
@@ -38,13 +33,28 @@ const WRITING_PAPER_CODE = 'PAPER_2';
 const WRITING_SKILL_SLUG = 'writing';
 
 /**
- * `WritingTaskType` names the genre (essay, article, report…), not the exam
- * part, so the part comes from the existing writing task catalog rather than
- * a second mapping that could drift from it.
+ * Writing weaknesses are indexed by the PAPER, not by the part.
+ *
+ * A passive is a passive whether the student wrote an essay or a report: the
+ * genre changes the register and the task, never which grammar they need to
+ * drill. Splitting Part 1 from Part 2 would halve the evidence behind every
+ * Writing weakness for no pedagogical gain — and, because mastery joins
+ * remediation to a weakness on the part code, it would also mean a single
+ * `sentence_correction` exercise could only ever repair one of the two.
+ *
+ * So every Writing mistake shares one synthetic part code. It is the only
+ * part code in the system that is not a real Cambridge part, which is
+ * deliberate: it says "this weakness belongs to Writing as a whole".
  */
-export function partCodeForWritingTask(taskType: WritingTaskType): string {
-  return `WRITING_PART_${getWritingTaskFormat(taskType).part}`;
-}
+export const WRITING_PART_CODE = 'WRITING';
+
+/**
+ * The task type a Writing mistake is recorded under is the one that can
+ * PRACTISE it, not the genre it came from. That is what lets Practice My
+ * Mistakes pick these up like any other weakness — see
+ * GENERATABLE_PARTS.sentence_correction.
+ */
+export const WRITING_REMEDIATION_TASK_TYPE = 'sentence_correction';
 
 /**
  * The Writing grader's own categories map almost one-to-one onto
@@ -99,14 +109,13 @@ export interface RecordWritingMistakesResult {
  * ways of writing "I agree" are the same weakness.
  */
 export function buildWritingConceptKey(
-  partCode: string,
   category: WritingCorrectionCategory,
   correctedExcerpt: string,
 ): string {
   const corrected = normalizeTextAnswer(correctedExcerpt, false)
     .replace(/\|/g, '/')
     .slice(0, MAX_KEY_EXCERPT_LENGTH);
-  return `${partCode.toLowerCase()}|${category}|${corrected}`;
+  return `${WRITING_PART_CODE.toLowerCase()}|${category}|${corrected}`;
 }
 
 export class RecordWritingMistakesService {
@@ -117,7 +126,6 @@ export class RecordWritingMistakesService {
     input: RecordWritingMistakesInput,
   ): Promise<RecordWritingMistakesResult> {
     const repository = (this.deps.repository ?? DEFAULT_REPOSITORY_FACTORY)(manager);
-    const partCode = partCodeForWritingTask(input.taskType);
     const result: RecordWritingMistakesResult = { recordedCount: 0, skippedCount: 0 };
 
     for (const correction of input.corrections) {
@@ -131,7 +139,7 @@ export class RecordWritingMistakesService {
       }
 
       const errorType = CATEGORY_TO_ERROR_TYPE[correction.category];
-      const conceptKey = buildWritingConceptKey(partCode, correction.category, corrected);
+      const conceptKey = buildWritingConceptKey(correction.category, corrected);
 
       const conceptId = await repository.ensureConcept({
         userId: input.userId,
@@ -140,8 +148,8 @@ export class RecordWritingMistakesService {
         skillSlug: WRITING_SKILL_SLUG,
         examCode: WRITING_EXAM_CODE,
         paperCode: WRITING_PAPER_CODE,
-        partCode,
-        taskType: input.taskType,
+        partCode: WRITING_PART_CODE,
+        taskType: WRITING_REMEDIATION_TASK_TYPE,
         // Writing has no base word: the unit is a phrase, not a lexeme.
         baseWord: null,
         prompt: original,
@@ -178,7 +186,7 @@ export class RecordWritingMistakesService {
         userAnswer: original,
         explanation: correction.explanation,
         baseWord: null,
-        taskType: input.taskType,
+        taskType: WRITING_REMEDIATION_TASK_TYPE,
         targetLevel: null,
         occurredAt: input.gradedAt,
         errorType,

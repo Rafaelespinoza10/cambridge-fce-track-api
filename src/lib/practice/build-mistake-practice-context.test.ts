@@ -72,7 +72,10 @@ describe('buildMistakePracticeContext', () => {
     });
     const context = buildMistakePracticeContext(unclassified);
     assert.match(context, /pattern: unknown/);
-    assert.match(context, /base word "n\/a"/);
+    // A mistake with no base word is about a form, not a word family — the
+    // prompt says so rather than filling the slot with "n/a".
+    assert.match(context, /correct form "quietly"/);
+    assert.doesNotMatch(context, /base word "/);
   });
 
   it('always appends the anti-repetition instructions once', () => {
