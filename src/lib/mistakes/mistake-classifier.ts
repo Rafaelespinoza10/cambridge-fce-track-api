@@ -3,10 +3,21 @@ import { normalizeTextAnswer } from '@lib/practice/practice-attempt-grading';
 import { levenshteinDistance } from './levenshtein-distance';
 import { classifyBaseWordClass, classifyWordClass } from './word-class-heuristics';
 import { stripKnownPrefix, stripKnownSuffix } from './affix-catalog';
+import { classifyKeyWordTransformation, classifyOpenCloze } from './task-type-classifiers';
 
 /**
- * Deterministic, no-AI classification of a Word Formation (UoE Part 3)
- * mistake into errorType/errorSubtype/expectedWordClass/userWordClass.
+ * Deterministic, no-AI classification of a Use of English mistake into
+ * errorType/errorSubtype/expectedWordClass/userWordClass.
+ *
+ * `MistakeClassifier` is a dispatcher: it routes on task type to the
+ * classifier that has a real signal for it (see task-type-classifiers.ts for
+ * Parts 2 and 4), and owns the Word Formation logic below. Multiple Choice
+ * Cloze (Part 1) has no deterministic signal worth trusting — telling a
+ * collocation apart from a phrasal verb from a semantic nuance needs actual
+ * lexical knowledge — so it is left UNKNOWN here and picked up by the
+ * separate AI pass (see classify-mistakes-with-ai.service.ts).
+ *
+ * The Word Formation rules that follow classify
  *
  * Why no dictionary of words: a suffix-based heuristic generalizes to any
  * root Cambridge (or an LLM generating new exercises) ever throws at it,
@@ -60,6 +71,8 @@ const WORD_CLASS_SUBTYPE_MAP: Partial<Record<string, MistakeErrorSubtype>> = {
 };
 
 const WORD_FORMATION_TASK_TYPE = 'word_formation';
+const KEY_WORD_TRANSFORMATION_TASK_TYPE = 'key_word_transformation';
+const OPEN_CLOZE_TASK_TYPE = 'open_cloze';
 const MIN_WORD_LENGTH = 3;
 const SPELLING_MAX_LENGTH_DIFF = 2;
 /** Relative to the longer word's length, floor 1 — conservative on purpose (see doc comment above). */
@@ -106,6 +119,12 @@ function detectAffixSwap(a: string, b: string): AffixSwapKind | null {
 
 export class MistakeClassifier {
   classify(input: MistakeClassificationInput): MistakeClassificationResult {
+    if (input.taskType === KEY_WORD_TRANSFORMATION_TASK_TYPE) {
+      return classifyKeyWordTransformation(input);
+    }
+    if (input.taskType === OPEN_CLOZE_TASK_TYPE) {
+      return classifyOpenCloze(input);
+    }
     if (input.taskType !== WORD_FORMATION_TASK_TYPE || input.baseWord === null) {
       return UNCLASSIFIED;
     }

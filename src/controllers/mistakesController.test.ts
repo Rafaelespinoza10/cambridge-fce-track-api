@@ -8,6 +8,7 @@ import {
   listMistakesHandler,
   listWeaknessesHandler,
   listDueReviewsHandler,
+  classifyPendingMistakesHandler,
   generateMistakePracticeHandler,
   generateMistakeRemixHandler,
 } from './mistakesController';
@@ -97,6 +98,13 @@ function makeDeps(execute?: () => Promise<ListMistakesResponseDto>): Spy {
     }),
     remixGenerationServices: async () => ({
       generateMistakeRemix: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
+    classifyServices: async () => ({
+      classifyPendingMistakes: {
         execute: async () => {
           throw new Error('not used by these tests');
         },
@@ -267,6 +275,13 @@ function makeGenerateDeps(execute?: () => Promise<PracticeExerciseSafeWithItems>
         },
       },
     }),
+    classifyServices: async () => ({
+      classifyPendingMistakes: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
   };
   return { deps, calls };
 }
@@ -414,6 +429,13 @@ function makeWeaknessDeps(execute?: () => Promise<ListWeaknessesResponseDto>): W
         },
       },
     }),
+    classifyServices: async () => ({
+      classifyPendingMistakes: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
   };
   return { deps, calls };
 }
@@ -547,6 +569,13 @@ function makeRemixDeps(execute?: () => Promise<PracticeExerciseSafeWithItems>): 
         execute: async (userId, idempotencyKey, request) => {
           calls.push({ userId, idempotencyKey, request });
           return execute === undefined ? SAFE_EXERCISE : execute();
+        },
+      },
+    }),
+    classifyServices: async () => ({
+      classifyPendingMistakes: {
+        execute: async () => {
+          throw new Error('not used by these tests');
         },
       },
     }),
@@ -685,6 +714,13 @@ function makeReviewDeps(execute?: () => Promise<ListReviewsResponseDto>): Review
         },
       },
     }),
+    classifyServices: async () => ({
+      classifyPendingMistakes: {
+        execute: async () => {
+          throw new Error('not used by these tests');
+        },
+      },
+    }),
   };
   return { deps, calls };
 }
@@ -758,6 +794,100 @@ describe('listDueReviews (listDueReviewsHandler)', () => {
     });
 
     const result = await listDueReviewsHandler(makeEvent(), deps);
+
+    assert.equal(result.statusCode, 500);
+    assert.equal(parseBody(result).message, 'Internal server error');
+  });
+});
+
+// ── POST /practice/mistakes/classify ─────────────────────────────────────────
+
+describe('classifyPendingMistakes (classifyPendingMistakesHandler)', () => {
+  function makeClassifyDeps(execute?: () => Promise<{ examined: number; classified: number }>): {
+    deps: MistakesControllerDeps;
+    calls: string[];
+  } {
+    const calls: string[] = [];
+    const deps: MistakesControllerDeps = {
+      services: async () => ({
+        listMistakes: { execute: async () => EMPTY_RESULT },
+        listWeaknesses: {
+          execute: async () => {
+            throw new Error('not used by these tests');
+          },
+        },
+        listDueReviews: {
+          execute: async () => {
+            throw new Error('not used by these tests');
+          },
+        },
+      }),
+      generationServices: async () => ({
+        generateMistakePractice: {
+          execute: async () => {
+            throw new Error('not used by these tests');
+          },
+        },
+      }),
+      remixGenerationServices: async () => ({
+        generateMistakeRemix: {
+          execute: async () => {
+            throw new Error('not used by these tests');
+          },
+        },
+      }),
+      classifyServices: async () => ({
+        classifyPendingMistakes: {
+          execute: async (userId: string) => {
+            calls.push(userId);
+            return execute === undefined ? { examined: 3, classified: 2 } : execute();
+          },
+        },
+      }),
+    };
+    return { deps, calls };
+  }
+
+  it('rejects an unauthenticated request without calling the service', async () => {
+    const { deps, calls } = makeClassifyDeps();
+
+    const result = await classifyPendingMistakesHandler(makeEvent({ headers: {} }), deps);
+
+    assert.equal(result.statusCode, 401);
+    assert.equal(calls.length, 0);
+  });
+
+  it('classifies only the caller own mistakes, never a userId from the request', async () => {
+    const { deps, calls } = makeClassifyDeps();
+
+    const result = await classifyPendingMistakesHandler(
+      makeEvent({
+        queryStringParameters: { userId: 'someone-else' },
+        body: JSON.stringify({ userId: 'someone-else', limit: 999 }),
+      }),
+      deps,
+    );
+
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(calls, [USER_ID]);
+  });
+
+  it('reports how much it examined and how much it could classify', async () => {
+    const { deps } = makeClassifyDeps();
+
+    const result = await classifyPendingMistakesHandler(makeEvent(), deps);
+
+    const body = parseBody(result);
+    assert.equal(body.success, true);
+    assert.deepEqual(body.data, { examined: 3, classified: 2 });
+  });
+
+  it('masks an AI/provider failure as a 500 without leaking its message', async () => {
+    const { deps } = makeClassifyDeps(async () => {
+      throw new Error('OPEN_AI_API_KEY is not configured');
+    });
+
+    const result = await classifyPendingMistakesHandler(makeEvent(), deps);
 
     assert.equal(result.statusCode, 500);
     assert.equal(parseBody(result).message, 'Internal server error');

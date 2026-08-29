@@ -10,6 +10,10 @@ import {
   ListReviewsError,
   ListReviewsErrorCode,
 } from '../../services/mistakes/list-due-reviews.service';
+import {
+  ClassifyPendingMistakesError,
+  ClassifyPendingMistakesErrorCode,
+} from '../../services/mistakes/classify-pending-mistakes.service';
 
 function httpError(message: string, statusCode: number): Error {
   return Object.assign(new Error(message), { statusCode });
@@ -32,6 +36,11 @@ const WEAKNESSES_STATUS_BY_CODE: Record<ListWeaknessesErrorCode, number> = {
   [ListWeaknessesErrorCode.UNSUPPORTED_PART]: 400,
 };
 
+/** The classification pass only ever rejects a missing owner. */
+const CLASSIFY_STATUS_BY_CODE: Record<ClassifyPendingMistakesErrorCode, number> = {
+  [ClassifyPendingMistakesErrorCode.INVALID_INPUT]: 400,
+};
+
 /** The reviews listing only ever rejects a malformed filter. */
 const REVIEWS_STATUS_BY_CODE: Record<ListReviewsErrorCode, number> = {
   [ListReviewsErrorCode.INVALID_INPUT]: 400,
@@ -49,6 +58,9 @@ function mapMistakeError(error: unknown): unknown {
   }
   if (error instanceof ListWeaknessesError) {
     return httpError(error.message, WEAKNESSES_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof ClassifyPendingMistakesError) {
+    return httpError(error.message, CLASSIFY_STATUS_BY_CODE[error.code]);
   }
   if (error instanceof ListReviewsError) {
     return httpError(error.message, REVIEWS_STATUS_BY_CODE[error.code]);

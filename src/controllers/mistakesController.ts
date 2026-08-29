@@ -5,6 +5,7 @@ import { getAuthenticatedPayload } from '@lib/shared/jwt';
 import { mapMistakeError } from '@lib/mistakes/mistake-error-mapper';
 import { mapGeneratePracticeExerciseError } from '@lib/practice/generate-practice-exercise-error-mapper';
 import { buildMistakesServices } from '../services/mistakes/mistakes-composition';
+import { buildClassifyMistakesServices } from '../services/mistakes/classify-mistakes-composition';
 import { buildMistakePracticeGenerationServices } from '../services/practice/generate-mistake-practice-composition';
 import { buildMistakeRemixGenerationServices } from '../services/practice/generate-mistake-remix-composition';
 import type { ListMistakesRawQuery } from '../services/mistakes/list-mistakes.service';
@@ -13,6 +14,7 @@ import type { ListReviewsRawQuery } from '../services/mistakes/list-due-reviews.
 import type { ListMistakesResponseDto } from '../interfaces/mistakes/mistakes.interface';
 import type { ListWeaknessesResponseDto } from '../interfaces/mistakes/weaknesses.interface';
 import type { ListReviewsResponseDto } from '../interfaces/mistakes/reviews.interface';
+import type { ClassifyPendingMistakesResult } from '../services/mistakes/classify-pending-mistakes.service';
 import type { GenerateMistakePracticeRequest } from '../interfaces/practice/practice-mistake-generation.interface';
 import type { GenerateMistakeRemixRequest } from '../interfaces/practice/practice-mistake-remix.interface';
 import type { PracticeExerciseSafeWithItems } from '../interfaces/practice/practice-exercise.interface';
@@ -27,6 +29,10 @@ interface ListWeaknessesPort {
 
 interface ListDueReviewsPort {
   execute(userId: string, rawQuery: ListReviewsRawQuery): Promise<ListReviewsResponseDto>;
+}
+
+interface ClassifyPendingMistakesPort {
+  execute(userId: string): Promise<ClassifyPendingMistakesResult>;
 }
 
 interface GenerateMistakePracticePort {
@@ -53,12 +59,14 @@ interface MistakesControllerDeps {
   }>;
   generationServices: () => Promise<{ generateMistakePractice: GenerateMistakePracticePort }>;
   remixGenerationServices: () => Promise<{ generateMistakeRemix: GenerateMistakeRemixPort }>;
+  classifyServices: () => Promise<{ classifyPendingMistakes: ClassifyPendingMistakesPort }>;
 }
 
 const DEFAULT_DEPS: MistakesControllerDeps = {
   services: buildMistakesServices,
   generationServices: buildMistakePracticeGenerationServices,
   remixGenerationServices: buildMistakeRemixGenerationServices,
+  classifyServices: buildClassifyMistakesServices,
 };
 
 // ── GET /practice/mistakes ───────────────────────────────────────────────────
@@ -288,10 +296,47 @@ export async function listDueReviews(event: APIGatewayProxyEvent): Promise<APIGa
   return listDueReviewsHandler(event, DEFAULT_DEPS);
 }
 
+// ── POST /practice/mistakes/classify ─────────────────────────────────────────
+
+/**
+ * Second-pass AI classification of the mistakes no rule could read (Multiple
+ * Choice Cloze). Deliberately its own request rather than part of the submit:
+ * an LLM call must never hold a grading transaction open, and a submission
+ * must never fail because a classification did.
+ *
+ * Idempotent by construction — only concepts still marked `unknown` are ever
+ * written — so a client may call it after any submit without tracking whether
+ * it already did.
+ */
+async function classifyPendingMistakesHandler(
+  event: APIGatewayProxyEvent,
+  deps: MistakesControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const { classifyPendingMistakes } = await deps.classifyServices();
+    // No request body is ever read — a client cannot choose whose mistakes
+    // get classified, nor how many.
+    const result = await classifyPendingMistakes.execute(payload.sub);
+    return successResponse({ success: true, data: result }, 200);
+  } catch (err: unknown) {
+    return handleError(mapMistakeError(err));
+  }
+}
+
+export async function classifyPendingMistakes(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return classifyPendingMistakesHandler(event, DEFAULT_DEPS);
+}
+
 export {
   listMistakesHandler,
   listWeaknessesHandler,
   listDueReviewsHandler,
+  classifyPendingMistakesHandler,
   generateMistakePracticeHandler,
   generateMistakeRemixHandler,
 };
@@ -300,6 +345,7 @@ export type {
   ListMistakesPort,
   ListWeaknessesPort,
   ListDueReviewsPort,
+  ClassifyPendingMistakesPort,
   GenerateMistakePracticePort,
   GenerateMistakeRemixPort,
 };

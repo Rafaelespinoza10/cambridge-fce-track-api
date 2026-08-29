@@ -382,3 +382,111 @@ date, so even a buggy caller can only ever pull a check-up closer.
 zone. `due` / `upcoming` / `overdue` are derived from `due_at` against the
 clock (`resolveTiming`), never stored — the only persisted states are
 `scheduled`, `completed` and `cancelled`.
+
+## 13. Classification beyond Word Formation
+
+The Mistake Bank records every part; until now only Word Formation (UoE 3)
+was ever _diagnosed_, so everything else collapsed into one `unknown` bucket
+per part. `MistakeClassifier` is now a dispatcher that routes on task type.
+
+| Part                          | Signal                            | Source          |
+| ----------------------------- | --------------------------------- | --------------- |
+| UoE 1 Multiple Choice Cloze   | none deterministic                | `ai`            |
+| UoE 2 Open Cloze              | closed set of function words      | `deterministic` |
+| UoE 3 Word Formation          | suffix/affix morphology           | `deterministic` |
+| UoE 4 Key Word Transformation | the key word Cambridge hands over | `deterministic` |
+| Writing                       | the grader's own `category`       | `ai`            |
+
+**The subtype means something different per part**, deliberately:
+
+- UoE 3 — the subtype IS the error (`adjective_to_adverb`).
+- UoE 4 — the subtype is the **structure under test** (`passive`,
+  `conditional`). That is what the key word deterministically reveals, and
+  what targeted practice needs in order to generate more of the same. Two
+  mechanical subtypes are the exception, because they are certainties about
+  the answer rather than readings of it: `key_word_altered` (Cambridge
+  forbids changing the key word) and `word_count` (the 2-5 word rule). Both
+  outrank the structure — a broken rule is what to fix first.
+- UoE 2 — the subtype is the **class the gap required** (`preposition`,
+  `article`…), taken from the correct answer, not from whatever the student
+  wrote.
+
+Open Cloze is the one place a lookup table is not a compromise but the right
+model: the answer is always a function word, and English has a finite
+inventory of those. A lexical answer ("take", "way") resolves to null rather
+than being forced into a class.
+
+**Part 1 is the AI pass.** Telling a collocation from a phrasal verb from a
+semantic nuance needs real lexical knowledge, so `POST
+/practice/mistakes/classify` runs a second pass over concepts still marked
+`unknown`. It is its own request on purpose — an LLM call has no business
+holding a grading transaction open, and a submission must never fail because
+a classification did. The model is offered only four categories plus
+`unknown`, never the ones that belong to deterministic parts, and an
+explicitly unconfident answer is discarded. Idempotent: only `unknown` rows
+are ever written, so re-runs converge instead of churning.
+
+## 14. Writing in the Mistake Bank
+
+Writing enters through a different door, and the difference matters:
+
+```
+Practice:  closed answer key  →  a mistake is "you got THIS item wrong"
+Writing:   free text          →  a mistake is "the grader rewrote THIS phrase"
+```
+
+There is no item, no `isCorrect`, no accepted-answers list — only
+`WritingFeedback.corrections`, each already carrying a `category`. Those map
+almost one-to-one onto `MistakeErrorType`; `punctuation` and `register` exist
+precisely because Writing can produce them and Practice cannot, and `other`
+becomes `unknown` rather than being forced into a category it does not fit.
+
+`RecordWritingMistakesService` runs inside the submission's own transaction,
+exactly like the Practice path, so a graded submission and the weaknesses it
+revealed can never disagree. Every concept it writes is
+`classification_source: 'ai'` — honest about the fact that an LLM decided it,
+even though the category arrived pre-computed.
+
+**Concepts are sparse here, by nature.** The same phrase is rarely written
+twice, so most Writing concepts sit at `times_wrong: 1`. That is real signal
+("you made 12 distinct grammar slips"), and the pattern rollup is where it
+becomes a weakness. The concept key is built from the CORRECTED form, not the
+original: two different wrong ways of writing "I agree" are one weakness.
+
+**Known limitation — the loop does not close yet.** Practice My Mistakes only
+generates for the four lexical UoE task types, so a Writing weakness has
+`remediationAttempts: 0` permanently, which pins its mastery at 0/WEAK and
+keeps it out of spaced retesting. Writing is therefore diagnosis-only for
+now. Closing it needs a `sentence_correction` task type (give the student the
+original excerpt, ask them to fix it, grade against the corrected one) — see
+the delivery note on why that is its own change rather than a flag here.
+
+### Why `sentence_correction` is not in this change
+
+Closing the Writing loop looked like adding one task type. It is not, and the
+reason is worth recording before anyone tries again.
+
+Mastery joins remediation evidence to a weakness on `(partCode, errorType,
+errorSubtype)`. Practice's generator maps **task type → a fixed part**
+(`GENERATABLE_PARTS`), because every real Cambridge task type belongs to
+exactly one part. `sentence_correction` breaks that assumption: the same
+exercise type has to be attributed to `WRITING_PART_1` for an essay slip and
+`WRITING_PART_2` for an article one, or the remediation lands on a pattern
+key that no Writing mistake shares — and the evidence silently never counts.
+
+Two ways out, and they are a product decision rather than a refactor:
+
+1. **Let the part vary per generated exercise.** Keeps essay and situational
+   weaknesses separate, matching how the rest of the app talks about parts.
+   Costs a change to `GENERATABLE_PARTS`' shape, which the Practice and Remix
+   generators also read.
+2. **Key Writing mistakes to the paper, not the part** (one `WRITING` bucket).
+   Arguably the truer model — a passive is a passive whether you wrote an
+   essay or a report, and the genre does not change what you need to drill.
+   Cheaper, but it merges the two parts in every Writing weakness the user
+   sees, and it makes Writing's part code unlike every other one.
+
+Until one is chosen, Writing is diagnosis-only: recorded, classified,
+visible in the Mistake Bank and in the pattern rollup, but with
+`remediationAttempts: 0`, which pins it at WEAK and keeps it out of spaced
+retesting.
