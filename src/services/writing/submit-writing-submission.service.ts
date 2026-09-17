@@ -19,6 +19,8 @@ import type { WritingSubmissionSubmitResultDto } from '../../interfaces/writing/
 import { renderPromptTemplate } from '@lib/llm/prompt-template';
 import { buildWritingSubmissionResultDto } from '@lib/writing/writing-submission-result-dto';
 import { getWritingTaskFormat } from '@lib/writing/writing-task-catalog';
+import { RecordWritingMistakesService } from '../mistakes/record-writing-mistakes.service';
+import type { RecordWritingMistakesInput } from '../mistakes/record-writing-mistakes.service';
 import { WritingTasksRepository } from '@repositories/writing/writing-tasks.repository';
 import { WritingSubmissionsRepository } from '@repositories/writing/writing-submissions.repository';
 import type { GradeSubmissionData } from '@repositories/writing/writing-submissions.repository';
@@ -81,6 +83,14 @@ export interface WritingSubmissionsRepositoryPort {
 
 export interface SubmitWritingSubmissionServiceDeps {
   llm: LLMServicePort;
+  /**
+   * Injectable seam for tests — the default records the grader's corrections
+   * into the Mistake Bank on the submission's own transaction.
+   */
+  recordWritingMistakes?: (
+    manager: EntityManager,
+    input: RecordWritingMistakesInput,
+  ) => Promise<unknown>;
   writingTasks?: (source: RepositorySource) => WritingTasksRepositoryPort;
   writingSubmissions?: (source: RepositorySource) => WritingSubmissionsRepositoryPort;
   // Injectable seam for tests — see SubmitPracticeAttemptServiceDeps.createAiLinkedActivity.
@@ -96,6 +106,11 @@ export interface SubmitWritingSubmissionServiceDeps {
     instant: Date,
   ) => Promise<string>;
 }
+
+const DEFAULT_RECORD_WRITING_MISTAKES = (
+  manager: EntityManager,
+  input: RecordWritingMistakesInput,
+): Promise<unknown> => new RecordWritingMistakesService().record(manager, input);
 
 const DEFAULT_WRITING_TASKS_FACTORY = (source: RepositorySource): WritingTasksRepositoryPort =>
   new WritingTasksRepository(source);
@@ -528,6 +543,17 @@ export class SubmitWritingSubmissionService {
           SubmitWritingSubmissionErrorCode.SUBMISSION_ABANDONED,
         );
       }
+
+      // Every correction the grader made becomes a Mistake Bank entry, on
+      // this same transaction — so a graded submission and the weaknesses it
+      // revealed can never disagree, exactly like the Practice path.
+      await (this.deps.recordWritingMistakes ?? DEFAULT_RECORD_WRITING_MISTAKES)(manager, {
+        userId,
+        submissionId,
+        taskType: task.task_type,
+        corrections: feedback.corrections,
+        gradedAt: submittedAt,
+      });
 
       const gradeData: GradeSubmissionData = {
         submittedAt,

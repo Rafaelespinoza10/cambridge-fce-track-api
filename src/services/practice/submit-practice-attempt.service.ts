@@ -8,6 +8,13 @@ import type { PracticeAttempt } from '../../models/PracticeAttempt';
 import type { PracticeItem } from '../../models/PracticeItem';
 import type { PracticeAnswer } from '../../models/PracticeAnswer';
 import { PracticeAttemptStatus } from '../../models/enums';
+import type { EnglishLevel } from '../../models/enums';
+import { RecordPracticeMistakesService } from '../mistakes/record-practice-mistakes.service';
+import { SyncWeaknessReviewsService } from '../mistakes/sync-weakness-reviews.service';
+import type { SyncWeaknessReviewsInput } from '../mistakes/sync-weakness-reviews.service';
+import type { ReviewOutcomeDto } from '../../interfaces/mistakes/reviews.interface';
+import type { PracticeExerciseGenerationMetadata } from '../../models/practice-json-types';
+import type { RecordPracticeMistakesInput } from '../mistakes/record-practice-mistakes.service';
 import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
 import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
 import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
@@ -57,11 +64,35 @@ export interface PracticeAttemptsRepositoryPort {
   ): Promise<{ affected?: number | null }>;
 }
 
+/**
+ * The exercise fields this service reads — a structural subset of what
+ * PracticeExercisesRepository really returns (the full PracticeExercise).
+ * `id`/`exam_code`/`paper_code`/`target_level` are here for the Mistake Bank
+ * (see RecordPracticeMistakesService), which files a mistake under the exam
+ * coordinates of the exercise it came from.
+ */
+export interface SubmitPracticeAttemptExercise {
+  id: string;
+  title: string;
+  exam_code: string;
+  paper_code: string;
+  part_code: string;
+  target_level: EnglishLevel | null;
+  /**
+   * How this exercise was built. Spaced retesting needs it to tell a plain
+   * practice submission (which never touches a review) from a Mistake Bank
+   * session, and a retest from ordinary remediation. The repository already
+   * returns the full entity — this only widens the structural subset this
+   * service declares.
+   */
+  generation_metadata: PracticeExerciseGenerationMetadata | null;
+}
+
 export interface PracticeExercisesRepositoryPort {
   findExerciseWithAnswerKeysForEvaluation(
     exerciseId: string,
     userId: string,
-  ): Promise<{ items: PracticeItem[]; exercise: { title: string; part_code: string } } | null>;
+  ): Promise<{ items: PracticeItem[]; exercise: SubmitPracticeAttemptExercise } | null>;
 }
 
 export interface PracticeAnswersRepositoryPort {
@@ -88,6 +119,17 @@ export interface SubmitPracticeAttemptServiceDeps {
     userId: string,
     instant: Date,
   ) => Promise<string>;
+  // Injectable seam for tests — the default is the real Mistake Bank
+  // recorder (see record-practice-mistakes.service.ts), which runs on this
+  // submission's own EntityManager.
+  recordMistakes?: (manager: EntityManager, input: RecordPracticeMistakesInput) => Promise<unknown>;
+  // Injectable seam for tests — the default is the real spaced-retesting
+  // scheduler (see sync-weakness-reviews.service.ts), which runs on this
+  // submission's own EntityManager.
+  syncWeaknessReviews?: (
+    manager: EntityManager,
+    input: SyncWeaknessReviewsInput,
+  ) => Promise<ReviewOutcomeDto[]>;
 }
 
 const DEFAULT_PRACTICE_ATTEMPTS_FACTORY = (
@@ -99,6 +141,16 @@ const DEFAULT_PRACTICE_EXERCISES_FACTORY = (
 const DEFAULT_PRACTICE_ANSWERS_FACTORY = (
   source: RepositorySource,
 ): PracticeAnswersRepositoryPort => new PracticeAnswersRepository(source);
+
+const DEFAULT_RECORD_MISTAKES = (
+  manager: EntityManager,
+  input: RecordPracticeMistakesInput,
+): Promise<unknown> => new RecordPracticeMistakesService().record(manager, input);
+
+const DEFAULT_SYNC_WEAKNESS_REVIEWS = (
+  manager: EntityManager,
+  input: SyncWeaknessReviewsInput,
+): Promise<ReviewOutcomeDto[]> => new SyncWeaknessReviewsService().sync(manager, input);
 
 function invalidInput(message: string): never {
   throw new SubmitPracticeAttemptError(message, SubmitPracticeAttemptErrorCode.INVALID_INPUT);
@@ -277,7 +329,10 @@ export class SubmitPracticeAttemptService {
       responseTimeMs: g.responseTimeMs,
       feedback: null,
     }));
-    await answersFactory(manager).createAnswers(answersToCreate);
+    const persistedAnswerRows = await answersFactory(manager).createAnswers(answersToCreate);
+    const answerIdByItemId = new Map(
+      persistedAnswerRows.map((answer) => [answer.item_id, answer.id]),
+    );
 
     await attemptsRepo.completeAttempt(attempt.id, userId, {
       submittedAt,
@@ -286,6 +341,30 @@ export class SubmitPracticeAttemptService {
       percentage,
       feedbackSummary,
     });
+
+    // Mistake Bank: every wrong answer of this submission becomes (or
+    // reinforces) a mistake concept, and every correct one can only mark a
+    // previously failed concept as answered right again — a correct answer
+    // never creates a mistake. Recorded inside this same transaction, like
+    // the Plan/Home linking below, so a completed attempt and its mistakes
+    // can never disagree. Nothing is re-graded here: it only reads the
+    // isCorrect this service already computed.
+    {
+      const recordMistakes = this.deps.recordMistakes ?? DEFAULT_RECORD_MISTAKES;
+      await recordMistakes(manager, {
+        userId,
+        attemptId: attempt.id,
+        exercise: withKeys.exercise,
+        occurredAt: submittedAt,
+        items: gradedItems.map((graded) => ({
+          item: graded.item,
+          payload: graded.payload,
+          normalizedAnswer: graded.normalizedAnswer,
+          isCorrect: graded.isCorrect,
+          answerId: answerIdByItemId.get(graded.item.id) ?? null,
+        })),
+      });
+    }
 
     // Register on the Plan/Home only once the attempt is really finished —
     // never at start time. Every completed attempt registers: the day
@@ -313,6 +392,27 @@ export class SubmitPracticeAttemptService {
       });
     }
 
+    // Spaced retesting, last: it reads the mastery this submission just
+    // produced, so it has to run after the Mistake Bank recorded the
+    // answers. Closes any review this attempt was a retest for and keeps the
+    // user's schedule in step; a plain practice submission is a no-op.
+    const reviewOutcomes = await (this.deps.syncWeaknessReviews ?? DEFAULT_SYNC_WEAKNESS_REVIEWS)(
+      manager,
+      {
+        userId,
+        attemptId: attempt.id,
+        exerciseId: attempt.exercise_id,
+        partCode: withKeys.exercise.part_code,
+        generationMetadata: withKeys.exercise.generation_metadata,
+        submittedAt,
+        items: gradedItems.map((graded) => ({
+          metadata: graded.item.metadata,
+          isCorrect: graded.isCorrect,
+          normalizedAnswer: graded.normalizedAnswer,
+        })),
+      },
+    );
+
     const completedAttempt = {
       ...attempt,
       status: PracticeAttemptStatus.COMPLETED,
@@ -338,6 +438,9 @@ export class SubmitPracticeAttemptService {
     return {
       result: buildPracticeAttemptResultDto(completedAttempt, withKeys.items, persistedAnswers),
       idempotentReplay: false,
+      // Empty for everything except a spaced retest — one entry per review
+      // this submission just closed.
+      reviewOutcomes,
     };
   }
 
@@ -363,6 +466,9 @@ export class SubmitPracticeAttemptService {
     return {
       result: buildPracticeAttemptResultDto(attempt, withKeys.items, answers),
       idempotentReplay: true,
+      // A replay re-grades nothing and re-schedules nothing, so it has no
+      // review outcome to report either.
+      reviewOutcomes: [],
     };
   }
 }

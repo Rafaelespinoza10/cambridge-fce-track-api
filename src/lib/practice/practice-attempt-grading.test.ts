@@ -9,6 +9,7 @@ import {
   buildPracticeAttemptResultDto,
   formatAcceptedAnswers,
   formatUserAnswer,
+  toAdaptiveMetadata,
 } from './practice-attempt-grading';
 
 // ── normalizeTextAnswer ──────────────────────────────────────────────────────
@@ -343,5 +344,158 @@ describe('formatUserAnswer', () => {
 
   it('renders an explicit placeholder for unanswered (never an empty string)', () => {
     assert.equal(formatUserAnswer(textItem, { kind: 'unanswered' }), '(no answer given)');
+  });
+});
+
+// ── toAdaptiveMetadata ───────────────────────────────────────────────────────
+
+describe('toAdaptiveMetadata', () => {
+  it('returns null for a plain catalog item (no metadata at all)', () => {
+    assert.equal(toAdaptiveMetadata(null), null);
+    assert.equal(toAdaptiveMetadata(undefined), null);
+  });
+
+  it('returns null for metadata with an unrecognized generationSource', () => {
+    assert.equal(toAdaptiveMetadata({ generationSource: 'something_else' }), null);
+  });
+
+  it('maps a Practice My Mistakes item, reading the role off practiceMode', () => {
+    const result = toAdaptiveMetadata({
+      generationSource: 'mistake_practice',
+      practiceMode: 'pattern_transfer',
+      targetErrorType: 'word_class',
+      targetErrorSubtype: 'adjective_to_adverb',
+      targetConceptId: 'concept-1',
+      itemBaseWord: 'CAREFUL',
+    });
+    assert.deepEqual(result, {
+      generationSource: 'mistake_practice',
+      questionRole: 'pattern_transfer',
+      targetErrorType: 'word_class',
+      targetErrorSubtype: 'adjective_to_adverb',
+    });
+  });
+
+  it('maps a Mistake Remix targeted item, reading the role off questionRole', () => {
+    const result = toAdaptiveMetadata({
+      generationSource: 'mistake_remix',
+      questionRole: 'targeted',
+      targetErrorType: 'word_class',
+      targetErrorSubtype: 'adjective_to_adverb',
+      itemBaseWord: 'CAREFUL',
+    });
+    assert.deepEqual(result, {
+      generationSource: 'mistake_remix',
+      questionRole: 'targeted',
+      targetErrorType: 'word_class',
+      targetErrorSubtype: 'adjective_to_adverb',
+    });
+  });
+
+  it('maps a Mistake Remix neutral item, with null target fields', () => {
+    const result = toAdaptiveMetadata({
+      generationSource: 'mistake_remix',
+      questionRole: 'neutral',
+      targetErrorType: null,
+      targetErrorSubtype: null,
+      itemBaseWord: null,
+    });
+    assert.deepEqual(result, {
+      generationSource: 'mistake_remix',
+      questionRole: 'neutral',
+      targetErrorType: null,
+      targetErrorSubtype: null,
+    });
+  });
+
+  it('never throws on a malformed/unexpected metadata shape', () => {
+    assert.equal(toAdaptiveMetadata({ generationSource: 'mistake_remix' }), null);
+    assert.equal(toAdaptiveMetadata({}), null);
+  });
+});
+
+// ── buildPracticeAttemptResultDto — adaptiveMetadata ────────────────────────
+
+describe('buildPracticeAttemptResultDto — adaptiveMetadata', () => {
+  const attempt = {
+    id: 'attempt-1',
+    exercise_id: 'exercise-1',
+    submitted_at: new Date('2026-01-01T00:05:00.000Z'),
+    duration_seconds: 300,
+    correct_count: 1,
+    total_count: 1,
+    percentage: '100.00',
+    feedback_summary: {
+      version: 'practice-attempt-feedback-v1',
+      unansweredCount: 0,
+      skillBreakdown: [],
+    },
+  } as unknown as import('@models/PracticeAttempt').PracticeAttempt;
+
+  it('carries the item metadata through as adaptiveMetadata', () => {
+    const items = [
+      {
+        id: 'item-1',
+        position: 1,
+        prompt: 'p1',
+        options: null,
+        answer_key: { kind: 'text', acceptedAnswers: ['carefully'], caseSensitive: false },
+        explanation: 'e1',
+        skill_tags: ['word-formation'],
+        metadata: {
+          generationSource: 'mistake_remix',
+          questionRole: 'targeted',
+          targetErrorType: 'word_class',
+          targetErrorSubtype: 'adjective_to_adverb',
+          itemBaseWord: 'CAREFUL',
+        },
+      },
+    ] as unknown as import('@models/PracticeItem').PracticeItem[];
+    const answers = [
+      {
+        item_id: 'item-1',
+        answer_payload: { kind: 'text', value: 'carefully' },
+        normalized_answer: 'carefully',
+        is_correct: true,
+        response_time_ms: 900,
+      },
+    ] as unknown as import('@models/PracticeAnswer').PracticeAnswer[];
+
+    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+
+    assert.deepEqual(dto.items[0]?.adaptiveMetadata, {
+      generationSource: 'mistake_remix',
+      questionRole: 'targeted',
+      targetErrorType: 'word_class',
+      targetErrorSubtype: 'adjective_to_adverb',
+    });
+  });
+
+  it('is null for a plain catalog item with no metadata', () => {
+    const items = [
+      {
+        id: 'item-1',
+        position: 1,
+        prompt: 'p1',
+        options: null,
+        answer_key: { kind: 'text', acceptedAnswers: ['carefully'], caseSensitive: false },
+        explanation: 'e1',
+        skill_tags: ['word-formation'],
+        metadata: null,
+      },
+    ] as unknown as import('@models/PracticeItem').PracticeItem[];
+    const answers = [
+      {
+        item_id: 'item-1',
+        answer_payload: { kind: 'text', value: 'carefully' },
+        normalized_answer: 'carefully',
+        is_correct: true,
+        response_time_ms: 900,
+      },
+    ] as unknown as import('@models/PracticeAnswer').PracticeAnswer[];
+
+    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+
+    assert.equal(dto.items[0]?.adaptiveMetadata, null);
   });
 });

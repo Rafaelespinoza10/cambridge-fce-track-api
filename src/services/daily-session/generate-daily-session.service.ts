@@ -27,6 +27,12 @@ import {
 } from '@lib/daily-session/daily-session-jsonb-validators';
 import { renderPromptTemplate } from '@lib/llm/prompt-template';
 import { pickRandomExamTopic } from '@lib/shared/exam-topics';
+import {
+  resolveDailySessionFocus,
+  NO_FOCUS_INSTRUCTION,
+} from '@lib/daily-session/daily-session-focus';
+import { resolveWeakestExamPart } from '../progress/resolve-weakest-exam-part';
+import type { WeakestExamPart } from '../progress/resolve-weakest-exam-part';
 import { resolveLocalDay, isValidTimeZone } from '@lib/shared/timezone';
 import { UsersRepository } from '@repositories/users/users.repository';
 import { DailySessionsRepository } from '@repositories/daily-session/daily-sessions.repository';
@@ -73,7 +79,10 @@ export interface LLMServicePort {
 /** Narrow port over SearchCambridgeKnowledgeService — grounding is optional, never required. */
 export interface SearchKnowledgePort {
   execute(filters: {
+    /** Free text ranked by embedding similarity — what actually finds material. */
+    query?: string;
     skill?: string;
+    /** Exact array match against import-time tags; usually too narrow to use. */
     topic?: string;
     limit?: number;
   }): Promise<{ content: string; sourceName: string; sourcePage: number }[]>;
@@ -107,6 +116,12 @@ export interface GenerateDailySessionServiceDeps {
   dailySessions?: (source: RepositorySource) => DailySessionsRepositoryPort;
   /** Best-effort grounding — a Knowledge Base miss never fails generation. */
   searchKnowledge?: SearchKnowledgePort;
+  /**
+   * Injectable seam for tests — the default reads the real progress metrics.
+   * Like grounding, this is best-effort: resolving to null just means the
+   * session stays balanced instead of targeted.
+   */
+  resolveWeakestExamPart?: (userId: string) => Promise<WeakestExamPart | null>;
 }
 
 const REQUEST_TIMEOUT_MS = 25_000;
@@ -180,6 +195,7 @@ function buildMessages(
   targetLevel: EnglishLevel,
   topicHint: string,
   groundingExcerpts: string,
+  focusInstruction: string,
 ): LLMChatMessage[] {
   const userPrompt = renderPromptTemplate(USER_PROMPT_TEMPLATE, {
     topicHint,
@@ -187,6 +203,7 @@ function buildMessages(
     itemCount: String(ITEM_COUNT),
     sentenceTargetCount: String(SENTENCE_TARGET_COUNT),
     groundingExcerpts,
+    focusInstruction,
   });
   return [
     { role: 'system', content: SYSTEM_PROMPT.trim() },
@@ -536,18 +553,39 @@ export class GenerateDailySessionService {
 
     const topicHint = pickRandomExamTopic();
 
+    // The topic stays varied; what adapts is WHICH sub-skill the questions and
+    // sentence targets lean on. Resolving to null is a normal outcome for a
+    // learner with little history, and the session simply stays balanced.
+    const resolveWeakest =
+      this.deps.resolveWeakestExamPart ??
+      ((id: string) => resolveWeakestExamPart(this.dataSource, id));
+    const focus = resolveDailySessionFocus(await resolveWeakest(userId));
+
     let grounding: GroundingResult = { excerptsBlock: '', knowledgeSourceNames: [] };
     if (this.deps.searchKnowledge !== undefined) {
       // Grounding is a quality improvement, never a hard requirement — a
       // Knowledge Base miss (or an empty corpus) still lets generation
       // proceed with buildGroundingResult's "no material found" fallback.
+      // `query` is what turns on semantic ranking — without it
+      // SearchCambridgeKnowledgeService leaves every relevance score at 0 and
+      // just returns whatever the SQL filter matched, so the embeddings this
+      // corpus was built with went entirely unused.
+      //
+      // `topic` is deliberately NOT passed. It filters with
+      // `:topic = ANY(item.topics)`, an exact array match against tags
+      // assigned at import time, so any topic the corpus happens not to carry
+      // returns zero rows and grounding silently does nothing. The topic bank
+      // is much wider than the corpus's coverage, so that was the common case,
+      // not the edge one. Ranking by embedding instead always yields the
+      // closest real Cambridge material, which is the entire point of having
+      // embedded it.
       const readingChunks = await this.deps.searchKnowledge.execute({
-        topic: topicHint,
+        query: topicHint,
         skill: 'reading',
         limit: 3,
       });
       const vocabChunks = await this.deps.searchKnowledge.execute({
-        topic: topicHint,
+        query: topicHint,
         limit: 3,
       });
       grounding = buildGroundingResult([...readingChunks, ...vocabChunks]);
@@ -555,7 +593,12 @@ export class GenerateDailySessionService {
       grounding = buildGroundingResult([]);
     }
 
-    const messages = buildMessages(targetLevel, topicHint, grounding.excerptsBlock);
+    const messages = buildMessages(
+      targetLevel,
+      topicHint,
+      grounding.excerptsBlock,
+      focus?.instruction ?? NO_FOCUS_INSTRUCTION,
+    );
 
     let raw: unknown;
     try {
@@ -574,6 +617,8 @@ export class GenerateDailySessionService {
       provider: this.deps.providerLabel,
       topic: topicHint,
       knowledgeSourceNames: grounding.knowledgeSourceNames,
+      focusSectionSlug: focus?.sectionSlug,
+      focusSectionName: focus?.sectionName,
       schemaVersion: PROMPT_VERSION,
     };
 

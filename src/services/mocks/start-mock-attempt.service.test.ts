@@ -85,6 +85,54 @@ describe('StartMockAttemptService.execute', () => {
     assert.equal(result.attempt.id, 'attempt-1');
   });
 
+  it('creates only the sections a scope covers', async () => {
+    const captured: { sections?: unknown } = {};
+    const repo: MockAttemptsRepositoryPort = {
+      findActiveByUser: async () => null,
+      createAttemptWithSections: async (data) => {
+        captured.sections = data.sections;
+        return makeAttempt();
+      },
+      findSectionsByAttempt: async () => [],
+    };
+    const service = new StartMockAttemptService(FAKE_DATA_SOURCE, { mockAttempts: () => repo });
+
+    await service.execute(USER_ID, ExamType.B2_FIRST, STARTED_AT, 'writing');
+
+    const sections = captured.sections as { sectionCode: string }[];
+    assert.deepEqual(
+      sections.map((section) => section.sectionCode),
+      ['writing-part-1', 'writing-part-2'],
+    );
+  });
+
+  it('defaults to the whole exam when no scope is given', async () => {
+    const captured: { sections?: unknown } = {};
+    const repo: MockAttemptsRepositoryPort = {
+      findActiveByUser: async () => null,
+      createAttemptWithSections: async (data) => {
+        captured.sections = data.sections;
+        return makeAttempt();
+      },
+      findSectionsByAttempt: async () => [],
+    };
+    const service = new StartMockAttemptService(FAKE_DATA_SOURCE, { mockAttempts: () => repo });
+
+    await service.execute(USER_ID, ExamType.B2_FIRST, STARTED_AT);
+
+    assert.equal((captured.sections as unknown[]).length, MOCK_ATTEMPT_SECTION_CATALOG.length);
+  });
+
+  it('rejects an unknown scope rather than silently widening it to the full exam', async () => {
+    const { service } = makeService({ findActiveByUser: async () => null });
+
+    // Asking for one paper and quietly getting all 13 sections would be a
+    // nasty surprise, so this is an error, not a fallback.
+    await assert.rejects(() =>
+      service.execute(USER_ID, ExamType.B2_FIRST, STARTED_AT, 'speaking' as never),
+    );
+  });
+
   it('resumes the existing active attempt instead of creating a new one', async () => {
     const { service, calls } = makeService({
       findActiveByUser: async () => makeAttempt({ id: 'existing-attempt' }),

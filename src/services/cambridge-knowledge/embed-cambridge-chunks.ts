@@ -26,11 +26,20 @@ const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
 export class OpenAIEmbeddingClient implements EmbeddingClient {
   readonly defaultModel: string;
 
+  /**
+   * Blank-tolerant for the same reason as OpenAIProvider's: callers pass
+   * `process.env['OPENAI_EMBEDDING_MODEL']`, which the serverless configs
+   * resolve with a `, ''` fallback. When that key was absent from
+   * serverless.env.yml the deployed Lambdas got `''`, sailed past the old
+   * default parameter, and every Knowledge Base search died with
+   * "you must provide a model parameter" — surfacing to users as an
+   * unrelated-looking "the AI returned something unusable".
+   */
   constructor(
     private readonly client: OpenAIEmbeddingClientPort,
-    defaultModel: string = DEFAULT_EMBEDDING_MODEL,
+    defaultModel?: string,
   ) {
-    this.defaultModel = defaultModel;
+    this.defaultModel = defaultModel?.trim() ? defaultModel.trim() : DEFAULT_EMBEDDING_MODEL;
   }
 
   async embed(texts: string[]): Promise<number[][]> {

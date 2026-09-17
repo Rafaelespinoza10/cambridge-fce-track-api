@@ -1,8 +1,10 @@
 import { getDatabaseConnection } from '@lib/shared/database';
 import { getSkillAccentColor } from '@lib/shared/skill-display';
 import { fromCsv } from '@lib/shared/csv';
+import { resolveLocalDay } from '@lib/shared/timezone';
 import { PlanningRepository } from '@repositories/planning/planning.repository';
 import { ScoringRepository } from '@repositories/scoring/scoring.repository';
+import { getUserTimeZone } from './resolve-user-local-day';
 import { ActivityPriority, PlannedActivityStatus, ScoreType } from '../../models/enums';
 import type { WeeklyPlan } from '../../models/WeeklyPlan';
 import type { PlanDay } from '../../models/PlanDay';
@@ -37,10 +39,6 @@ function addDays(dateStr: string, days: number): string {
   const date = new Date(dateStr + 'T00:00:00.000Z');
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
-}
-
-function todayISODate(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function isValidDateString(value: string): boolean {
@@ -190,8 +188,12 @@ class PlanningService {
   }
 
   async getCurrentPlan(userId: string): Promise<SafeWeeklyPlan | null> {
-    const today = todayISODate();
     const ds = await getDatabaseConnection();
+    // Server's UTC day, not the user's, was picking the wrong week in the
+    // evening for anyone west of Greenwich — see progress-library.ts's
+    // getCurrentWeekBounds for the same bug fixed the same way.
+    const timeZone = await getUserTimeZone(ds, userId);
+    const today = resolveLocalDay(new Date(), timeZone).localDate;
     const repo = new PlanningRepository(ds);
 
     const plan = await repo.findCurrentWeekPlan(userId, today);

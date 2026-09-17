@@ -5,6 +5,19 @@ import type { OpenAIEmbeddingClientPort } from './embed-cambridge-chunks';
 import { LLMServiceError, LLMErrorCode } from '../llm/llm.types';
 
 describe('OpenAIEmbeddingClient', () => {
+  // OPENAI_EMBEDDING_MODEL missing from serverless.env.yml resolved to '' via
+  // the `, ''` fallback in the serverless configs; that blank slipped past the
+  // old default parameter and was sent as an empty model id, so every
+  // Knowledge Base search 400'd with "you must provide a model parameter".
+  it('falls back to the default model when the configured value is blank', () => {
+    const client: OpenAIEmbeddingClientPort = {
+      embeddings: { create: async () => ({}) as never },
+    };
+    for (const blank of ['', '   ']) {
+      assert.equal(new OpenAIEmbeddingClient(client, blank).defaultModel, 'text-embedding-3-small');
+    }
+  });
+
   it('returns vectors sorted by response index, not response array order', async () => {
     const client: OpenAIEmbeddingClientPort = {
       embeddings: {

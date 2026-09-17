@@ -24,6 +24,18 @@ export interface DailySessionSafeDto {
   sentenceTaskInstructions: string;
   sentenceTargets: DailySessionSentenceTarget[];
   createdAt: Date;
+  /**
+   * Cambridge sources the passage was grounded in, as "<source> p.<page>".
+   * Safe to expose: names and page numbers only, never chunk text or prompts.
+   */
+  knowledgeSourceNames: string[];
+  /**
+   * The weak Cambridge part this session was aimed at, when there was one.
+   * Null for a learner without enough history — the session is then balanced
+   * rather than targeted, and the client says nothing about focus.
+   */
+  focusSectionSlug: string | null;
+  focusSectionName: string | null;
 }
 
 /** Never carries answerKey or explanation — those stay server-side until submit/evaluation. */

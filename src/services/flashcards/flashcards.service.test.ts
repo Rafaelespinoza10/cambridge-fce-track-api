@@ -723,6 +723,106 @@ describe('FlashcardsService.listWordFamilies', () => {
   });
 });
 
+// ── Phrasal verb groups (by base verb) ───────────────────────────────────────────
+
+describe('FlashcardsService.createFlashcard (phrasal verb tags)', () => {
+  it('auto-tags phrasal verbs with verb:{base}', async () => {
+    const { service } = setup();
+    const card = await service.createFlashcard(USER_ID, DECK_ID, NOW, {
+      type: FlashcardType.PHRASAL_VERB,
+      front: 'give up',
+      back: 'rendirse',
+      tags: ['topic'],
+    });
+    assert.deepEqual(card.tags, ['topic', 'verb:give']);
+  });
+});
+
+describe('FlashcardsService.listPhrasalVerbGroups', () => {
+  it('groups phrasal verbs by base verb from front or existing tag', async () => {
+    const { service } = setup({
+      flashcards: [
+        makeFlashcard({
+          id: 'a',
+          type: FlashcardType.PHRASAL_VERB,
+          front: 'give up',
+          back: 'rendirse',
+          tags: [],
+        }),
+        makeFlashcard({
+          id: 'b',
+          type: FlashcardType.PHRASAL_VERB,
+          front: 'give in',
+          back: 'ceder',
+          tags: [],
+        }),
+        makeFlashcard({
+          id: 'c',
+          type: FlashcardType.PHRASAL_VERB,
+          front: 'look forward to',
+          back: 'esperar con ilusión',
+          tags: ['verb:look'],
+        }),
+        makeFlashcard({
+          id: 'd',
+          type: FlashcardType.VOCABULARY,
+          front: 'give',
+          back: 'dar',
+          tags: [],
+        }),
+      ],
+    });
+    const groups = await service.listPhrasalVerbGroups(USER_ID, DECK_ID);
+    assert.deepEqual(
+      groups.map((g) => g.baseVerb),
+      ['give', 'look'],
+    );
+    assert.deepEqual(
+      groups[0]!.cards.map((c) => c.front),
+      ['give in', 'give up'],
+    );
+    assert.equal(groups[1]!.cards.length, 1);
+  });
+});
+
+describe('FlashcardsService.organizePhrasalVerbsByBaseVerb', () => {
+  it('writes verb tags for untagged phrasal verbs and returns groups', async () => {
+    const { world, service } = setup({
+      flashcards: [
+        makeFlashcard({
+          id: 'a',
+          type: FlashcardType.PHRASAL_VERB,
+          front: 'carry out',
+          back: 'llevar a cabo',
+          tags: ['work'],
+        }),
+        makeFlashcard({
+          id: 'b',
+          type: FlashcardType.PHRASAL_VERB,
+          front: 'carry on',
+          back: 'continuar',
+          tags: ['verb:carry'],
+        }),
+      ],
+    });
+    const result = await service.organizePhrasalVerbsByBaseVerb(USER_ID, DECK_ID);
+    assert.equal(result.updatedCount, 1);
+    assert.deepEqual(world.flashcards[0]!.tags, ['work', 'verb:carry']);
+    assert.equal(result.groups.length, 1);
+    assert.equal(result.groups[0]!.baseVerb, 'carry');
+    assert.equal(result.groups[0]!.cards.length, 2);
+  });
+
+  it('rejects organizing an archived deck', async () => {
+    const { service } = setup({ decks: [makeDeck({ is_archived: true })] });
+    await assert.rejects(
+      () => service.organizePhrasalVerbsByBaseVerb(USER_ID, DECK_ID),
+      (error: unknown) =>
+        error instanceof FlashcardError && error.code === FlashcardErrorCode.DECK_UNAVAILABLE,
+    );
+  });
+});
+
 // ── Listar ───────────────────────────────────────────────────────────────────────
 
 describe('FlashcardsService.listFlashcards', () => {

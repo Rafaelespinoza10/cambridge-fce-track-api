@@ -15,6 +15,7 @@ const GENERATE_PRACTICE_EXERCISE_STATUS_BY_CODE: Record<GeneratePracticeExercise
     [GeneratePracticeExerciseErrorCode.AI_REQUEST_TIMEOUT]: 504,
     [GeneratePracticeExerciseErrorCode.AI_CONFIGURATION_ERROR]: 500,
     [GeneratePracticeExerciseErrorCode.AI_INVALID_RESPONSE]: 502,
+    [GeneratePracticeExerciseErrorCode.NO_ELIGIBLE_MISTAKES]: 404,
   };
 
 function mapGeneratePracticeExerciseError(error: unknown): unknown {
