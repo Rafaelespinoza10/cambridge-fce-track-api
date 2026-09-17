@@ -49,6 +49,21 @@ functions:
           path: /listening/sources
           method: GET
 
+  # Grouped catalog: one card per YouTube test (normally 4 LISTENING parts).
+  listListeningTests:
+    handler: src/controllers/listeningAttemptController.listListeningTests
+    events:
+      - httpApi:
+          path: /listening/tests
+          method: GET
+
+  getListeningTest:
+    handler: src/controllers/listeningAttemptController.getListeningTest
+    events:
+      - httpApi:
+          path: /listening/tests/{testId}
+          method: GET
+
   getListeningSource:
     handler: src/controllers/listeningAttemptController.getListeningSource
     events:
