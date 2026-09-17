@@ -45,7 +45,10 @@ function partSortKey(partCode: string): number {
 /** "B2 First Listening — Test 1 Part 2" → "B2 First Listening — Test 1" */
 export function deriveListeningTestTitle(partTitles: string[]): string {
   const first = partTitles[0]?.trim() || 'Listening test';
-  const stripped = first.replace(/\s*[—–-]\s*Part\s*\d+\s*$/i, '').trim();
+  const stripped = first
+    .replace(/\s*[—–-]\s*Part\s*\d+\s*$/i, '')
+    .replace(/\s+Part\s*\d+\s*$/i, '')
+    .trim();
   return stripped.length > 0 ? stripped : first;
 }
 

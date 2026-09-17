@@ -5,6 +5,7 @@ import { getAuthenticatedPayload } from '@lib/shared/jwt';
 import { mapListeningAttemptError } from '@lib/listening/listening-attempt-error-mapper';
 import { buildListeningAttemptServices } from '../services/listening/listening-attempt-composition';
 import type { ListeningSourceSafeDto } from '../repositories/mocks/listening-sources.repository';
+import type { ListeningTestGroupDto } from '@lib/listening/listening-test-grouping';
 import type {
   ListeningAttemptStartResultDto,
   ListeningAttemptViewDto,
@@ -15,6 +16,14 @@ type NowProvider = () => Date;
 
 interface ListSourcesPort {
   execute(): Promise<ListeningSourceSafeDto[]>;
+}
+
+interface ListTestsPort {
+  execute(): Promise<ListeningTestGroupDto[]>;
+}
+
+interface GetTestPort {
+  execute(testId: string): Promise<ListeningTestGroupDto>;
 }
 
 interface GetSourcePort {
@@ -46,6 +55,8 @@ interface ListeningAttemptControllerDeps {
   now: NowProvider;
   services: () => Promise<{
     listSources: ListSourcesPort;
+    listTests: ListTestsPort;
+    getTest: GetTestPort;
     getSource: GetSourcePort;
     startAttempt: StartAttemptPort;
     submitAttempt: SubmitAttemptPort;
@@ -66,6 +77,12 @@ function getSourceIdParam(event: APIGatewayProxyEvent): string | null {
 function getAttemptIdParam(event: APIGatewayProxyEvent): string | null {
   const attemptId = event.pathParameters?.attemptId ?? '';
   return attemptId && isValidUuid(attemptId) ? attemptId : null;
+}
+
+/** YouTube video id (or other external id) — not a UUID. */
+function getTestIdParam(event: APIGatewayProxyEvent): string | null {
+  const testId = (event.pathParameters?.testId ?? '').trim();
+  return testId.length > 0 ? testId : null;
 }
 
 // AWS Lambda always invokes the exported handler as `handler(event, context)`,
@@ -97,6 +114,57 @@ export async function listListeningSources(
   event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> {
   return listListeningSourcesHandler(event, DEFAULT_DEPS);
+}
+
+// ── GET /listening/tests ────────────────────────────────────────────────────
+
+async function listListeningTestsHandler(
+  event: APIGatewayProxyEvent,
+  deps: ListeningAttemptControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  try {
+    const { listTests } = await deps.services();
+    const tests = await listTests.execute();
+    return successResponse({ success: true, data: { tests } }, 200);
+  } catch (err: unknown) {
+    return handleError(mapListeningAttemptError(err));
+  }
+}
+
+export async function listListeningTests(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return listListeningTestsHandler(event, DEFAULT_DEPS);
+}
+
+// ── GET /listening/tests/{testId} ───────────────────────────────────────────
+
+async function getListeningTestHandler(
+  event: APIGatewayProxyEvent,
+  deps: ListeningAttemptControllerDeps,
+): Promise<APIGatewayProxyResult> {
+  const payload = getAuthenticatedPayload(event);
+  if (payload === null) return errorResponse('Unauthorized', 401);
+
+  const testId = getTestIdParam(event);
+  if (testId === null) return errorResponse('Invalid or missing testId', 400);
+
+  try {
+    const { getTest } = await deps.services();
+    const test = await getTest.execute(testId);
+    return successResponse({ success: true, data: { test } }, 200);
+  } catch (err: unknown) {
+    return handleError(mapListeningAttemptError(err));
+  }
+}
+
+export async function getListeningTest(
+  event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> {
+  return getListeningTestHandler(event, DEFAULT_DEPS);
 }
 
 // ── GET /listening/sources/{sourceId} ───────────────────────────────────────
@@ -221,6 +289,8 @@ export async function getListeningAttempt(
 
 export {
   listListeningSourcesHandler,
+  listListeningTestsHandler,
+  getListeningTestHandler,
   getListeningSourceHandler,
   startListeningAttemptHandler,
   submitListeningAttemptHandler,
@@ -230,6 +300,8 @@ export type {
   ListeningAttemptControllerDeps,
   NowProvider,
   ListSourcesPort,
+  ListTestsPort,
+  GetTestPort,
   GetSourcePort,
   StartAttemptPort,
   SubmitAttemptPort,

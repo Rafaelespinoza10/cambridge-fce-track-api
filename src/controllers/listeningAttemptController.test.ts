@@ -7,6 +7,10 @@ import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
   listListeningSources,
   listListeningSourcesHandler,
+  listListeningTests,
+  listListeningTestsHandler,
+  getListeningTest,
+  getListeningTestHandler,
   getListeningSource,
   getListeningSourceHandler,
   startListeningAttempt,
@@ -19,6 +23,8 @@ import {
 import type {
   ListeningAttemptControllerDeps,
   ListSourcesPort,
+  ListTestsPort,
+  GetTestPort,
   GetSourcePort,
   StartAttemptPort,
   SubmitAttemptPort,
@@ -30,6 +36,10 @@ import {
   GetListeningSourceError,
   GetListeningSourceErrorCode,
 } from '../services/listening/get-listening-source.service';
+import {
+  GetListeningTestError,
+  GetListeningTestErrorCode,
+} from '../services/listening/get-listening-test.service';
 import {
   StartListeningAttemptError,
   StartListeningAttemptErrorCode,
@@ -47,6 +57,7 @@ import type {
   ListeningAttemptViewDto,
   ListeningAttemptSubmitResultDto,
 } from '../interfaces/listening/listening-attempt.interface';
+import type { ListeningTestGroupDto } from '@lib/listening/listening-test-grouping';
 
 const USER_ID = 'user-1';
 const SOURCE_ID = '11111111-1111-1111-1111-111111111111';
@@ -126,9 +137,35 @@ const SUBMIT_RESULT: ListeningAttemptSubmitResultDto = {
   idempotentReplay: false,
 };
 
+const SAFE_TEST: ListeningTestGroupDto = {
+  id: 'abc',
+  videoExternalId: 'abc',
+  videoProvider: 'youtube',
+  examCode: 'B2_FIRST',
+  paperCode: 'PAPER_4',
+  title: 'B2 First Listening — Test 1',
+  targetLevel: null,
+  partCount: 1,
+  totalItemCount: 1,
+  parts: [
+    {
+      sourceId: SOURCE_ID,
+      partCode: 'LISTENING_PART_1',
+      title: 'B2 First Listening — Test 1 Part 1',
+      instructions: 'i',
+      itemCount: 1,
+      videoStartSeconds: 0,
+      videoEndSeconds: 60,
+    },
+  ],
+  createdAt: FIXED_NOW,
+};
+
 function buildDeps(
   overrides: {
     listSourcesExecute?: ListSourcesPort['execute'];
+    listTestsExecute?: ListTestsPort['execute'];
+    getTestExecute?: GetTestPort['execute'];
     getSourceExecute?: GetSourcePort['execute'];
     startExecute?: StartAttemptPort['execute'];
     submitExecute?: SubmitAttemptPort['execute'];
@@ -139,6 +176,8 @@ function buildDeps(
     now: () => FIXED_NOW,
     services: async () => ({
       listSources: { execute: overrides.listSourcesExecute ?? (async () => [SAFE_SOURCE]) },
+      listTests: { execute: overrides.listTestsExecute ?? (async () => [SAFE_TEST]) },
+      getTest: { execute: overrides.getTestExecute ?? (async () => SAFE_TEST) },
       getSource: { execute: overrides.getSourceExecute ?? (async () => SAFE_SOURCE) },
       startAttempt: { execute: overrides.startExecute ?? (async () => START_RESULT) },
       submitAttempt: { execute: overrides.submitExecute ?? (async () => SUBMIT_RESULT) },
@@ -162,6 +201,59 @@ describe('listListeningSources', () => {
 
   it('is exported as the real Lambda entry point', () => {
     assert.equal(typeof listListeningSources, 'function');
+  });
+});
+
+describe('listListeningTests', () => {
+  it('401s with no token', async () => {
+    const result = await listListeningTestsHandler(makeEvent({ headers: {} }), buildDeps());
+    assert.equal(result.statusCode, 401);
+  });
+
+  it('200s with the grouped catalog', async () => {
+    const result = await listListeningTestsHandler(makeEvent(), buildDeps());
+    assert.equal(result.statusCode, 200);
+    const body = parseBody(result);
+    assert.equal((body.data as { tests: unknown[] }).tests.length, 1);
+  });
+
+  it('is exported as the real Lambda entry point', () => {
+    assert.equal(typeof listListeningTests, 'function');
+  });
+});
+
+describe('getListeningTest', () => {
+  it('400s on a missing testId', async () => {
+    const result = await getListeningTestHandler(
+      makeEvent({ pathParameters: { testId: '   ' } }),
+      buildDeps(),
+    );
+    assert.equal(result.statusCode, 400);
+  });
+
+  it('200s with the grouped test', async () => {
+    const result = await getListeningTestHandler(
+      makeEvent({ pathParameters: { testId: 'abc' } }),
+      buildDeps(),
+    );
+    assert.equal(result.statusCode, 200);
+  });
+
+  it('maps a not-found test to 404', async () => {
+    const deps = buildDeps({
+      getTestExecute: async () => {
+        throw new GetListeningTestError('nope', GetListeningTestErrorCode.TEST_NOT_FOUND);
+      },
+    });
+    const result = await getListeningTestHandler(
+      makeEvent({ pathParameters: { testId: 'missing' } }),
+      deps,
+    );
+    assert.equal(result.statusCode, 404);
+  });
+
+  it('is exported as the real Lambda entry point', () => {
+    assert.equal(typeof getListeningTest, 'function');
   });
 });
 

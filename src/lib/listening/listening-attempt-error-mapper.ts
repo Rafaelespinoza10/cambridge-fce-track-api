@@ -3,6 +3,10 @@ import {
   GetListeningSourceErrorCode,
 } from '../../services/listening/get-listening-source.service';
 import {
+  GetListeningTestError,
+  GetListeningTestErrorCode,
+} from '../../services/listening/get-listening-test.service';
+import {
   StartListeningAttemptError,
   StartListeningAttemptErrorCode,
 } from '../../services/listening/start-listening-attempt.service';
@@ -21,6 +25,10 @@ function httpError(message: string, statusCode: number): Error {
 
 const GET_SOURCE_STATUS_BY_CODE: Record<GetListeningSourceErrorCode, number> = {
   [GetListeningSourceErrorCode.SOURCE_NOT_FOUND]: 404,
+};
+
+const GET_TEST_STATUS_BY_CODE: Record<GetListeningTestErrorCode, number> = {
+  [GetListeningTestErrorCode.TEST_NOT_FOUND]: 404,
 };
 
 const START_STATUS_BY_CODE: Record<StartListeningAttemptErrorCode, number> = {
@@ -48,6 +56,9 @@ const GET_ATTEMPT_STATUS_BY_CODE: Record<GetListeningAttemptErrorCode, number> =
 function mapListeningAttemptError(error: unknown): unknown {
   if (error instanceof GetListeningSourceError) {
     return httpError(error.message, GET_SOURCE_STATUS_BY_CODE[error.code]);
+  }
+  if (error instanceof GetListeningTestError) {
+    return httpError(error.message, GET_TEST_STATUS_BY_CODE[error.code]);
   }
   if (error instanceof StartListeningAttemptError) {
     return httpError(error.message, START_STATUS_BY_CODE[error.code]);
