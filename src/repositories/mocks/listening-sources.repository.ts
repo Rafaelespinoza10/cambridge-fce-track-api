@@ -149,11 +149,15 @@ class ListeningSourcesRepository {
   }
 
   private async attachItemCounts(sources: ListeningSource[]): Promise<ListeningSourceSafeDto[]> {
+    // Empty IN (...) is invalid SQL; never pad with '' — source_id is UUID and
+    // Postgres rejects invalid input syntax for type uuid: "" (500 on the catalog).
+    if (sources.length === 0) return [];
+
     const counts = await this.itemRepo
       .createQueryBuilder('item')
       .select('item.source_id', 'sourceId')
       .addSelect('COUNT(*)', 'count')
-      .where('item.source_id IN (:...ids)', { ids: sources.map((s) => s.id).concat('') })
+      .where('item.source_id IN (:...ids)', { ids: sources.map((s) => s.id) })
       .groupBy('item.source_id')
       .getRawMany<{ sourceId: string; count: string }>();
     const countsBySource = new Map(counts.map((c) => [c.sourceId, Number(c.count)]));
