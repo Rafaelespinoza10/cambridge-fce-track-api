@@ -22,7 +22,11 @@ interface GetSourcePort {
 }
 
 interface StartAttemptPort {
-  execute(userId: string, sourceId: string, startedAt: Date): Promise<ListeningAttemptStartResultDto>;
+  execute(
+    userId: string,
+    sourceId: string,
+    startedAt: Date,
+  ): Promise<ListeningAttemptStartResultDto>;
 }
 
 interface SubmitAttemptPort {

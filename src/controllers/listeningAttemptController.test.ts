@@ -149,10 +149,7 @@ function buildDeps(
 
 describe('listListeningSources', () => {
   it('401s with no token', async () => {
-    const result = await listListeningSourcesHandler(
-      makeEvent({ headers: {} }),
-      buildDeps(),
-    );
+    const result = await listListeningSourcesHandler(makeEvent({ headers: {} }), buildDeps());
     assert.equal(result.statusCode, 401);
   });
 
@@ -317,10 +314,7 @@ describe('getListeningAttempt', () => {
   it('maps a not-found attempt to 404', async () => {
     const deps = buildDeps({
       getExecute: async () => {
-        throw new GetListeningAttemptError(
-          'nope',
-          GetListeningAttemptErrorCode.ATTEMPT_NOT_FOUND,
-        );
+        throw new GetListeningAttemptError('nope', GetListeningAttemptErrorCode.ATTEMPT_NOT_FOUND);
       },
     });
     const result = await getListeningAttemptHandler(

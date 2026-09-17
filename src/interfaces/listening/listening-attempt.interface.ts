@@ -1,10 +1,10 @@
 import type { ListeningAttemptStatus } from '../../models/enums';
-import type {
-  PracticeAnswerPayload,
-  PracticeItemOption,
-} from '../../models/practice-json-types';
+import type { PracticeAnswerPayload, PracticeItemOption } from '../../models/practice-json-types';
 import type { ListeningAttemptFeedbackSummary } from '../../models/listening-json-types';
-import type { ListeningSourceSafeDto, ListeningItemSafeDto } from '../../repositories/mocks/listening-sources.repository';
+import type {
+  ListeningSourceSafeDto,
+  ListeningItemSafeDto,
+} from '../../repositories/mocks/listening-sources.repository';
 
 export interface SubmitListeningAttemptAnswerInput {
   itemId: string;
