@@ -190,7 +190,10 @@ export class SubmitListeningAttemptService {
         };
       }),
     );
-    const listeningFeedbackSummary = { ...feedbackSummary, version: 'listening-attempt-feedback-v1' as const };
+    const listeningFeedbackSummary = {
+      ...feedbackSummary,
+      version: 'listening-attempt-feedback-v1' as const,
+    };
 
     await this.deps.attempts.completeAttempt(attempt.id, userId, {
       submittedAt,
@@ -218,7 +221,9 @@ export class SubmitListeningAttemptService {
     };
   }
 
-  private async buildReplayResult(attempt: ListeningAttempt): Promise<ListeningAttemptSubmitResultDto> {
+  private async buildReplayResult(
+    attempt: ListeningAttempt,
+  ): Promise<ListeningAttemptSubmitResultDto> {
     const itemsWithKeys = await this.deps.sources.findItemsWithAnswerKeysBySourceId(
       attempt.source_id,
     );

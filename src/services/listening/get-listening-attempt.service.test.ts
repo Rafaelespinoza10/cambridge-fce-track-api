@@ -35,7 +35,9 @@ const SAFE_SOURCE = {
   createdAt: new Date(),
 };
 
-const SAFE_ITEMS = [{ id: 'item-1', position: 1, prompt: 'Q1', options: null, skillTags: ['listening'] }];
+const SAFE_ITEMS = [
+  { id: 'item-1', position: 1, prompt: 'Q1', options: null, skillTags: ['listening'] },
+];
 
 const ITEMS_WITH_KEYS: ListeningItem[] = [
   {
