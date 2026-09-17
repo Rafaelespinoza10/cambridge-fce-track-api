@@ -125,6 +125,8 @@ class ProgressService {
       skill: r.skillName,
       score: r.score !== null ? roundTwo(r.score) : null,
       date: r.date,
+      source: r.source,
+      plannedActivityId: r.plannedActivityId,
     }));
 
     // ── Exam goal ──────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { WeeklyPlan } from '@models/WeeklyPlan';
 import { MockTest } from '@models/MockTest';
 import { UserGoal } from '@models/UserGoal';
 import { ExamType, EnglishLevel } from '@models/enums';
+import type { RecentActivitySource } from '../../interfaces/progress/progress.interface';
 
 interface WeeklyActivityStats {
   total: number;
@@ -33,6 +34,8 @@ interface RecentActivityRow {
   skillName: string | null;
   score: number | null;
   date: string;
+  source: RecentActivitySource;
+  plannedActivityId: string | null;
 }
 
 interface OverallWeekRow {
@@ -109,7 +112,8 @@ const UNIFIED_SCORES_CTE = `
     SELECT sc.id, sc.user_id, sc.attempted_at AS occurred_at,
            CAST(sc.percentage AS FLOAT) AS percentage, sk.name AS skill_name, sk.slug AS skill_slug,
            COALESCE(sc.time_spent_minutes, 0) AS duration_minutes,
-           COALESCE(pa.title, 'Activity') AS title
+           COALESCE(pa.title, 'Activity') AS title,
+           'activity_score' AS source, sc.planned_activity_id AS planned_activity_id
     FROM activity_scores sc
     LEFT JOIN skills sk ON sk.id = sc.skill_id
     LEFT JOIN planned_activities pa ON pa.id = sc.planned_activity_id AND pa.deleted_at IS NULL
@@ -122,7 +126,8 @@ const UNIFIED_SCORES_CTE = `
            CASE WHEN ex.part_code LIKE 'UOE_PART_%' THEN 'Use of English' ELSE 'Use of English' END AS skill_name,
            CASE WHEN ex.part_code LIKE 'UOE_PART_%' THEN 'use-of-english' ELSE 'use-of-english' END AS skill_slug,
            COALESCE(att.duration_seconds, 0) / 60.0 AS duration_minutes,
-           ex.title AS title
+           ex.title AS title,
+           'practice_attempt' AS source, NULL::uuid AS planned_activity_id
     FROM practice_attempts att
     INNER JOIN practice_exercises ex ON ex.id = att.exercise_id
     WHERE att.deleted_at IS NULL AND att.status = 'completed'
@@ -134,7 +139,8 @@ const UNIFIED_SCORES_CTE = `
            'Writing' AS skill_name,
            'writing' AS skill_slug,
            COALESCE(ws.duration_seconds, 0) / 60.0 AS duration_minutes,
-           wt.title AS title
+           wt.title AS title,
+           'writing_submission' AS source, NULL::uuid AS planned_activity_id
     FROM writing_submissions ws
     INNER JOIN writing_tasks wt ON wt.id = ws.task_id
     WHERE ws.deleted_at IS NULL AND ws.status = 'graded'
@@ -291,11 +297,20 @@ class ProgressRepository {
     timeZone: string,
   ): Promise<RecentActivityRow[]> {
     const rows = await this.ds.query<
-      { id: string; title: string; skillName: string | null; score: string | null; date: string }[]
+      {
+        id: string;
+        title: string;
+        skillName: string | null;
+        score: string | null;
+        date: string;
+        source: RecentActivitySource;
+        plannedActivityId: string | null;
+      }[]
     >(
       `${UNIFIED_SCORES_CTE}
        SELECT id, title, skill_name AS "skillName", percentage AS score,
-              TO_CHAR(occurred_at AT TIME ZONE $3, 'YYYY-MM-DD') AS date
+              TO_CHAR(occurred_at AT TIME ZONE $3, 'YYYY-MM-DD') AS date,
+              source, planned_activity_id AS "plannedActivityId"
        FROM unified_scores
        WHERE user_id = $1
        ORDER BY occurred_at DESC
@@ -309,6 +324,8 @@ class ProgressRepository {
       skillName: r.skillName,
       score: r.score !== null ? parseFloat(r.score) || null : null,
       date: r.date,
+      source: r.source,
+      plannedActivityId: r.plannedActivityId,
     }));
   }
 
