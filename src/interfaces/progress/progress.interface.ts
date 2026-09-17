@@ -30,7 +30,11 @@ export interface SkillProgressMetric {
  * resolves against: /planned-activity-detail, /practice/attempts, or
  * /writing/submissions are three unrelated ID spaces.
  */
-export type RecentActivitySource = 'activity_score' | 'practice_attempt' | 'writing_submission';
+export type RecentActivitySource =
+  | 'activity_score'
+  | 'practice_attempt'
+  | 'writing_submission'
+  | 'listening_attempt';
 
 export interface RecentActivityMetric {
   id: string;

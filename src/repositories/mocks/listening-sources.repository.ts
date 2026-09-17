@@ -129,16 +129,80 @@ class ListeningSourcesRepository {
       .orderBy('source.created_at', 'DESC')
       .getMany();
 
+    return this.attachItemCounts(sources);
+  }
+
+  /**
+   * The user-facing catalog (GET /listening/sources) — only ever ACTIVE
+   * sources, never a draft/inactive one an admin is still curating. Same
+   * shape as the admin listing, just pre-filtered so the public endpoint
+   * can't leak unpublished content by omission.
+   */
+  async listActiveSources(): Promise<ListeningSourceSafeDto[]> {
+    const sources = await this.sourceRepo
+      .createQueryBuilder('source')
+      .where('source.status = :status', { status: ListeningSourceStatus.ACTIVE })
+      .orderBy('source.created_at', 'DESC')
+      .getMany();
+
+    return this.attachItemCounts(sources);
+  }
+
+  private async attachItemCounts(sources: ListeningSource[]): Promise<ListeningSourceSafeDto[]> {
+    // Empty IN (...) is invalid SQL; never pad with '' — source_id is UUID and
+    // Postgres rejects invalid input syntax for type uuid: "" (500 on the catalog).
+    if (sources.length === 0) return [];
+
     const counts = await this.itemRepo
       .createQueryBuilder('item')
       .select('item.source_id', 'sourceId')
       .addSelect('COUNT(*)', 'count')
-      .where('item.source_id IN (:...ids)', { ids: sources.map((s) => s.id).concat('') })
+      .where('item.source_id IN (:...ids)', { ids: sources.map((s) => s.id) })
       .groupBy('item.source_id')
       .getRawMany<{ sourceId: string; count: string }>();
     const countsBySource = new Map(counts.map((c) => [c.sourceId, Number(c.count)]));
 
     return sources.map((source) => toSafeSourceDto(source, countsBySource.get(source.id) ?? 0));
+  }
+
+  /**
+   * Public single-source lookup for the preview screen (GET
+   * /listening/sources/{sourceId}) — metadata + item count, never the
+   * items/questions themselves (those only ever come back once an attempt
+   * actually starts). `null` for a missing OR inactive source — the two
+   * cases the public endpoint treats identically (404), unlike the admin
+   * listing which shows both.
+   */
+  async findActiveByIdSafe(sourceId: string): Promise<ListeningSourceSafeDto | null> {
+    const source = await this.sourceRepo
+      .createQueryBuilder('source')
+      .where('source.id = :sourceId', { sourceId })
+      .andWhere('source.status = :status', { status: ListeningSourceStatus.ACTIVE })
+      .getOne();
+    if (source === null) return null;
+
+    const itemCount = await this.itemRepo.count({ where: { source_id: source.id } });
+    return toSafeSourceDto(source, itemCount);
+  }
+
+  /** Same active-only guard as findActiveByIdSafe, but with items — used to start an attempt. */
+  async findActiveByIdWithItems(sourceId: string): Promise<ListeningSourceSafeWithItems | null> {
+    const source = await this.sourceRepo
+      .createQueryBuilder('source')
+      .where('source.id = :sourceId', { sourceId })
+      .andWhere('source.status = :status', { status: ListeningSourceStatus.ACTIVE })
+      .getOne();
+    if (source === null) return null;
+
+    const items = await this.itemRepo.find({
+      where: { source_id: source.id },
+      order: { position: 'ASC' },
+    });
+
+    return {
+      source: toSafeSourceDto(source, items.length),
+      items: items.map(toSafeItemDto),
+    };
   }
 
   /**
