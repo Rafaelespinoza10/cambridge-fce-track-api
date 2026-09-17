@@ -39,6 +39,44 @@ functions:
           path: /admin/listening-sources
           method: GET
 
+  # Public (authenticated user) surface — lets a student browse the same
+  # admin-curated sources above and attempt one standalone, outside a full
+  # timed Mock. See listeningAttemptController.ts.
+  listListeningSources:
+    handler: src/controllers/listeningAttemptController.listListeningSources
+    events:
+      - httpApi:
+          path: /listening/sources
+          method: GET
+
+  getListeningSource:
+    handler: src/controllers/listeningAttemptController.getListeningSource
+    events:
+      - httpApi:
+          path: /listening/sources/{sourceId}
+          method: GET
+
+  startListeningAttempt:
+    handler: src/controllers/listeningAttemptController.startListeningAttempt
+    events:
+      - httpApi:
+          path: /listening/sources/{sourceId}/attempts
+          method: POST
+
+  submitListeningAttempt:
+    handler: src/controllers/listeningAttemptController.submitListeningAttempt
+    events:
+      - httpApi:
+          path: /listening/attempts/{attemptId}/submit
+          method: POST
+
+  getListeningAttempt:
+    handler: src/controllers/listeningAttemptController.getListeningAttempt
+    events:
+      - httpApi:
+          path: /listening/attempts/{attemptId}
+          method: GET
+
 package:
   individually: true
 

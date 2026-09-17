@@ -36,6 +36,7 @@ import { CambridgeSource } from '../models/CambridgeSource';
 import { CambridgeKnowledgeItem } from '../models/CambridgeKnowledgeItem';
 import { ListeningSource } from '../models/ListeningSource';
 import { ListeningItem } from '../models/ListeningItem';
+import { ListeningAttempt } from '../models/ListeningAttempt';
 import { MockAttempt } from '../models/MockAttempt';
 import { MockAttemptSection } from '../models/MockAttemptSection';
 import { DailySession } from '../models/DailySession';
@@ -100,6 +101,7 @@ export const AppDataSource = new DataSource({
     CambridgeKnowledgeItem,
     ListeningSource,
     ListeningItem,
+    ListeningAttempt,
     MockAttempt,
     MockAttemptSection,
     DailySession,

@@ -86,12 +86,13 @@ interface ActivityHeatmapRow {
 
 /**
  * One row per graded score, regardless of source — a manually-logged
- * ActivityScore, a completed Practice attempt, or a graded Writing
- * submission. Built with a raw parameterized CTE (not QueryBuilder)
- * because TypeORM's QueryBuilder has no clean way to UNION three
- * structurally different tables and then GROUP BY/AVG over the result —
- * every value substituted here is a `$n` placeholder, never string-
- * interpolated, same injection discipline as the rest of this codebase.
+ * ActivityScore, a completed Practice attempt, a graded Writing submission,
+ * or a completed standalone Listening attempt. Built with a raw
+ * parameterized CTE (not QueryBuilder) because TypeORM's QueryBuilder has
+ * no clean way to UNION four structurally different tables and then
+ * GROUP BY/AVG over the result — every value substituted here is a `$n`
+ * placeholder, never string-interpolated, same injection discipline as the
+ * rest of this codebase.
  *
  * Deliberately does NOT filter `percentage IS NOT NULL` here — some
  * callers (getStudyDates, getRecentActivities) need every row regardless
@@ -99,13 +100,14 @@ interface ActivityHeatmapRow {
  * ActivityScore-only behavior); callers that aggregate scores add that
  * filter themselves.
  *
- * Practice/Writing rows resolve a `skill_name` from their catalog codes
- * instead of a Skill FK (neither table has one) — Skill is seeded with
- * rows named exactly 'Use of English' and 'Writing'
- * (src/config/seed/data/skills.ts), so these land in the same bucket a
- * manually-logged activity for that skill would. The CASE for Practice is
- * intentionally not a bare hardcode: only UOE_PART_% is generatable today,
- * but this leaves room for READING_PART_% later without another migration.
+ * Practice/Writing/Listening rows resolve a `skill_name` from their catalog
+ * codes instead of a Skill FK (none of those tables have one) — Skill is
+ * seeded with rows named exactly 'Use of English', 'Writing' and
+ * 'Listening' (src/config/seed/data/skills.ts), so these land in the same
+ * bucket a manually-logged activity for that skill would. The CASE for
+ * Practice is intentionally not a bare hardcode: only UOE_PART_% is
+ * generatable today, but this leaves room for READING_PART_% later without
+ * another migration.
  */
 const UNIFIED_SCORES_CTE = `
   WITH unified_scores AS (
@@ -144,6 +146,19 @@ const UNIFIED_SCORES_CTE = `
     FROM writing_submissions ws
     INNER JOIN writing_tasks wt ON wt.id = ws.task_id
     WHERE ws.deleted_at IS NULL AND ws.status = 'graded'
+
+    UNION ALL
+
+    SELECT la.id, la.user_id, la.submitted_at AS occurred_at,
+           CAST(la.percentage AS FLOAT) AS percentage,
+           'Listening' AS skill_name,
+           'listening' AS skill_slug,
+           COALESCE(la.duration_seconds, 0) / 60.0 AS duration_minutes,
+           ls.title AS title,
+           'listening_attempt' AS source, NULL::uuid AS planned_activity_id
+    FROM listening_attempts la
+    INNER JOIN listening_sources ls ON ls.id = la.source_id
+    WHERE la.deleted_at IS NULL AND la.status = 'completed'
   )
 `;
 

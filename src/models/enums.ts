@@ -215,6 +215,11 @@ export enum ListeningSourceStatus {
   INACTIVE = 'inactive',
 }
 
+export enum ListeningAttemptStatus {
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+}
+
 export enum MockAttemptStatus {
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
