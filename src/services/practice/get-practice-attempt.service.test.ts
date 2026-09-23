@@ -37,6 +37,8 @@ const SAFE_EXERCISE: PracticeExerciseSafeWithItems = {
   items: [],
 };
 
+const EXERCISE_TEMPLATE = { title: 't', instructions: 'i', stimulus: null };
+
 function makeAttempt(overrides: Partial<PracticeAttempt> = {}): PracticeAttempt {
   return {
     id: ATTEMPT_ID,
@@ -86,7 +88,8 @@ function makeService(overrides: Overrides = {}): GetPracticeAttemptService {
       findSafeExerciseWithItemsForUser:
         overrides.findSafeExerciseWithItemsForUser ?? (async () => SAFE_EXERCISE),
       findExerciseWithAnswerKeysForEvaluation:
-        overrides.findExerciseWithAnswerKeysForEvaluation ?? (async () => ({ items: [ITEM] })),
+        overrides.findExerciseWithAnswerKeysForEvaluation ??
+        (async () => ({ items: [ITEM], exercise: EXERCISE_TEMPLATE })),
     },
     answers: { findByAttemptForUser: overrides.findByAttemptForUser ?? (async () => [ANSWER]) },
   });
@@ -169,7 +172,7 @@ describe('GetPracticeAttemptService.execute', () => {
       findByIdForUser: async () => completed,
       findExerciseWithAnswerKeysForEvaluation: async (_exerciseId, userId) => {
         evalUserId = userId;
-        return { items: [ITEM] };
+        return { items: [ITEM], exercise: EXERCISE_TEMPLATE };
       },
       findByAttemptForUser: async (_attemptId, userId) => {
         answersUserId = userId;

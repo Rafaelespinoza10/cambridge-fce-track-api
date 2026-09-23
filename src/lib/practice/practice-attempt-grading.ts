@@ -11,6 +11,7 @@ import type { PracticeItem } from '@models/PracticeItem';
 import type { PracticeAnswer } from '@models/PracticeAnswer';
 import type {
   PracticeAttemptResultDto,
+  PracticeAttemptResultExercise,
   PracticeAttemptItemResultDto,
   PracticeAttemptItemAdaptiveMetadata,
 } from '../../interfaces/practice/practice-attempt.interface';
@@ -197,12 +198,17 @@ export function toAdaptiveMetadata(
 /**
  * Builds the full, answer-revealing result DTO for a `completed` attempt —
  * used by both SubmitPracticeAttemptService (fresh submit + replay) and
- * GetPracticeAttemptService, so the two can never drift. `itemsWithKeys` must
- * come from PracticeExercisesRepository.findExerciseWithAnswerKeysForEvaluation
- * (the only place answer_key/explanation are ever selected).
+ * GetPracticeAttemptService, so the two can never drift. `itemsWithKeys` and
+ * `exercise` must both come from
+ * PracticeExercisesRepository.findExerciseWithAnswerKeysForEvaluation (the
+ * only place answer_key/explanation are ever selected) — `exercise` is
+ * re-embedded here because PracticeAttemptViewDto.exercise is always `null`
+ * once an attempt is completed, so this is the only place the original
+ * title/instructions/stimulus survive into the result.
  */
 export function buildPracticeAttemptResultDto(
   attempt: PracticeAttempt,
+  exercise: PracticeAttemptResultExercise,
   itemsWithKeys: PracticeItem[],
   answers: PracticeAnswer[],
 ): PracticeAttemptResultDto {
@@ -240,6 +246,7 @@ export function buildPracticeAttemptResultDto(
   return {
     attemptId: attempt.id,
     exerciseId: attempt.exercise_id,
+    exercise,
     submittedAt: attempt.submitted_at,
     durationSeconds: attempt.duration_seconds,
     correctCount: attempt.correct_count,
