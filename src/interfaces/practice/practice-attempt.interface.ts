@@ -62,9 +62,24 @@ export interface PracticeAttemptItemResultDto {
   adaptiveMetadata: PracticeAttemptItemAdaptiveMetadata | null;
 }
 
+/**
+ * The exercise's own template — title/instructions/stimulus — re-embedded
+ * on the result so a completed attempt's review screen can show what the
+ * student was actually asked to do without a second fetch. `exercise` is
+ * always `null` once an attempt is `completed` (see PracticeAttemptViewDto),
+ * so without this the original prompt/stimulus would be unrecoverable from
+ * the result alone.
+ */
+export interface PracticeAttemptResultExercise {
+  title: string;
+  instructions: string;
+  stimulus: string | null;
+}
+
 export interface PracticeAttemptResultDto {
   attemptId: string;
   exerciseId: string;
+  exercise: PracticeAttemptResultExercise;
   submittedAt: Date;
   durationSeconds: number;
   correctCount: number;

@@ -128,6 +128,7 @@ const ACTIVE_VIEW: PracticeAttemptViewDto = {
 const RESULT_DTO = {
   attemptId: ATTEMPT_ID,
   exerciseId: EXERCISE_ID,
+  exercise: { title: 'Title', instructions: 'Instructions', stimulus: null },
   submittedAt: FIXED_NOW,
   durationSeconds: 120,
   correctCount: 6,

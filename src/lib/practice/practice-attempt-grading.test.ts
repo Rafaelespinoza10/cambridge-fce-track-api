@@ -12,6 +12,8 @@ import {
   toAdaptiveMetadata,
 } from './practice-attempt-grading';
 
+const EXERCISE_TEMPLATE = { title: 'Exercise title', instructions: 'Do the thing.', stimulus: null };
+
 // ── normalizeTextAnswer ──────────────────────────────────────────────────────
 
 describe('normalizeTextAnswer', () => {
@@ -227,7 +229,7 @@ describe('buildPracticeAttemptResultDto', () => {
   ] as unknown as import('@models/PracticeAnswer').PracticeAnswer[];
 
   it('orders items by position regardless of input order', () => {
-    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+    const dto = buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, answers);
     assert.deepEqual(
       dto.items.map((i) => i.itemId),
       ['item-1', 'item-2'],
@@ -235,29 +237,29 @@ describe('buildPracticeAttemptResultDto', () => {
   });
 
   it('maps accepted option ids to their labels for single_choice', () => {
-    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+    const dto = buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, answers);
     assert.deepEqual(dto.items[0]?.acceptedAnswers, ['alpha']);
   });
 
   it('uses the literal accepted answers for text items', () => {
-    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+    const dto = buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, answers);
     assert.deepEqual(dto.items[1]?.acceptedAnswers, ['been']);
   });
 
   it('converts the stored numeric-as-string percentage to a real number', () => {
-    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+    const dto = buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, answers);
     assert.equal(dto.percentage, 50);
     assert.equal(typeof dto.percentage, 'number');
   });
 
   it('carries explanation and skillTags through from the item (post-completion reveal)', () => {
-    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+    const dto = buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, answers);
     assert.equal(dto.items[0]?.explanation, 'e1');
     assert.deepEqual(dto.items[0]?.skillTags, ['collocations']);
   });
 
   it('throws if a persisted answer is missing for an item (data-integrity guard)', () => {
-    assert.throws(() => buildPracticeAttemptResultDto(attempt, items, [answers[0]!]));
+    assert.throws(() => buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, [answers[0]!]));
   });
 
   it('throws if the attempt is not actually completed', () => {
@@ -266,7 +268,7 @@ describe('buildPracticeAttemptResultDto', () => {
       submitted_at: null,
       duration_seconds: null,
     } as unknown as import('@models/PracticeAttempt').PracticeAttempt;
-    assert.throws(() => buildPracticeAttemptResultDto(inProgress, items, answers));
+    assert.throws(() => buildPracticeAttemptResultDto(inProgress, EXERCISE_TEMPLATE, items, answers));
   });
 });
 
@@ -461,7 +463,7 @@ describe('buildPracticeAttemptResultDto — adaptiveMetadata', () => {
       },
     ] as unknown as import('@models/PracticeAnswer').PracticeAnswer[];
 
-    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+    const dto = buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, answers);
 
     assert.deepEqual(dto.items[0]?.adaptiveMetadata, {
       generationSource: 'mistake_remix',
@@ -494,7 +496,7 @@ describe('buildPracticeAttemptResultDto — adaptiveMetadata', () => {
       },
     ] as unknown as import('@models/PracticeAnswer').PracticeAnswer[];
 
-    const dto = buildPracticeAttemptResultDto(attempt, items, answers);
+    const dto = buildPracticeAttemptResultDto(attempt, EXERCISE_TEMPLATE, items, answers);
 
     assert.equal(dto.items[0]?.adaptiveMetadata, null);
   });

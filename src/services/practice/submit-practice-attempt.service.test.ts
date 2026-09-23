@@ -69,6 +69,8 @@ const ITEM_2 = {
 const EXERCISE = {
   id: EXERCISE_ID,
   title: 'Word Formation Exercise',
+  instructions: 'Complete each gap with the correct form of the word given.',
+  stimulus: null,
   exam_code: 'B2_FIRST',
   paper_code: 'PAPER_1',
   part_code: 'UOE_PART_3',
