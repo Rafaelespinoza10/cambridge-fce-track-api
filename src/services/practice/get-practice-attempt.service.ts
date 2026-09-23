@@ -21,6 +21,12 @@ export class GetPracticeAttemptError extends Error {
   }
 }
 
+export interface GetPracticeAttemptExercise {
+  title: string;
+  instructions: string;
+  stimulus: string | null;
+}
+
 export interface PracticeExercisesRepositoryPort {
   findSafeExerciseWithItemsForUser(
     exerciseId: string,
@@ -29,7 +35,7 @@ export interface PracticeExercisesRepositoryPort {
   findExerciseWithAnswerKeysForEvaluation(
     exerciseId: string,
     userId: string,
-  ): Promise<{ items: PracticeItem[] } | null>;
+  ): Promise<{ items: PracticeItem[]; exercise: GetPracticeAttemptExercise } | null>;
 }
 
 export interface PracticeAttemptsRepositoryPort {
@@ -85,7 +91,7 @@ export class GetPracticeAttemptService {
     return {
       attempt: toPracticeAttemptSafeDto(attempt),
       exercise: null,
-      result: buildPracticeAttemptResultDto(attempt, withKeys.items, answers),
+      result: buildPracticeAttemptResultDto(attempt, withKeys.exercise, withKeys.items, answers),
     };
   }
 }

@@ -74,6 +74,8 @@ export interface PracticeAttemptsRepositoryPort {
 export interface SubmitPracticeAttemptExercise {
   id: string;
   title: string;
+  instructions: string;
+  stimulus: string | null;
   exam_code: string;
   paper_code: string;
   part_code: string;
@@ -436,7 +438,12 @@ export class SubmitPracticeAttemptService {
     );
 
     return {
-      result: buildPracticeAttemptResultDto(completedAttempt, withKeys.items, persistedAnswers),
+      result: buildPracticeAttemptResultDto(
+        completedAttempt,
+        withKeys.exercise,
+        withKeys.items,
+        persistedAnswers,
+      ),
       idempotentReplay: false,
       // Empty for everything except a spaced retest — one entry per review
       // this submission just closed.
@@ -464,7 +471,7 @@ export class SubmitPracticeAttemptService {
     const answers = await answersFactory(source).findByAttemptForUser(attempt.id, attempt.user_id);
 
     return {
-      result: buildPracticeAttemptResultDto(attempt, withKeys.items, answers),
+      result: buildPracticeAttemptResultDto(attempt, withKeys.exercise, withKeys.items, answers),
       idempotentReplay: true,
       // A replay re-grades nothing and re-schedules nothing, so it has no
       // review outcome to report either.
