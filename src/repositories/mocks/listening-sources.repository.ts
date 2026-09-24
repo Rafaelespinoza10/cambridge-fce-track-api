@@ -293,6 +293,17 @@ class ListeningSourcesRepository {
       .orderBy('item.position', 'ASC')
       .getMany();
   }
+
+  /** Narrow lookup for the AI-linked planned-activity title/exam-section — not the active/inactive filtering `findActiveByIdSafe` does. */
+  async findTitleAndPartCodeById(
+    sourceId: string,
+  ): Promise<{ title: string; partCode: string } | null> {
+    const source = await this.sourceRepo.findOne({
+      where: { id: sourceId },
+      select: { title: true, part_code: true },
+    });
+    return source ? { title: source.title, partCode: source.part_code } : null;
+  }
 }
 
 export { ListeningSourcesRepository };

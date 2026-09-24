@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
+import type { DataSource, EntityManager } from 'typeorm';
 
 import {
   SubmitListeningAttemptService,
@@ -13,6 +14,10 @@ import type {
 import type { ListeningAttempt } from '../../models/ListeningAttempt';
 import type { ListeningItem } from '../../models/ListeningItem';
 import { ListeningAttemptStatus } from '../../models/enums';
+
+const FAKE_DATA_SOURCE = {
+  transaction: async <T>(work: (manager: EntityManager) => Promise<T>) => work({} as EntityManager),
+} as unknown as DataSource;
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
 const SOURCE_ID = '22222222-2222-2222-2222-222222222222';
@@ -68,26 +73,72 @@ function makeAttempt(overrides: Partial<ListeningAttempt> = {}): ListeningAttemp
 
 interface Overrides {
   findByIdForUser?: ListeningAttemptsRepositoryPort['findByIdForUser'];
+  findByIdForUpdate?: ListeningAttemptsRepositoryPort['findByIdForUpdate'];
   completeAttempt?: ListeningAttemptsRepositoryPort['completeAttempt'];
   findItemsWithAnswerKeysBySourceId?: ListeningSourcesRepositoryPort['findItemsWithAnswerKeysBySourceId'];
+  findTitleAndPartCodeById?: ListeningSourcesRepositoryPort['findTitleAndPartCodeById'];
 }
 
 function makeService(overrides: Overrides = {}): SubmitListeningAttemptService {
   const attempts: ListeningAttemptsRepositoryPort = {
     findByIdForUser: overrides.findByIdForUser ?? (async () => makeAttempt()),
+    findByIdForUpdate: overrides.findByIdForUpdate ?? (async () => makeAttempt()),
     completeAttempt: overrides.completeAttempt ?? (async () => ({ affected: 1 })),
   };
   const sources: ListeningSourcesRepositoryPort = {
     findItemsWithAnswerKeysBySourceId:
       overrides.findItemsWithAnswerKeysBySourceId ?? (async () => ITEMS),
+    findTitleAndPartCodeById:
+      overrides.findTitleAndPartCodeById ??
+      (async () => ({ title: 'Test Source', partCode: 'LISTENING_PART_1' })),
   };
-  return new SubmitListeningAttemptService({ attempts, sources });
+  return new SubmitListeningAttemptService(FAKE_DATA_SOURCE, {
+    attempts,
+    sources,
+    // Stubbed for the same reason as the repositories: the real one opens
+    // repositories on the transaction's EntityManager, and this suite's
+    // manager is a fake. Its own behaviour is covered by
+    // create-ai-linked-activity.test.ts / resolve-plan-day-for-date.test.ts.
+    createAiLinkedActivity: async () => undefined,
+    resolvePlanDayId: async () => 'plan-day-1',
+    resolveUserLocalDayKey: async () => '2026-01-01',
+  });
 }
 
 function assertErr(err: unknown, code: SubmitListeningAttemptErrorCode): true {
   assert.ok(err instanceof SubmitListeningAttemptError);
   assert.equal(err.code, code);
   return true;
+}
+
+/** Builds a service whose createAiLinkedActivity calls are observable, unlike makeService's silent stub. */
+function makeServiceWithLinkSpy(overrides: Overrides = {}): {
+  service: SubmitListeningAttemptService;
+  linkCalls: unknown[];
+} {
+  const linkCalls: unknown[] = [];
+  const attempts: ListeningAttemptsRepositoryPort = {
+    findByIdForUser: overrides.findByIdForUser ?? (async () => makeAttempt()),
+    findByIdForUpdate: overrides.findByIdForUpdate ?? (async () => makeAttempt()),
+    completeAttempt: overrides.completeAttempt ?? (async () => ({ affected: 1 })),
+  };
+  const sources: ListeningSourcesRepositoryPort = {
+    findItemsWithAnswerKeysBySourceId:
+      overrides.findItemsWithAnswerKeysBySourceId ?? (async () => ITEMS),
+    findTitleAndPartCodeById:
+      overrides.findTitleAndPartCodeById ??
+      (async () => ({ title: 'Test Source', partCode: 'LISTENING_PART_1' })),
+  };
+  const service = new SubmitListeningAttemptService(FAKE_DATA_SOURCE, {
+    attempts,
+    sources,
+    createAiLinkedActivity: async (_manager, input) => {
+      linkCalls.push(input);
+    },
+    resolvePlanDayId: async () => 'plan-day-1',
+    resolveUserLocalDayKey: async () => '2026-01-01',
+  });
+  return { service, linkCalls };
 }
 
 describe('SubmitListeningAttemptService.execute', () => {
@@ -179,6 +230,59 @@ describe('SubmitListeningAttemptService.execute', () => {
     assert.equal(idempotentReplay, true);
     assert.equal(completeCalls, 0);
     assert.equal(result.correctCount, 2);
+  });
+
+  it('registers a completed attempt as an AI-linked planned activity, same as Practice/Writing', async () => {
+    const { service, linkCalls } = makeServiceWithLinkSpy();
+
+    await service.execute(
+      USER_ID,
+      ATTEMPT_ID,
+      [{ itemId: ITEM_1, answer: { kind: 'single_choice', optionId: 'a' } }],
+      SUBMITTED_AT,
+    );
+
+    assert.equal(linkCalls.length, 1);
+    const input = linkCalls[0] as Record<string, unknown>;
+    assert.equal(input.listeningAttemptId, ATTEMPT_ID);
+    assert.equal(input.skillSlug, 'listening');
+    assert.equal(input.title, 'Listening — Test Source');
+    assert.equal(input.examSectionSlug, 'listening-part-1');
+    assert.equal(input.planDayId, 'plan-day-1');
+    assert.equal(input.practiceAttemptId, undefined);
+    assert.equal(input.writingSubmissionId, undefined);
+    assert.equal(input.dailySessionSubmissionId, undefined);
+  });
+
+  it('does not register a planned activity on an idempotent replay', async () => {
+    const completedAttempt = makeAttempt({
+      status: ListeningAttemptStatus.COMPLETED,
+      submitted_at: SUBMITTED_AT,
+      duration_seconds: 300,
+      correct_count: 2,
+      percentage: '100.00',
+      answers: [
+        {
+          itemId: ITEM_1,
+          answerPayload: { kind: 'single_choice', optionId: 'a' },
+          normalizedAnswer: 'a',
+          isCorrect: true,
+          responseTimeMs: null,
+        },
+      ],
+      feedback_summary: {
+        version: 'listening-attempt-feedback-v1',
+        unansweredCount: 0,
+        skillBreakdown: [],
+      },
+    });
+    const { service, linkCalls } = makeServiceWithLinkSpy({
+      findByIdForUser: async () => completedAttempt,
+    });
+
+    await service.execute(USER_ID, ATTEMPT_ID, [], SUBMITTED_AT);
+
+    assert.equal(linkCalls.length, 0);
   });
 
   it('rejects an unknown attempt', async () => {

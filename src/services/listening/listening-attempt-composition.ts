@@ -33,7 +33,7 @@ async function buildListeningAttemptServices(): Promise<ListeningAttemptServices
       sources: sourcesRepo,
       attempts: attemptsRepo,
     }),
-    submitAttempt: new SubmitListeningAttemptService({
+    submitAttempt: new SubmitListeningAttemptService(dataSource, {
       attempts: attemptsRepo,
       sources: sourcesRepo,
     }),

@@ -14,16 +14,18 @@ interface CreateAiLinkedPlannedActivityInput {
   practiceAttemptId?: string;
   writingSubmissionId?: string;
   dailySessionSubmissionId?: string;
+  listeningAttemptId?: string;
 }
 
 /**
- * Called from inside the Practice/Writing/Daily Session submit transaction
- * once an AI-generated session actually completes (see the "register on
- * completion only" decision) — never at generation/start time. Exactly one
- * of practiceAttemptId/writingSubmissionId/dailySessionSubmissionId must be
- * provided, matching the 3-way chk_planned_activities_ai_link constraint
- * (originally 2-way in AddAiLinkedPlannedActivities, extended by
- * AddDailySessionModule).
+ * Called from inside the Practice/Writing/Daily Session/Listening submit
+ * transaction once an AI-generated session actually completes (see the
+ * "register on completion only" decision) — never at generation/start time.
+ * Exactly one of practiceAttemptId/writingSubmissionId/
+ * dailySessionSubmissionId/listeningAttemptId must be provided, matching the
+ * 4-way chk_planned_activities_ai_link constraint (originally 2-way in
+ * AddAiLinkedPlannedActivities, extended by AddDailySessionModule and
+ * AddListeningAiLinkedPlannedActivity).
  *
  * Takes a bare EntityManager (not PlanningRepository, which is DataSource-only)
  * so it composes into a transaction that a different service already owns.
@@ -59,6 +61,7 @@ async function createAiLinkedPlannedActivity(
     practice_attempt_id: input.practiceAttemptId ?? null,
     writing_submission_id: input.writingSubmissionId ?? null,
     daily_session_submission_id: input.dailySessionSubmissionId ?? null,
+    listening_attempt_id: input.listeningAttemptId ?? null,
   });
 
   return plannedActivityRepo.save(entity);

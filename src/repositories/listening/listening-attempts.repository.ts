@@ -78,13 +78,20 @@ class ListeningAttemptsRepository {
       .getOne();
   }
 
-  /** Only transitions an attempt that is still 'in_progress' (prevents completing twice). */
+  /**
+   * Only transitions an attempt that is still 'in_progress' (prevents
+   * completing twice). Takes the transactional manager explicitly — this
+   * write and the AI-linked planned_activity it creates (see
+   * SubmitListeningAttemptService) must commit or roll back together, same
+   * as Writing's gradeSubmission.
+   */
   async completeAttempt(
     attemptId: string,
     userId: string,
     data: CompleteListeningAttemptData,
+    manager: EntityManager,
   ): Promise<UpdateResult> {
-    return this.attemptRepo.update(
+    return manager.getRepository(ListeningAttempt).update(
       {
         id: attemptId,
         user_id: userId,
