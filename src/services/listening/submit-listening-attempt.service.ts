@@ -59,9 +59,7 @@ export interface ListeningAttemptsRepositoryPort {
 
 export interface ListeningSourcesRepositoryPort {
   findItemsWithAnswerKeysBySourceId(sourceId: string): Promise<ListeningItem[]>;
-  findTitleAndPartCodeById(
-    sourceId: string,
-  ): Promise<{ title: string; partCode: string } | null>;
+  findTitleAndPartCodeById(sourceId: string): Promise<{ title: string; partCode: string } | null>;
 }
 
 export interface SubmitListeningAttemptServiceDeps {
