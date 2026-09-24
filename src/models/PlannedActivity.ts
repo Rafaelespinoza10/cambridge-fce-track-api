@@ -21,6 +21,7 @@ import type { EvidenceFile } from './EvidenceFile';
 import type { PracticeAttempt } from './PracticeAttempt';
 import type { WritingSubmission } from './WritingSubmission';
 import type { DailySessionSubmission } from './DailySessionSubmission';
+import type { ListeningAttempt } from './ListeningAttempt';
 
 @Entity('planned_activities')
 export class PlannedActivity {
@@ -93,6 +94,9 @@ export class PlannedActivity {
   @Column({ type: 'uuid', nullable: true })
   daily_session_submission_id: string | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  listening_attempt_id: string | null;
+
   @CreateDateColumn({ type: 'timestamp with time zone' })
   created_at: Date;
 
@@ -144,4 +148,8 @@ export class PlannedActivity {
   @ManyToOne('DailySessionSubmission', { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'daily_session_submission_id' })
   daily_session_submission: DailySessionSubmission | null;
+
+  @ManyToOne('ListeningAttempt', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'listening_attempt_id' })
+  listening_attempt: ListeningAttempt | null;
 }

@@ -1,3 +1,4 @@
+import type { DataSource, EntityManager } from 'typeorm';
 import type { ListeningAttempt } from '@models/ListeningAttempt';
 import type { ListeningItem } from '@models/ListeningItem';
 import { ListeningAttemptStatus } from '@models/enums';
@@ -15,6 +16,10 @@ import type {
   SubmitListeningAttemptAnswerInput,
   ListeningAttemptSubmitResultDto,
 } from '../../interfaces/listening/listening-attempt.interface';
+import { createAiLinkedPlannedActivity } from '../planning/create-ai-linked-activity';
+import type { CreateAiLinkedPlannedActivityInput } from '../planning/create-ai-linked-activity';
+import { resolvePlanDayIdForDate } from '../planning/resolve-plan-day-for-date';
+import { resolveUserLocalDayKey } from '../planning/resolve-user-local-day';
 
 export enum SubmitListeningAttemptErrorCode {
   INVALID_INPUT = 'invalid_input',
@@ -34,20 +39,44 @@ export class SubmitListeningAttemptError extends Error {
 
 export interface ListeningAttemptsRepositoryPort {
   findByIdForUser(attemptId: string, userId: string): Promise<ListeningAttempt | null>;
+  /**
+   * Locks the row with SELECT ... FOR UPDATE — requires a transactional
+   * EntityManager. Guards a concurrent double-submit racing the deterministic
+   * grader the same way Writing/Practice guard their (slower) LLM call.
+   */
+  findByIdForUpdate(
+    attemptId: string,
+    userId: string,
+    manager: EntityManager,
+  ): Promise<ListeningAttempt | null>;
   completeAttempt(
     attemptId: string,
     userId: string,
     data: CompleteListeningAttemptData,
+    manager: EntityManager,
   ): Promise<{ affected?: number | null }>;
 }
 
 export interface ListeningSourcesRepositoryPort {
   findItemsWithAnswerKeysBySourceId(sourceId: string): Promise<ListeningItem[]>;
+  findTitleAndPartCodeById(sourceId: string): Promise<{ title: string; partCode: string } | null>;
 }
 
 export interface SubmitListeningAttemptServiceDeps {
   attempts: ListeningAttemptsRepositoryPort;
   sources: ListeningSourcesRepositoryPort;
+  // Injectable seam for tests — see SubmitWritingSubmissionServiceDeps.createAiLinkedActivity.
+  createAiLinkedActivity?: (
+    manager: EntityManager,
+    input: CreateAiLinkedPlannedActivityInput,
+  ) => Promise<unknown>;
+  // Injectable seam for tests — see resolve-plan-day-for-date.ts.
+  resolvePlanDayId?: (manager: EntityManager, userId: string, dateKey: string) => Promise<string>;
+  resolveUserLocalDayKey?: (
+    manager: EntityManager,
+    userId: string,
+    instant: Date,
+  ) => Promise<string>;
 }
 
 function invalidInput(message: string): never {
@@ -97,18 +126,24 @@ function toCleanPayload(payload: PracticeAnswerPayload): PracticeAnswerPayload {
   return { kind: 'unanswered' };
 }
 
+/** "LISTENING_PART_2" -> "listening-part-2", matching the seeded exam_sections slug. */
+function examSectionSlugForPartCode(partCode: string): string | null {
+  const match = /_PART_(\d+)$/.exec(partCode);
+  return match ? `listening-part-${match[1]}` : null;
+}
+
 /**
  * Grades and persists a full attempt submission: validate ownership/status
  * -> fetch the real answer keys -> grade every item deterministically ->
- * complete the attempt with the graded answers inline. Client-sent
- * score/timestamps/isCorrect are never read; only itemId/answer/
- * responseTimeMs are. Not wrapped in a DB transaction (unlike Practice's
- * submit) — there's only ever a single `completeAttempt` write here, no
- * separate answers table, no Mistake Bank/Plan/spaced-retest side effects
- * to keep atomic with it.
+ * lock and complete the attempt, and register it on the Plan/Home, inside
+ * one transaction. Client-sent score/timestamps/isCorrect are never read;
+ * only itemId/answer/responseTimeMs are.
  */
 export class SubmitListeningAttemptService {
-  constructor(private readonly deps: SubmitListeningAttemptServiceDeps) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly deps: SubmitListeningAttemptServiceDeps,
+  ) {}
 
   async execute(
     userId: string,
@@ -195,30 +230,79 @@ export class SubmitListeningAttemptService {
       version: 'listening-attempt-feedback-v1' as const,
     };
 
-    await this.deps.attempts.completeAttempt(attempt.id, userId, {
-      submittedAt,
-      durationSeconds,
-      correctCount,
-      percentage,
-      answers: gradedAnswers,
-      feedbackSummary: listeningFeedbackSummary,
+    return this.dataSource.transaction(async (manager) => {
+      const locked = await this.deps.attempts.findByIdForUpdate(attemptId, userId, manager);
+      if (locked === null) {
+        throw new SubmitListeningAttemptError(
+          'Listening attempt not found',
+          SubmitListeningAttemptErrorCode.ATTEMPT_NOT_FOUND,
+        );
+      }
+      if (locked.status === ListeningAttemptStatus.COMPLETED) {
+        // Lost a race against a concurrent submit — discard this (already
+        // computed) grading result and replay whichever one actually won.
+        return this.buildReplayResult(locked);
+      }
+
+      await this.deps.attempts.completeAttempt(
+        attemptId,
+        userId,
+        {
+          submittedAt,
+          durationSeconds,
+          correctCount,
+          percentage,
+          answers: gradedAnswers,
+          feedbackSummary: listeningFeedbackSummary,
+        },
+        manager,
+      );
+
+      // Register on the Plan/Home only once the attempt is really completed
+      // — never at start time. A standalone Listening attempt never captures
+      // a plan_day_id up front (there is no "Add Activity" chooser flow into
+      // it, unlike Practice/Writing), so the day is always resolved here, the
+      // same way Daily Session resolves it. Without this, a finished
+      // Listening session never showed up as a completed activity on the
+      // Plan/Home "This Week" count the way Practice/Writing/Daily Session
+      // already did.
+      {
+        const linker = this.deps.createAiLinkedActivity ?? createAiLinkedPlannedActivity;
+        const resolveDay = this.deps.resolvePlanDayId ?? resolvePlanDayIdForDate;
+        const resolveLocalDayKey = this.deps.resolveUserLocalDayKey ?? resolveUserLocalDayKey;
+        const planDayId = await resolveDay(
+          manager,
+          userId,
+          await resolveLocalDayKey(manager, userId, submittedAt),
+        );
+        const sourceInfo = await this.deps.sources.findTitleAndPartCodeById(attempt.source_id);
+        await linker(manager, {
+          planDayId,
+          title: `Listening — ${sourceInfo?.title ?? 'Listening'}`,
+          skillSlug: 'listening',
+          examSectionSlug: sourceInfo ? examSectionSlugForPartCode(sourceInfo.partCode) : null,
+          estimatedDurationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
+          completedAt: submittedAt,
+          listeningAttemptId: attemptId,
+        });
+      }
+
+      const completedAttempt = {
+        ...attempt,
+        status: ListeningAttemptStatus.COMPLETED,
+        submitted_at: submittedAt,
+        duration_seconds: durationSeconds,
+        correct_count: correctCount,
+        total_count: totalCount,
+        percentage: String(percentage),
+        feedback_summary: listeningFeedbackSummary,
+      } as ListeningAttempt;
+
+      return {
+        result: buildListeningAttemptResultDto(completedAttempt, itemsWithKeys, gradedAnswers),
+        idempotentReplay: false,
+      };
     });
-
-    const completedAttempt = {
-      ...attempt,
-      status: ListeningAttemptStatus.COMPLETED,
-      submitted_at: submittedAt,
-      duration_seconds: durationSeconds,
-      correct_count: correctCount,
-      total_count: totalCount,
-      percentage: String(percentage),
-      feedback_summary: listeningFeedbackSummary,
-    } as ListeningAttempt;
-
-    return {
-      result: buildListeningAttemptResultDto(completedAttempt, itemsWithKeys, gradedAnswers),
-      idempotentReplay: false,
-    };
   }
 
   private async buildReplayResult(
