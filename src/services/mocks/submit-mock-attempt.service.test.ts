@@ -20,7 +20,10 @@ import {
 } from '@models/enums';
 import type { MockAttempt } from '@models/MockAttempt';
 import type { MockAttemptSection } from '@models/MockAttemptSection';
-import { computeMockAttemptPaperScores, PAPER_GROUPS } from '@lib/mocks/mock-attempt-paper-scores';
+import {
+  computeMockAttemptPaperScores,
+  computeCoveredOverallPercentage,
+} from '@lib/mocks/mock-attempt-paper-scores';
 import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
@@ -121,17 +124,18 @@ function makeService(opts: {
 }
 
 describe('SubmitMockAttemptService.execute', () => {
-  it('gives a scoped attempt no estimated score or level, and files it as PARTIAL', async () => {
-    // Writing only. The overall average reads a missing group as 0, so scoring
-    // this would report (0 + 0 + 75 + 0) / 4 = 18.75% as a B2 First result and
-    // then show up as "your last mock" on Home and Progress. A partial sitting
-    // is not a B2 First estimate, so it reports none.
+  it('still estimates a score/level for a scoped attempt, scoped to what was covered, and files it as PARTIAL', async () => {
+    // Writing only, at 75%. The estimate must average ONLY the covered
+    // group(s) — a `?? 0` average across all 4 groups would report
+    // (0 + 0 + 75 + 0) / 4 = 18.75% instead, filing a strong Writing-only
+    // sitting near the bottom of the Cambridge scale.
+    const sections = [
+      makeSection('writing-part-1', MockAttemptSectionStatus.COMPLETED, '15', '20'),
+      makeSection('writing-part-2', MockAttemptSectionStatus.COMPLETED, '15', '20'),
+    ];
     const { service, createMockCalls, createSectionsCalls } = makeService({
       attempt: makeAttempt(),
-      sections: [
-        makeSection('writing-part-1', MockAttemptSectionStatus.COMPLETED, '15', '20'),
-        makeSection('writing-part-2', MockAttemptSectionStatus.COMPLETED, '15', '20'),
-      ],
+      sections,
     });
 
     await service.execute(USER_ID, ATTEMPT_ID, SUBMITTED_AT);
@@ -142,9 +146,12 @@ describe('SubmitMockAttemptService.execute', () => {
       estimatedLevel: string | null;
       name: string;
     };
+    const paperScores = computeMockAttemptPaperScores(sections);
+    const overallPercentage = computeCoveredOverallPercentage(paperScores);
+    const expectedEstimate = estimateB2FirstResult(overallPercentage as number);
     assert.equal(mockData.mockType, MockType.PARTIAL);
-    assert.equal(mockData.estimatedStandardizedScore, null);
-    assert.equal(mockData.estimatedLevel, null);
+    assert.equal(mockData.estimatedStandardizedScore, expectedEstimate.estimatedScore);
+    assert.equal(mockData.estimatedLevel, expectedEstimate.estimatedLevel);
     // Recognisable in the mock history instead of another "Full Timed Mock".
     assert.ok(mockData.name.startsWith('Writing Timed Mock'));
 
@@ -172,9 +179,7 @@ describe('SubmitMockAttemptService.execute', () => {
     // estimateB2FirstResult itself computes it, so this stays correct
     // regardless of the fixture's own numbers.
     const paperScores = computeMockAttemptPaperScores(makeCompletedSections());
-    const overallPercentage =
-      PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0).reduce((a, b) => a + b, 0) /
-      PAPER_GROUPS.length;
+    const overallPercentage = computeCoveredOverallPercentage(paperScores) as number;
     const expectedEstimate = estimateB2FirstResult(overallPercentage);
     assert.equal(mockData.estimatedStandardizedScore, expectedEstimate.estimatedScore);
     assert.equal(mockData.estimatedLevel, expectedEstimate.estimatedLevel);
