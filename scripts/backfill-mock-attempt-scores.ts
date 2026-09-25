@@ -42,7 +42,10 @@ import {
   computeMockAttemptPaperScores,
   computeCoveredOverallPercentage,
 } from '../src/lib/mocks/mock-attempt-paper-scores';
-import type { MockAttemptPaperGroup, MockAttemptPaperScoreDto } from '../src/lib/mocks/mock-attempt-paper-scores';
+import type {
+  MockAttemptPaperGroup,
+  MockAttemptPaperScoreDto,
+} from '../src/lib/mocks/mock-attempt-paper-scores';
 import { findMockAttemptSectionCatalogEntry } from '../src/lib/mocks/mock-attempt-catalog';
 import { estimateB2FirstResult } from '../src/lib/mocks/estimate-mock-level';
 
@@ -217,7 +220,9 @@ async function main(): Promise<void> {
       `${updated} row(s) ${APPLY ? 'updated' : 'would be updated'} (${updatedFromAttempt} from a live attempt, ${updatedFromManualEntry} from a manual entry's own section scores).`,
     );
     console.log(`${skippedNotB2First} row(s) skipped (not B2 First).`);
-    console.log(`${skippedNothingCovered} row(s) skipped (no usable section score to derive a score from).`);
+    console.log(
+      `${skippedNothingCovered} row(s) skipped (no usable section score to derive a score from).`,
+    );
     if (!APPLY && updated > 0) {
       console.log('\nRe-run with --apply to write these changes.');
     }
