@@ -25,7 +25,7 @@ import {
 } from '@lib/practice/practice-attempt-grading';
 import {
   computeMockAttemptPaperScores,
-  PAPER_GROUPS,
+  computeCoveredOverallPercentage,
   type MockAttemptPaperGroup,
   type MockAttemptPaperScoreDto,
 } from '@lib/mocks/mock-attempt-paper-scores';
@@ -194,7 +194,11 @@ export class GetMockAttemptResultService {
    * Only meaningful once every section is graded (attempt.status ===
    * 'completed' — an abandoned attempt may be missing whole papers) and
    * only for B2 First (the only exam type estimateB2FirstResult has
-   * published boundaries for).
+   * published boundaries for). Scoped to whatever papers were actually
+   * covered via computeCoveredOverallPercentage — same as
+   * SubmitMockAttemptService, which persists this same estimate onto the
+   * MockTest — so a partial sitting (Use of English only, ...) still gets a
+   * level instead of silently averaging in the unattempted papers as zeros.
    */
   private buildEstimatedResult(
     attempt: MockAttempt,
@@ -203,8 +207,8 @@ export class GetMockAttemptResultService {
     if (attempt.status !== MockAttemptStatus.COMPLETED) return null;
     if (attempt.exam_type !== ExamType.B2_FIRST) return null;
 
-    const percentages = PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0);
-    const overallPercentage = percentages.reduce((sum, p) => sum + p, 0) / percentages.length;
+    const overallPercentage = computeCoveredOverallPercentage(paperScores);
+    if (overallPercentage === null) return null;
     return estimateB2FirstResult(overallPercentage);
   }
 

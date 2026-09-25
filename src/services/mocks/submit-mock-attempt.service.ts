@@ -7,7 +7,11 @@ import type { MockAttemptSection } from '@models/MockAttemptSection';
 import { getMockExamCatalog } from '@lib/mocks/mock-exam-catalog';
 import { roundToTwoDecimals } from '@lib/practice/practice-attempt-grading';
 import { toMockAttemptSafeDto } from '@lib/mocks/mock-attempt-dto';
-import { computeMockAttemptPaperScores, PAPER_GROUPS } from '@lib/mocks/mock-attempt-paper-scores';
+import {
+  computeMockAttemptPaperScores,
+  computeCoveredOverallPercentage,
+  PAPER_GROUPS,
+} from '@lib/mocks/mock-attempt-paper-scores';
 import type { MockAttemptPaperGroup } from '@lib/mocks/mock-attempt-paper-scores';
 import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 import type { MockAttemptFinalResultDto } from '../../interfaces/mocks/mock-attempt.interface';
@@ -176,31 +180,29 @@ export class SubmitMockAttemptService {
     const mockAttemptsRepo = mockAttemptsFactory(this.dataSource);
 
     // Only B2 First has a published-boundary approximation to interpolate
-    // (see estimateB2FirstResult) — every other exam type stays null, same
-    // as before. All 4 groups are guaranteed non-null percentages here since
-    // every section is already confirmed 'completed' above.
+    // (see estimateB2FirstResult) — every other exam type stays null.
+    // isFullMock/coveredGroups still drive mockType and the display name;
+    // they no longer gate whether an estimate gets computed at all.
     const paperScores = computeMockAttemptPaperScores(sections);
     const coveredGroups = PAPER_GROUPS.filter((group) => paperScores[group].percentage !== null);
     const isFullMock = coveredGroups.length === PAPER_GROUPS.length;
 
-    // A scoped attempt (Writing only, Listening only, ...) gets NO estimated
-    // score or level, and this is the whole reason that check exists.
-    //
-    // The average below reads a missing group as `?? 0`, which is correct when
-    // every group is present but catastrophic when one isn't: a Writing-only
-    // attempt scoring 80% would average (0 + 0 + 80 + 0) / 4 = 20% and be
-    // filed as a B2 First result near the bottom of the scale. It would then
-    // become "your last mock" on Home and Progress. A partial sitting simply
-    // is not a B2 First estimate, so it reports none — the per-section scores
-    // still roll up and still feed the exam-part metrics.
+    // A scoped attempt (Writing only, Listening only, ...) still gets an
+    // estimated score/level — just one scoped to whatever papers were
+    // actually covered, via computeCoveredOverallPercentage (never a `?? 0`
+    // average across all 4 groups: that would score every unattempted paper
+    // as a zero, filing a genuinely strong single-paper sitting near the
+    // bottom of the scale). Only a fully empty attempt (nothing gradeable
+    // completed) reports none.
     let estimatedStandardizedScore: number | null = null;
     let estimatedLevel: ReturnType<typeof estimateB2FirstResult>['estimatedLevel'] | null = null;
-    if (attempt.exam_type === ExamType.B2_FIRST && isFullMock) {
-      const percentages = PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0);
-      const overallPercentage = percentages.reduce((sum, p) => sum + p, 0) / percentages.length;
-      const estimate = estimateB2FirstResult(overallPercentage);
-      estimatedStandardizedScore = estimate.estimatedScore;
-      estimatedLevel = estimate.estimatedLevel;
+    if (attempt.exam_type === ExamType.B2_FIRST) {
+      const overallPercentage = computeCoveredOverallPercentage(paperScores);
+      if (overallPercentage !== null) {
+        const estimate = estimateB2FirstResult(overallPercentage);
+        estimatedStandardizedScore = estimate.estimatedScore;
+        estimatedLevel = estimate.estimatedLevel;
+      }
     }
 
     const mockTest = await mocksRepo.createMock({
@@ -214,7 +216,7 @@ export class SubmitMockAttemptService {
       estimatedLevel,
       notes: isFullMock
         ? 'Generated automatically from a live timed mock attempt. Score and level are an approximation, not an official Cambridge result.'
-        : 'Generated automatically from a scoped timed mock attempt. Covers only part of the exam, so it carries no overall score or level estimate.',
+        : 'Generated automatically from a scoped timed mock attempt. Covers only part of the exam, so the score and level are an approximation based solely on the paper(s) covered, not an official Cambridge result.',
     });
 
     const sectionCodes = sections.map((s) => s.section_code);

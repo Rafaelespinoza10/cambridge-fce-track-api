@@ -24,7 +24,10 @@ import type { MockAttemptSection } from '@models/MockAttemptSection';
 import type { PracticeExercise } from '@models/PracticeExercise';
 import type { PracticeItem } from '@models/PracticeItem';
 import type { WritingTask } from '@models/WritingTask';
-import { computeMockAttemptPaperScores, PAPER_GROUPS } from '@lib/mocks/mock-attempt-paper-scores';
+import {
+  computeMockAttemptPaperScores,
+  computeCoveredOverallPercentage,
+} from '@lib/mocks/mock-attempt-paper-scores';
 import { estimateB2FirstResult } from '@lib/mocks/estimate-mock-level';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
@@ -265,13 +268,30 @@ describe('GetMockAttemptResultService.execute', () => {
     const result = await service.execute(USER_ID, ATTEMPT_ID);
 
     // Derived the exact same way estimateB2FirstResult itself computes it —
-    // stays correct regardless of the fixture's own numbers, and listening
-    // being un-attempted (0%) is deliberately part of the overall average.
+    // stays correct regardless of the fixture's own numbers. Listening was
+    // never attempted here, so it must be excluded from the average, not
+    // folded in as a 0%.
     const paperScores = computeMockAttemptPaperScores([uoe, reading, writingPart1, writingPart2]);
-    const overallPercentage =
-      PAPER_GROUPS.map((group) => paperScores[group].percentage ?? 0).reduce((a, b) => a + b, 0) /
-      PAPER_GROUPS.length;
+    const overallPercentage = computeCoveredOverallPercentage(paperScores) as number;
     assert.deepEqual(result.estimatedResult, estimateB2FirstResult(overallPercentage));
+  });
+
+  it('still estimates a score/level for a scoped attempt covering only one paper', async () => {
+    const writingPart1 = makeWritingSection({ raw_score: '15.00', max_score: '20.00' });
+    const writingPart2 = makeWritingSection({
+      id: 'section-writing2',
+      section_code: 'writing-part-2',
+      raw_score: '16.00',
+      max_score: '20.00',
+    });
+
+    const service = makeService({ sections: [writingPart1, writingPart2] });
+    const result = await service.execute(USER_ID, ATTEMPT_ID);
+
+    const paperScores = computeMockAttemptPaperScores([writingPart1, writingPart2]);
+    const overallPercentage = computeCoveredOverallPercentage(paperScores) as number;
+    assert.deepEqual(result.estimatedResult, estimateB2FirstResult(overallPercentage));
+    assert.notEqual(result.estimatedResult, null);
   });
 
   it('never estimates a score for an attempt still missing sections (abandoned)', async () => {

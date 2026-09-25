@@ -56,4 +56,25 @@ export function computeMockAttemptPaperScores(
   return scores;
 }
 
+/**
+ * Overall percentage across whatever papers were actually covered — never
+ * an average over all 4 groups. Padding a missing group in with `?? 0` would
+ * score every unattempted paper as a zero, dragging a genuinely strong
+ * single-paper sitting (e.g. Use of English only) down to a near-bottom-of-
+ * scale estimate instead of reporting none. `null` only when nothing at all
+ * was completed. Shared by SubmitMockAttemptService (persists the estimate)
+ * and GetMockAttemptResultService (displays it) for the same reason
+ * computeMockAttemptPaperScores is shared: so neither can drift from the
+ * other's idea of "how much of the exam did this cover".
+ */
+export function computeCoveredOverallPercentage(
+  scores: Record<MockAttemptPaperGroup, MockAttemptPaperScoreDto>,
+): number | null {
+  const covered = PAPER_GROUPS.map((group) => scores[group].percentage).filter(
+    (p): p is number => p !== null,
+  );
+  if (covered.length === 0) return null;
+  return covered.reduce((sum, p) => sum + p, 0) / covered.length;
+}
+
 export { PAPER_GROUPS };
